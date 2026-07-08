@@ -47,6 +47,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // Validasi tambahan
+    if (!emailController.text.contains("@")) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Format email tidak valid"),
+        ),
+      );
+      return;
+    }
+
+    if (phoneController.text.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Nomor HP tidak valid"),
+        ),
+      );
+      return;
+    }
+
+    if (passwordController.text.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Password minimal 8 karakter"),
+        ),
+      );
+      return;
+    }
+
     if (passwordController.text != konfirmasiController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
