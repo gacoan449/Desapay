@@ -23,6 +23,10 @@ jobs:
       with:
         channel: 'stable'
 
+    # BARIS BARU: Otomatis membuat folder android yang hilang sebelum build
+    - name: Auto Generate Android Folder
+      run: flutter create . --platforms=android
+
     - name: Install dependencies
       run: flutter pub get
 
