@@ -8,6 +8,7 @@ class DefaultFirebaseOptions {
       messagingSenderId: "242778852239",
       projectId: "desapay-10614",
       storageBucket: "desapay-10614.firebasestorage.app",
+      authDomain: "desapay-10614.firebaseapp.com",
     );
   }
 }
