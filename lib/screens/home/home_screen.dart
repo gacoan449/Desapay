@@ -19,25 +19,6 @@ import '../notifikasi/notifikasi_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  Future<void> bukaWhatsApp(BuildContext context) async {
-    final Uri whatsappUrl = Uri.parse("https://wa.me/6285642131263");
-    try {
-      if (await canLaunchUrl(whatsappUrl)) {
-        await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
-      } else {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Tidak dapat membuka WhatsApp")),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Gagal membuka tautan")),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -429,26 +410,42 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // 11. Pusat Bantuan
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: const Color(0xFFE0F2F1), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.06), blurRadius: 5)]),
-              child: Row(
-                children: [
-                  CircleAvatar(radius: 26, backgroundColor: const Color(0xFF00897B), child: const Icon(Icons.support_agent, color: Colors.white, size: 28)),
-                  const SizedBox(width: 15),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF00796B))),
-                        SizedBox(height: 6),
-                        Text("WhatsApp\n085642131263", style: TextStyle(color: Color(0xFF00796B), height: 1.5)),
-                      ],
+            InkWell(
+              onTap: () async {
+                final Uri urlWa = Uri.parse("https://wa.me/6285642131263");
+                if (await canLaunchUrl(urlWa)) {
+                  await launchUrl(urlWa, mode: LaunchMode.externalApplication);
+                } else {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Aplikasi WhatsApp tidak ditemukan")),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F2F1),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.06), blurRadius: 5)],
+                ),
+                child: const Row(
+                  children: [
+                    CircleAvatar(radius: 26, backgroundColor: Color(0xFF00897B), child: Icon(Icons.support_agent, color: Colors.white, size: 28)),
+                    SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF00796B))),
+                          SizedBox(height: 6),
+                          Text("WhatsApp\n085642131263", style: TextStyle(color: Color(0xFF00796B), height: 1.5)),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              onTap: () => bukaWhatsApp(context),
             ),
 
             const SizedBox(height: 25),
