@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
+import 'edit_profil_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -95,6 +96,20 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
 
               const Divider(),
+
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text("Edit Profil"),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EditProfilScreen(),
+                    ),
+                  );
+                },
+              ),
 
               ListTile(
                 leading: const Icon(Icons.lock_reset),
