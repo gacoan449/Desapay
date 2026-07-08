@@ -5,31 +5,55 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<bool> login({
+  User? get user => _auth.currentUser;
+
+  Future<String?> login({
     required String email,
     required String password,
   }) async {
     try {
       await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+        email: email.trim(),
+        password: password.trim(),
       );
-      return true;
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "user-not-found":
+          return "Email belum terdaftar.";
+
+        case "wrong-password":
+          return "Password salah.";
+
+        case "invalid-email":
+          return "Format email tidak valid.";
+
+        case "invalid-credential":
+          return "Email atau password salah.";
+
+        case "network-request-failed":
+          return "Tidak ada koneksi internet.";
+
+        default:
+          return e.message ?? "Login gagal.";
+      }
     } catch (_) {
-      return false;
+      return "Terjadi kesalahan.";
     }
   }
 
-  Future<bool> register({
+  Future<String?> register({
     required String nama,
     required String email,
     required String phone,
     required String password,
   }) async {
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+      final credential =
+          await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password.trim(),
       );
 
       final user = credential.user;
@@ -37,9 +61,9 @@ class AuthService {
       if (user != null) {
         await _firestore.collection("users").doc(user.uid).set({
           "uid": user.uid,
-          "nama": nama,
-          "email": email,
-          "phone": phone,
+          "nama": nama.trim(),
+          "email": email.trim(),
+          "phone": phone.trim(),
           "saldo": 0,
           "poin": 0,
           "member": "Silver",
@@ -48,9 +72,26 @@ class AuthService {
         });
       }
 
-      return true;
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "email-already-in-use":
+          return "Email sudah digunakan.";
+
+        case "weak-password":
+          return "Password terlalu lemah.";
+
+        case "invalid-email":
+          return "Format email tidak valid.";
+
+        case "network-request-failed":
+          return "Tidak ada koneksi internet.";
+
+        default:
+          return e.message ?? "Pendaftaran gagal.";
+      }
     } catch (_) {
-      return false;
+      return "Terjadi kesalahan.";
     }
   }
 
@@ -58,10 +99,18 @@ class AuthService {
     await _auth.signOut();
   }
 
-  Future<void> forgotPassword(String email) async {
-    await _auth.sendPasswordResetEmail(
-      email: email,
-    );
+  Future<String?> forgotPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(
+        email: email.trim(),
+      );
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return e.message;
+    } catch (_) {
+      return "Gagal mengirim email reset password.";
+    }
   }
 
   Future<User?> currentUser() async {
@@ -69,11 +118,11 @@ class AuthService {
   }
 
   Future<void> sendOtp(String phone) async {
-    // Akan kita lengkapi setelah Phone Authentication diaktifkan.
+    // Tahap berikutnya
   }
 
   Future<bool> verifyOtp(String code) async {
-    // Akan kita lengkapi setelah Phone Authentication diaktifkan.
+    // Tahap berikutnya
     return true;
   }
 }
