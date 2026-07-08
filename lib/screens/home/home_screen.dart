@@ -13,6 +13,7 @@ import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../layanan/layanan_screen.dart';
 import '../riwayat/riwayat_screen.dart';
+import '../notifikasi/notifikasi_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -79,16 +80,16 @@ class HomeScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () {},
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.notifications, color: Colors.white, size: 26),
-                        ),
+                      IconButton(
+                        icon: const Icon(Icons.notifications_none, color: Colors.white, size: 26),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NotifikasiScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
