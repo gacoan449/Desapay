@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../bottom_nav.dart';
+// REVISI: Menggunakan format package import agar pelacakan file langsung tepat sasaran
+import 'package:desapay/bottom_nav.dart';
+
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 import 'login_screen.dart';
@@ -60,17 +62,19 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          // REVISI: Kata 'const' di depan kurung siku dihapus agar tidak error, 
+          // sebagai gantinya kata 'const' dipasang langsung di depan widget yang statis.
+          children: [
 
-            Icon(
+            const Icon(
               Icons.account_balance_wallet,
               color: Colors.white,
               size: 90,
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-            Text(
+            const Text(
               "DesaPay",
               style: TextStyle(
                 color: Colors.white,
@@ -79,18 +83,18 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
 
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-            Text(
+            const Text(
               "Aplikasi PPOB Modern",
               style: TextStyle(
                 color: Colors.white70,
               ),
             ),
 
-            SizedBox(height: 40),
+            const SizedBox(height: 40),
 
-            CircularProgressIndicator(
+            const CircularProgressIndicator(
               color: Colors.white,
             ),
 
