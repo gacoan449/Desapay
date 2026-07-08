@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
+import '../home/home_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -9,14 +10,11 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
-
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(25),
-
           child: Column(
             children: [
-
               const SizedBox(height: 40),
 
               const Icon(
@@ -74,9 +72,15 @@ class LoginScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: 50,
-
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const HomeScreen(),
+                      ),
+                    );
+                  },
                   child: const Text("MASUK"),
                 ),
               ),
@@ -86,9 +90,16 @@ class LoginScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: 50,
-
                 child: OutlinedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Fitur daftar akun segera hadir",
+                        ),
+                      ),
+                    );
+                  },
                   child: const Text("DAFTAR AKUN"),
                 ),
               ),
@@ -103,19 +114,35 @@ class LoginScreen extends StatelessWidget {
                 "Pusat Bantuan",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
+                  fontSize: 18,
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
+
+              const Icon(
+                Icons.chat,
+                color: Colors.green,
+              ),
+
+              const SizedBox(height: 5),
 
               const Text("WhatsApp"),
               const Text("085642131263"),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
+
+              const Icon(
+                Icons.email,
+                color: Colors.blue,
+              ),
+
+              const SizedBox(height: 5),
 
               const Text("Email"),
               const Text("gacoan449@gmail.com"),
 
+              const SizedBox(height: 30),
             ],
           ),
         ),
