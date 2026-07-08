@@ -6,6 +6,8 @@ import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'edit_profil_screen.dart';
+// REVISI 1: Menambahkan impor halaman admin dashboard agar sistem mengenalinya
+import 'admin_dashboard_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -21,10 +23,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // REVISI: Menentukan warna teks yang tegas agar kontras dengan background putih
     const Color warnaTeksUtama = Color(0xFF1A1A1A); // Hitam pekat elegan
-    const Color warnaTeksSekunder = Color(0xFF555555); // Abu-abu tua tegas (bukan abu-abu pudar)
-    const Color warnaIkon = Color(0xFF0D47A1); // Biru tua premium untuk ikon agar hidup
+    const Color warnaTeksSekunder = Color(0xFF555555); // Abu-abu tua tegas
+    const Color warnaIkon = Color(0xFF0D47A1); // Biru tua premium
 
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
@@ -63,7 +64,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: warnaTeksUtama, // REVISI WARNA NAMA
+                    color: warnaTeksUtama,
                   ),
                 ),
               ),
@@ -72,7 +73,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 child: Text(
                   data["member"] ?? "Anggota Biasa",
                   style: const TextStyle(
-                    color: warnaTeksSekunder, // REVISI WARNA STATUS MEMBER
+                    color: warnaTeksSekunder,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -129,6 +130,34 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
 
               const Divider(color: Colors.grey, thickness: 0.5),
+
+              // REVISI 2: MEMASANG TOMBOL EMAS ADMIN RAHASIA YANG AMAN DARI EROR HURUF BESAR/KECIL
+              if (data["email"].toString().trim().toLowerCase() == "annisaualinayah55@gmail.com")
+                Card(
+                  color: Colors.amber[50],
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Colors.amber, width: 1),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.admin_panel_settings, color: Colors.amber, size: 28),
+                    title: const Text(
+                      "Dashboard Admin",
+                      style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text("Ubah promo, banner info, & kelola menu", style: TextStyle(fontSize: 12)),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.amber),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminDashboardScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
 
               ListTile(
                 leading: const Icon(Icons.edit, color: warnaIkon),
