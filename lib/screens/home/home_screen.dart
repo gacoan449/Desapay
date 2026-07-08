@@ -12,6 +12,7 @@ import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../layanan/layanan_screen.dart';
+import '../riwayat/riwayat_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -105,7 +106,6 @@ class HomeScreen extends StatelessWidget {
                     icon: Icons.account_balance_wallet,
                     color: Colors.green,
                   ),
-
                 ],
               ),
             ),
@@ -237,6 +237,43 @@ class HomeScreen extends StatelessWidget {
                 title: const Text("Pusat Bantuan"),
                 subtitle: const Text(
                   "WhatsApp : 085642131263\nEmail : gacoan449@gmail.com",
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.receipt_long,
+                  color: Colors.blue,
+                ),
+                title: const Text("Riwayat Transaksi"),
+                subtitle: const Text(
+                  "Lihat semua transaksi yang pernah dilakukan",
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const RiwayatScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            const Center(
+              child: Text(
+                "Versi 1.0.0\n© 2026 DesaPay",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
                 ),
               ),
             ),
