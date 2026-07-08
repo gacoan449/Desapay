@@ -27,7 +27,7 @@ class _ForgotPasswordScreenState
 
   Future<void> resetPassword() async {
 
-    if (emailController.text.isEmpty) {
+    if (emailController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Masukkan email terlebih dahulu"),
@@ -40,7 +40,7 @@ class _ForgotPasswordScreenState
       loading = true;
     });
 
-    await auth.forgotPassword(
+    final hasil = await auth.forgotPassword(
       emailController.text.trim(),
     );
 
@@ -50,15 +50,27 @@ class _ForgotPasswordScreenState
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          "Link reset password berhasil dikirim.",
-        ),
-      ),
-    );
+    if (hasil == null) {
 
-    Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Link reset password berhasil dikirim.",
+          ),
+        ),
+      );
+
+      Navigator.pop(context);
+
+    } else {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(hasil),
+        ),
+      );
+
+    }
   }
 
   @override
@@ -122,17 +134,13 @@ class _ForgotPasswordScreenState
             SizedBox(
               width: double.infinity,
               height: 55,
-
               child: ElevatedButton(
                 onPressed: loading ? null : resetPassword,
-
                 child: loading
                     ? const CircularProgressIndicator(
                         color: Colors.white,
                       )
-                    : const Text(
-                        "KIRIM LINK RESET",
-                      ),
+                    : const Text("KIRIM LINK RESET"),
               ),
             ),
 
