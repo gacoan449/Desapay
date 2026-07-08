@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../bottom_nav.dart';
+// REVISI: Menggunakan format package import agar sistem melacak langsung ke folder lib Anda
+import 'package:desapay/bottom_nav.dart';
+
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 import 'forgot_password_screen.dart';
@@ -30,10 +32,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> login() async {
+    // Validasi input dasar sebelum mengirim data ke server
+    if (emailController.text.trim().isEmpty || passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email dan Password tidak boleh kosong")),
+      );
+      return;
+    }
+
     setState(() {
       loading = true;
     });
 
+    // Menerima nilai String? dari auth.login
     final berhasil = await auth.login(
       email: emailController.text.trim(),
       password: passwordController.text.trim(),
@@ -45,17 +56,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    if (berhasil) {
+    // REVISI LOGIKA: Jika bernilai null, artinya login berhasil tanpa ada teks pesan error
+    if (berhasil == null) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
+          // Kata 'const' dihapus jika widget BottomNav Anda nantinya memiliki parameter dinamis
           builder: (_) => const BottomNav(),
         ),
       );
     } else {
+      // Menampilkan pesan error spesifik dari firebase lewat snackbar
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Email atau Password salah"),
+        SnackBar(
+          content: Text(berhasil),
         ),
       );
     }
