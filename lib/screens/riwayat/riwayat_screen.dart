@@ -8,33 +8,39 @@ class RiwayatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: WarnaDesaPay.background,
+
       appBar: AppBar(
         title: const Text("Riwayat Transaksi"),
       ),
-      backgroundColor: WarnaDesaPay.background,
+
       body: ListView(
         padding: const EdgeInsets.all(16),
+
         children: const [
 
           RiwayatItem(
-            title: "Pulsa Telkomsel",
+            layanan: "Pulsa Telkomsel",
+            tujuan: "081234567890",
             nominal: "Rp10.000",
             status: "Berhasil",
-            tanggal: "04 Juli 2026",
+            warna: Colors.green,
           ),
 
           RiwayatItem(
-            title: "Token PLN",
+            layanan: "Token PLN",
+            tujuan: "1234567890",
             nominal: "Rp50.000",
             status: "Berhasil",
-            tanggal: "03 Juli 2026",
+            warna: Colors.green,
           ),
 
           RiwayatItem(
-            title: "Top Up DANA",
+            layanan: "Top Up DANA",
+            tujuan: "081298765432",
             nominal: "Rp20.000",
             status: "Diproses",
-            tanggal: "03 Juli 2026",
+            warna: Colors.orange,
           ),
 
         ],
@@ -45,48 +51,48 @@ class RiwayatScreen extends StatelessWidget {
 
 class RiwayatItem extends StatelessWidget {
 
-  final String title;
+  final String layanan;
+  final String tujuan;
   final String nominal;
   final String status;
-  final String tanggal;
+  final Color warna;
 
   const RiwayatItem({
     super.key,
-    required this.title,
+    required this.layanan,
+    required this.tujuan,
     required this.nominal,
     required this.status,
-    required this.tanggal,
+    required this.warna,
   });
 
   @override
   Widget build(BuildContext context) {
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+
       child: ListTile(
-        leading: const CircleAvatar(
-          child: Icon(Icons.receipt_long),
+        leading: CircleAvatar(
+          backgroundColor: warna,
+          child: const Icon(
+            Icons.receipt_long,
+            color: Colors.white,
+          ),
         ),
-        title: Text(title),
-        subtitle: Text(tanggal),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              nominal,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              status,
-              style: TextStyle(
-                color: status == "Berhasil"
-                    ? Colors.green
-                    : Colors.orange,
-                fontSize: 12,
-              ),
-            ),
-          ],
+
+        title: Text(layanan),
+
+        subtitle: Text(
+          "$tujuan\n$nominal",
+        ),
+
+        trailing: Text(
+          status,
+          style: TextStyle(
+            color: warna,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
