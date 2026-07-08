@@ -1,26 +1,102 @@
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/bottom_nav.dart';
+import 'forgot_password_screen.dart';
+import 'register_screen.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  final AuthService auth = AuthService();
+
+  bool loading = false;
+  bool hidePassword = true;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> login() async {
+
+    if (emailController.text.isEmpty ||
+        passwordController.text.isEmpty) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Email dan password wajib diisi"),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      loading = true;
+    });
+
+    final hasil = await auth.login(
+      email: emailController.text.trim(),
+      password: passwordController.text.trim(),
+    );
+
+    setState(() {
+      loading = false;
+    });
+
+    if (!mounted) return;
+
+    if (hasil == null) {
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const BottomNav(),
+        ),
+      );
+
+    } else {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(hasil),
+        ),
+      );
+
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
+
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(25),
+          padding: const EdgeInsets.all(24),
+
           child: Column(
             children: [
+
               const SizedBox(height: 40),
 
               const Icon(
                 Icons.account_balance_wallet,
-                color: WarnaDesaPay.primary,
                 size: 90,
+                color: WarnaDesaPay.primary,
               ),
 
               const SizedBox(height: 20),
@@ -34,7 +110,7 @@ class LoginScreen extends StatelessWidget {
               ),
 
               const Text(
-                "Top Up & Pembayaran",
+                "Masuk ke akun Anda",
                 style: TextStyle(
                   color: Colors.grey,
                 ),
@@ -43,12 +119,13 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 40),
 
               TextField(
-                keyboardType: TextInputType.phone,
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  labelText: "Nomor HP",
-                  prefixIcon: const Icon(Icons.phone),
+                  labelText: "Email",
+                  prefixIcon: const Icon(Icons.email),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
@@ -56,32 +133,56 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 20),
 
               TextField(
-                obscureText: true,
-                keyboardType: TextInputType.number,
+                controller: passwordController,
+                obscureText: hidePassword,
                 decoration: InputDecoration(
-                  labelText: "PIN",
+                  labelText: "Password",
                   prefixIcon: const Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      hidePassword
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        hidePassword = !hidePassword;
+                      });
+                    },
+                  ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 25),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
                   onPressed: () {
-                    Navigator.pushReplacement(
+                    Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const BottomNav(),
+                        builder: (_) => const ForgotPasswordScreen(),
                       ),
                     );
                   },
-                  child: const Text("MASUK"),
+                  child: const Text("Lupa Password?"),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  onPressed: loading ? null : login,
+                  child: loading
+                      ? const CircularProgressIndicator(
+                          color: Colors.white,
+                        )
+                      : const Text("MASUK"),
                 ),
               ),
 
@@ -89,14 +190,13 @@ class LoginScreen extends StatelessWidget {
 
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 55,
                 child: OutlinedButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          "Fitur daftar akun segera hadir",
-                        ),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RegisterScreen(),
                       ),
                     );
                   },
@@ -104,45 +204,25 @@ class LoginScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
 
               const Divider(),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 20),
 
               const Text(
-                "Pusat Bantuan",
+                "Butuh Bantuan?",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
                 ),
               ),
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 8),
 
-              const Icon(
-                Icons.chat,
-                color: Colors.green,
-              ),
+              const Text("WhatsApp: 085642131263"),
 
-              const SizedBox(height: 5),
+              const Text("Email: gacoan449@gmail.com"),
 
-              const Text("WhatsApp"),
-              const Text("085642131263"),
-
-              const SizedBox(height: 15),
-
-              const Icon(
-                Icons.email,
-                color: Colors.blue,
-              ),
-
-              const SizedBox(height: 5),
-
-              const Text("Email"),
-              const Text("gacoan449@gmail.com"),
-
-              const SizedBox(height: 30),
             ],
           ),
         ),
