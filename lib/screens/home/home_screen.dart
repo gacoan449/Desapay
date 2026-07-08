@@ -7,10 +7,11 @@ import '../../widgets/menu_item.dart';
 import '../../widgets/promo_card.dart';
 import '../../widgets/saldo_card.dart';
 
-import '../ewallet/ewallet_screen.dart';
+import '../pulsa/pulsa_screen.dart';
 import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
-import '../pulsa/pulsa_screen.dart';
+import '../ewallet/ewallet_screen.dart';
+import '../layanan/layanan_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -41,9 +42,7 @@ class HomeScreen extends StatelessWidget {
 
             const Text(
               "Selamat Datang 👋",
-              style: TextStyle(
-                fontSize: 16,
-              ),
+              style: TextStyle(fontSize: 16),
             ),
 
             const SizedBox(height: 5),
@@ -84,17 +83,21 @@ class HomeScreen extends StatelessWidget {
 
                   PromoCard(
                     title: "Cashback Pulsa",
-                    subtitle: "Hemat hingga Rp2.000",
+                    subtitle: "Lebih hemat setiap transaksi",
                     icon: Icons.local_offer,
                     color: Colors.blue,
                   ),
 
+                  SizedBox(width: 12),
+
                   PromoCard(
                     title: "Token PLN",
-                    subtitle: "Admin lebih murah",
+                    subtitle: "Admin murah",
                     icon: Icons.flash_on,
                     color: Colors.orange,
                   ),
+
+                  SizedBox(width: 12),
 
                   PromoCard(
                     title: "Top Up E-Wallet",
@@ -112,8 +115,8 @@ class HomeScreen extends StatelessWidget {
             const Text(
               "Layanan",
               style: TextStyle(
-                fontWeight: FontWeight.bold,
                 fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
             ),
 
@@ -180,17 +183,48 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
 
+                MenuItem(
+                  icon: Icons.sports_esports,
+                  title: "Game",
+                  onTap: () {},
+                ),
+
+                MenuItem(
+                  icon: Icons.health_and_safety,
+                  title: "BPJS",
+                  onTap: () {},
+                ),
+
+                MenuItem(
+                  icon: Icons.water_drop,
+                  title: "PDAM",
+                  onTap: () {},
+                ),
+
+                MenuItem(
+                  icon: Icons.grid_view,
+                  title: "Semua",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LayananScreen(),
+                      ),
+                    );
+                  },
+                ),
+
               ],
             ),
 
-            const SizedBox(height: 25),
+            const SizedBox(height: 30),
 
             Card(
               child: ListTile(
                 leading: const Icon(Icons.local_offer),
                 title: const Text("Promo Hari Ini"),
                 subtitle: const Text(
-                  "Nikmati harga terbaik untuk Pulsa, Paket Data dan Token PLN.",
+                  "Nikmati harga spesial Pulsa, Paket Data, Token PLN dan E-Wallet.",
                 ),
               ),
             ),
@@ -207,7 +241,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
 
           ],
         ),
