@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../config/warna.dart';
+// Sesuaikan lokasi berkas TopupSaldoScreen sesuai proyek kamu
+import '../topup/topup_saldo_screen.dart';
 
 class SaldoCard extends StatelessWidget {
   const SaldoCard({super.key});
@@ -23,7 +25,7 @@ class SaldoCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: WarnaDesaPay.primary.withValues(alpha: 0.30),
+            color: WarnaDesaPay.primary.withOpacity(0.30),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -73,7 +75,14 @@ class SaldoCard extends StatelessWidget {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TopupSaldoScreen(),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.add),
                   label: const Text("Isi Saldo"),
                 ),
