@@ -1,6 +1,8 @@
 import 'dart:convert';
-
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:crypto/crypto.dart';
 
 import '../models/payment_channel.dart';
 
@@ -49,6 +51,67 @@ class TripayService {
     return data
         .map((e) => PaymentChannel.fromJson(e))
         .toList();
+  }
+
+  String createSignature(String merchantRef, int amount) {
+    final payload = merchantCode + merchantRef + amount.toString();
+
+    return Hmac(
+      sha256,
+      utf8.encode(privateKey),
+    ).convert(
+      utf8.encode(payload),
+    ).toString();
+  }
+
+  Future<Map<String, dynamic>> createTransaction({
+    required String method,
+    required String merchantRef,
+    required int amount,
+    required String customerName,
+    required String customerEmail,
+    required String customerPhone,
+  }) async {
+
+    final response = await http.post(
+      Uri.parse("$baseUrl/transaction/create"),
+      headers: headers(),
+      body: jsonEncode({
+
+        "method": method,
+
+        "merchant_ref": merchantRef,
+
+        "amount": amount,
+
+        "customer_name": customerName,
+
+        "customer_email": customerEmail,
+
+        "customer_phone": customerPhone,
+
+        "order_items": [
+          {
+            "sku": "TOPUP",
+            "name": "Top Up Saldo DesaPay",
+            "price": amount,
+            "quantity": 1,
+          }
+        ],
+
+        "signature": createSignature(
+          merchantRef,
+          amount,
+        ),
+
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Gagal membuat transaksi");
+    }
+
+    return jsonDecode(response.body);
   }
 
 }
