@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../config/warna.dart';
-
-import '../../widgets/banner_promo.dart';
-import '../../widgets/menu_item.dart';
-import '../../widgets/promo_card.dart';
-import '../../widgets/saldo_card.dart';
 
 import '../pulsa/pulsa_screen.dart';
 import '../paket/paket_screen.dart';
@@ -16,451 +10,865 @@ import '../layanan/layanan_screen.dart';
 import '../riwayat/riwayat_screen.dart';
 import '../notifikasi/notifikasi_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+
+  bool saldoTerlihat = true;
+  double saldo = 0;
+  double cashback = 0;
+  int poin = 0;
+  int jumlahTransaksi = 0;
+
+  final NumberFormat rupiah = NumberFormat.currency(
+    locale: "id_ID",
+    symbol: "Rp ",
+    decimalDigits: 0,
+  );
+
+  final List<Map<String, dynamic>> riwayat = [];
+
+  @override
+  void initState() {
+    super.initState();
+    /// nanti dihubungkan Firebase / API
+    saldo = 250000;
+    cashback = 18500;
+    poin = 1240;
+    jumlahTransaksi = 28;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F8),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      backgroundColor: const Color(0xffF4F7FC),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          setState(() {});
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
 
-            // 1. Header Premium
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF1976D2),
-                    Color(0xFF42A5F5),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+              //=============================
+              // HEADER
+              //=============================
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 55,
+                  bottom: 30,
                 ),
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xff1565C0),
+                      Color(0xff1E88E5),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(35),
+                    bottomRight: Radius.circular(35),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Icon(
+                            Icons.account_circle,
+                            size: 38,
+                            color: Color(0xff1565C0),
+                          ),
+                        ),
+                        const SizedBox(width: 15),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Selamat Datang",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                "Pengguna DesaPay",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 22,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.workspace_premium,
+                                    color: Colors.amber,
+                                    size: 18,
+                                  ),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    "Member Gold",
+                                    style: TextStyle(
+                                      color: Colors.amber,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const NotifikasiScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.notifications_none,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+
+              const SizedBox(height: 20),
+
+              //=============================
+              // KARTU SALDO PREMIUM
+              //=============================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.12),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            "Saldo DesaPay",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            splashRadius: 22,
+                            onPressed: () {
+                              setState(() {
+                                saldoTerlihat = !saldoTerlihat;
+                              });
+                            },
+                            icon: Icon(
+                              saldoTerlihat
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: Text(
+                          saldoTerlihat
+                              ? rupiah.format(saldo)
+                              : "Rp ••••••••",
+                          key: ValueKey(saldoTerlihat),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 33,
+                            color: Color(0xff1565C0),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xffE8F5E9),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Icon(
+                                    Icons.savings,
+                                    color: Colors.green,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    "Cashback",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    rupiah.format(cashback),
+                                    style: const TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xffFFF8E1),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Icon(
+                                    Icons.stars,
+                                    color: Colors.orange,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    "Poin",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "$poin Poin",
+                                    style: const TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xff1565C0),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                          onPressed: () {
+                            // TODO: Halaman Isi Saldo
+                          },
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text(
+                            "ISI SALDO",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              //==================================================
+              // QUICK ACTION
+              //==================================================
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "Akses Cepat",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _quickButton(
+                        icon: Icons.send_rounded,
+                        title: "Transfer",
+                        color: const Color(0xff1976D2),
+                        onTap: () {
+                          // TODO Transfer
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _quickButton(
+                        icon: Icons.qr_code_scanner,
+                        title: "Scan",
+                        color: const Color(0xff00897B),
+                        onTap: () {
+                          // TODO Scan QR
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _quickButton(
+                        icon: Icons.account_balance_wallet,
+                        title: "Top Up",
+                        color: const Color(0xffEF6C00),
+                        onTap: () {
+                          // TODO TopUp
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _quickButton(
+                        icon: Icons.qr_code_2,
+                        title: "QRIS",
+                        color: const Color(0xff7B1FA2),
+                        onTap: () {
+                          // TODO QRIS
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              //==================================================
+              // MENU LAYANAN
+              //==================================================
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "Layanan DesaPay",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 20,
+                  childAspectRatio: .82,
+                  children: [
+                    _menuItem(Icons.phone_android, "Pulsa"),
+                    _menuItem(Icons.wifi, "Data"),
+                    _menuItem(Icons.flash_on, "PLN"),
+                    _menuItem(Icons.receipt_long, "Tagihan"),
+                    _menuItem(Icons.account_balance_wallet, "E-Wallet"),
+                    _menuItem(Icons.sports_esports, "Game"),
+                    _menuItem(Icons.local_hospital, "BPJS"),
+                    _menuItem(Icons.grid_view_rounded, "Semua"),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              // ===============================
+              // MENU LAYANAN DESAPAY
+              // ===============================
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 18),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Layanan Lengkap",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "Lihat Semua",
+                      style: TextStyle(
+                        color: Color(0xff1565C0),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 4,
+                  childAspectRatio: .85,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 18,
+                  children: [
+                    menuHome(Icons.phone_android, "Pulsa"),
+                    menuHome(Icons.wifi, "Data"),
+                    menuHome(Icons.flash_on, "PLN"),
+                    menuHome(Icons.receipt_long, "Tagihan"),
+                    menuHome(Icons.account_balance_wallet, "Top Up"),
+                    menuHome(Icons.send, "Transfer"),
+                    menuHome(Icons.qr_code_scanner, "Scan"),
+                    menuHome(Icons.qr_code_2, "QRIS"),
+                    menuHome(Icons.account_balance, "Bank"),
+                    menuHome(Icons.savings, "Tabungan"),
+                    menuHome(Icons.shopping_cart, "Belanja"),
+                    menuHome(Icons.more_horiz, "Lainnya"),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // =====================
+              // ARTIKEL & INFO
+              // =====================
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "Info DesaPay",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+              SizedBox(
+                height: 170,
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _artikelCard(
+                      gambar: Icons.newspaper,
+                      warna: Colors.blue,
+                      judul: "DesaPay Resmi Diluncurkan",
+                      isi:
+                          "Nikmati pembayaran digital yang aman, cepat dan mudah untuk seluruh Indonesia.",
+                    ),
+                    _artikelCard(
+                      gambar: Icons.security,
+                      warna: Colors.green,
+                      judul: "Tips Keamanan",
+                      isi:
+                          "Jangan pernah memberikan PIN maupun OTP kepada siapapun.",
+                    ),
+                    _artikelCard(
+                      gambar: Icons.local_offer,
+                      warna: Colors.orange,
+                      judul: "Promo Cashback",
+                      isi:
+                          "Bayar Pulsa, PLN dan E-Wallet dapat cashback setiap hari.",
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              // =====================
+              // PUSAT BANTUAN
+              // =====================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: InkWell(
+                  onTap: () async {
+                    final Uri urlWa = Uri.parse("https://wa.me/6285642131263");
+                    if (await canLaunchUrl(urlWa)) {
+                      await launchUrl(urlWa, mode: LaunchMode.externalApplication);
+                    } else {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Aplikasi WhatsApp tidak ditemukan")),
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2F1),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.06), blurRadius: 5)],
+                    ),
+                    child: const Row(
+                      children: [
+                        CircleAvatar(radius: 26, backgroundColor: Color(0xFF00897B), child: Icon(Icons.support_agent, color: Colors.white, size: 28)),
+                        SizedBox(width: 15),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF00796B))),
+                              SizedBox(height: 6),
+                              Text("Hubungi via WhatsApp\n085642131263", style: TextStyle(color: Color(0xFF00796B), height: 1.5)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // =====================
+              // CEK UPDATE
+              // =====================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                      )
+                    ],
+                  ),
+                  child: Row(
                     children: [
                       const CircleAvatar(
-                        radius: 26,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person, color: Color(0xFF1976D2), size: 28),
+                        backgroundColor: Color(0xff1976D2),
+                        child: Icon(
+                          Icons.system_update,
+                          color: Colors.white,
+                        ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 15),
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Selamat Datang",
-                              style: TextStyle(color: Colors.white70, fontSize: 15),
+                              "Versi Aplikasi",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             SizedBox(height: 4),
                             Text(
-                              "Pengguna DesaPay",
+                              "DesaPay v1.0.0",
                               style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.notifications_none, color: Colors.white, size: 26),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const NotifikasiScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                      ElevatedButton(
+                        onPressed: () {},
+                        child: const Text("Cek"),
+                      )
                     ],
                   ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 2. Pencarian
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
-              ),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: "Cari layanan...",
-                  hintStyle: const TextStyle(color: Colors.grey),
-                  prefixIcon: const Icon(Icons.search, color: Colors.blue),
-                  filled: true,
-                  fillColor: Colors.transparent,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide.none,
-                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 25),
 
-            // 3. Tombol Cepat
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1565C0),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 3,
-                    ),
-                    onPressed: () {},
-                    icon: const Icon(Icons.add, size: 20),
-                    label: const Text("Isi Saldo", style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 3,
-                    ),
-                    onPressed: () {},
-                    icon: const Icon(Icons.send, size: 20),
-                    label: const Text("Transfer", style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE65100),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 3,
-                    ),
-                    onPressed: () {},
-                    icon: const Icon(Icons.qr_code_scanner, size: 20),
-                    label: const Text("Scan", style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 25),
-
-            // 4. Statistik Singkat
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF263238),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.receipt_long, color: Colors.white, size: 30),
-                        SizedBox(height: 8),
-                        Text("24", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
-                        SizedBox(height: 4),
-                        Text("Transaksi", style: TextStyle(fontSize: 13, color: Colors.white70)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF263238),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.payments, color: Colors.greenAccent, size: 30),
-                        SizedBox(height: 8),
-                        Text("Rp 0", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
-                        SizedBox(height: 4),
-                        Text("Saldo", style: TextStyle(fontSize: 13, color: Colors.white70)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF263238),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.stars, color: Colors.orangeAccent, size: 30),
-                        SizedBox(height: 8),
-                        Text("0", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
-                        SizedBox(height: 4),
-                        Text("Poin", style: TextStyle(fontSize: 13, color: Colors.white70)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 28),
-
-            // 5. Menu Layanan Utama
-            const Text(
-              "Layanan",
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF263238)),
-            ),
-            const SizedBox(height: 15),
-
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 4,
-              childAspectRatio: 0.78,
-              mainAxisSpacing: 18,
-              crossAxisSpacing: 12,
-              children: [
-                MenuItem(
-                  icon: Icons.phone_android,
-                  title: "Pulsa",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()));
-                  },
-                ),
-                MenuItem(
-                  icon: Icons.wifi,
-                  title: "Data",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PaketScreen()));
-                  },
-                ),
-                MenuItem(
-                  icon: Icons.flash_on,
-                  title: "PLN",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen()));
-                  },
-                ),
-                MenuItem(
-                  icon: Icons.account_balance_wallet,
-                  title: "E-Wallet",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EwalletScreen()));
-                  },
-                ),
-                MenuItem(icon: Icons.sports_esports, title: "Game", onTap: () {}),
-                MenuItem(icon: Icons.health_and_safety, title: "BPJS", onTap: () {}),
-                MenuItem(icon: Icons.water_drop, title: "PDAM", onTap: () {}),
-                MenuItem(
-                  icon: Icons.grid_view,
-                  title: "Semua",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const LayananScreen()));
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 25),
-
-            // 6. Menu Favorit
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8)],
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Transaksi Favorit", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF263238))),
-                  SizedBox(height: 12),
-                  Text("Belum ada transaksi favorit", style: TextStyle(color: Colors.grey, fontSize: 15)),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 7. Banner Info
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.08), blurRadius: 5)],
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.campaign, color: Color(0xFF2E7D32), size: 38),
-                  SizedBox(width: 15),
-                  Expanded(
-                    child: Text(
-                      "Isi saldo sekarang dan nikmati cashback hingga 10%.",
-                      style: TextStyle(fontSize: 15, color: Color(0xFF2E7D32), fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // 8. Promo Hari Ini
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.08), blurRadius: 5)],
-              ),
-              child: const Row(
-                children: [
-                  CircleAvatar(radius: 26, backgroundColor: Color(0xFFFF9800), child: Icon(Icons.local_offer, color: Colors.white, size: 28)),
-                  SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Promo Hari Ini", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFFE65100))),
-                        SizedBox(height: 6),
-                        Text("Cashback hingga 10% untuk Pulsa, PLN dan E-Wallet.", style: TextStyle(color: Color(0xFFE65100), fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // 9. Riwayat Transaksi
-            Container(
-              decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.06), blurRadius: 5)]),
-              child: ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFF1976D2), child: Icon(Icons.receipt_long, color: Colors.white)),
-                title: const Text("Riwayat Transaksi", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1565C0))),
-                subtitle: const Text("Lihat semua transaksi Anda", style: TextStyle(color: Colors.blueGrey)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blueGrey),
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const RiwayatScreen()));
-                },
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // 10. Keamanan Akun
-            Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]),
-              child: ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFF388E3C), child: Icon(Icons.security, color: Colors.white)),
-                title: const Text("Keamanan Akun", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
-                subtitle: const Text("Aktifkan PIN & Login OTP", style: TextStyle(color: Colors.grey)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                onTap: () {},
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // 11. Pusat Bantuan
-            InkWell(
-              onTap: () async {
-                final Uri urlWa = Uri.parse("https://wa.me/6285642131263");
-                if (await canLaunchUrl(urlWa)) {
-                  await launchUrl(urlWa, mode: LaunchMode.externalApplication);
-                } else {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Aplikasi WhatsApp tidak ditemukan")),
-                  );
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2F1),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.06), blurRadius: 5)],
-                ),
-                child: const Row(
+              // =====================
+              // FOOTER
+              // =====================
+              Center(
+                child: Column(
                   children: [
-                    CircleAvatar(radius: 26, backgroundColor: Color(0xFF00897B), child: Icon(Icons.support_agent, color: Colors.white, size: 28)),
-                    SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF00796B))),
-                          SizedBox(height: 6),
-                          Text("WhatsApp\n085642131263", style: TextStyle(color: Color(0xFF00796B), height: 1.5)),
-                        ],
+                    const Icon(
+                      Icons.account_balance_wallet,
+                      color: Color(0xff1976D2),
+                      size: 55,
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "DesaPay",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Dompet Digital Indonesia",
+                      style: TextStyle(
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Text(
+                      "© 2026 DesaPay Indonesia",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
                   ],
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            const SizedBox(height: 25),
-
-            const Center(
-              child: Text(
-                "Versi 1.0.0\n© 2026 DesaPay",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+  Widget _quickButton({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
               ),
             ),
-
-            const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _menuItem(IconData icon, String title) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () {},
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: const Color(0xffE3F2FD),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              icon,
+              color: const Color(0xff1565C0),
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget menuHome(IconData icon, String title) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () {
+        switch(title) {
+          case "Pulsa":
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()));
+            break;
+          case "Data":
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const PaketScreen()));
+            break;
+          case "PLN":
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen()));
+            break;
+          case "Top Up":
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const EwalletScreen()));
+            break;
+          case "QRIS":
+            // Navigator.push(context, MaterialPageRoute(builder: (_) => const QrisScreen()));
+            break;
+        }
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xff2196F3),
+                  Color(0xff1565C0),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blueAccent.withOpacity(.25),
+                  blurRadius: 10,
+                  offset: const Offset(0,5),
+                )
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _artikelCard({
+    required IconData gambar,
+    required Color warna,
+    required String judul,
+    required String isi,
+  }) {
+    return Container(
+      width: 240,
+      margin: const EdgeInsets.only(right: 15),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            backgroundColor: warna.withOpacity(.15),
+            child: Icon(
+              gambar,
+              color: warna,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            judul,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isi,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.grey,
+            ),
+          ),
+        ],
       ),
     );
   }
