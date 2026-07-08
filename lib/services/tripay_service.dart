@@ -114,4 +114,20 @@ class TripayService {
     return jsonDecode(response.body);
   }
 
+  Future<Map<String, dynamic>> cekStatus(String reference) async {
+
+    final response = await http.get(
+      Uri.parse(
+        "$baseUrl/transaction/detail?reference=$reference",
+      ),
+      headers: headers(),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Gagal mengambil status transaksi");
+    }
+
+    return jsonDecode(response.body);
+  }
+
 }
