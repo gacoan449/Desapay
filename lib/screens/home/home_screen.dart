@@ -20,14 +20,14 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F8), // Latar belakang lebih lembut tidak terlalu putih
+      backgroundColor: const Color(0xFFF0F4F8),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // 1. Header Premium - warna lebih cerah dan jelas
+            // 1. Header Premium
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -98,18 +98,18 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // 2. Pencarian - lebih jelas
+            // 2. Pencarian
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
               ),
-              child: const TextField(
+              child: TextField(
                 decoration: InputDecoration(
                   hintText: "Cari layanan...",
-                  hintStyle: TextStyle(color: Colors.grey),
-                  prefixIcon: Icon(Icons.search, color: Colors.blue),
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  prefixIcon: const Icon(Icons.search, color: Colors.blue),
                   filled: true,
                   fillColor: Colors.transparent,
                   border: OutlineInputBorder(
@@ -122,7 +122,7 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // 3. Tombol Cepat - warna lebih tegas
+            // 3. Tombol Cepat
             Row(
               children: [
                 Expanded(
@@ -180,7 +180,7 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 25),
 
-            // 4. Statistik Singkat - warna gelap tulisan putih seperti contoh
+            // 4. Statistik Singkat
             Row(
               children: [
                 Expanded(
