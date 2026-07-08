@@ -1,3 +1,5 @@
+import '../../models/transaksi.dart';
+import '../../services/transaksi_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
@@ -100,6 +102,32 @@ class KonfirmasiPembayaranScreen extends StatelessWidget {
                 label: const Text("BAYAR SEKARANG"),
 
                 onPressed: () {
+
+  TransaksiService.tambah(
+
+    Transaksi(
+      tujuan: nomor,
+      produk: produk,
+      harga: harga,
+      status: "Berhasil",
+      tanggal: DateTime.now(),
+    ),
+
+  );
+
+  ScaffoldMessenger.of(context).showSnackBar(
+
+    const SnackBar(
+      content: Text(
+        "Transaksi berhasil disimpan.",
+      ),
+    ),
+
+  );
+
+  Navigator.popUntil(context, (route) => route.isFirst);
+
+                }
 
                   ScaffoldMessenger.of(context).showSnackBar(
 
