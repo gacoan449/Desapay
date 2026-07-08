@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
+import 'metode_pembayaran_screen.dart';
 
 class TopupSaldoScreen extends StatelessWidget {
   const TopupSaldoScreen({super.key});
@@ -58,6 +59,17 @@ class TopupSaldoScreen extends StatelessWidget {
         ),
 
         trailing: const Icon(Icons.arrow_forward_ios),
+
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MetodePembayaranScreen(
+                nominal: nominal,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
