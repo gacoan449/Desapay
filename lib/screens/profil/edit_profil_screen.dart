@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
 
@@ -15,7 +17,30 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
   final email = TextEditingController();
   final phone = TextEditingController();
 
+  final auth = FirebaseAuth.instance;
+  final firestore = FirebaseFirestore.instance;
+
   bool loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    loadData();
+  }
+
+  Future<void> loadData() async {
+    final uid = auth.currentUser!.uid;
+
+    final doc = await firestore.collection("users").doc(uid).get();
+
+    if (!doc.exists) return;
+
+    final data = doc.data()!;
+
+    nama.text = data["nama"] ?? "";
+    email.text = data["email"] ?? "";
+    phone.text = data["phone"] ?? "";
+  }
 
   @override
   void dispose() {
@@ -26,35 +51,60 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
   }
 
   Future<void> simpan() async {
+    if (nama.text.trim().isEmpty ||
+        email.text.trim().isEmpty ||
+        phone.text.trim().isEmpty) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Semua data wajib diisi"),
+        ),
+      );
+      return;
+    }
 
     setState(() {
       loading = true;
     });
 
-    // Firebase update nanti
+    try {
+      final uid = auth.currentUser!.uid;
 
-    await Future.delayed(
-      const Duration(seconds: 1),
-    );
+      await firestore.collection("users").doc(uid).update({
+        "nama": nama.text.trim(),
+        "email": email.text.trim(),
+        "phone": phone.text.trim(),
+      });
 
-    setState(() {
-      loading = false;
-    });
+      setState(() {
+        loading = false;
+      });
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Profil berhasil diperbarui"),
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Profil berhasil diperbarui"),
+        ),
+      );
 
-    Navigator.pop(context);
+      Navigator.pop(context);
+
+    } catch (e) {
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
 
@@ -66,7 +116,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         padding: const EdgeInsets.all(16),
 
         children: [
-
           TextField(
             controller: nama,
             decoration: const InputDecoration(
@@ -110,7 +159,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   : const Text("SIMPAN"),
             ),
           ),
-
         ],
       ),
     );
