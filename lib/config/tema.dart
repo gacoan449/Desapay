@@ -31,7 +31,7 @@ class TemaDesaPay {
         ),
       ),
 
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 3,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(15),
