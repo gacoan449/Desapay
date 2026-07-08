@@ -18,20 +18,28 @@ class PromoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 260,
-      margin: const EdgeInsets.only(right: 12),
+      margin: const EdgeInsets.only(right: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: [
+            color,
+            color.withValues(alpha: 0.80),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          Icon(
-            icon,
-            size: 35,
-            color: Colors.white,
+          CircleAvatar(
+            backgroundColor: Colors.white24,
+            child: Icon(
+              icon,
+              color: Colors.white,
+            ),
           ),
 
           const Spacer(),
@@ -40,20 +48,20 @@ class PromoCard extends StatelessWidget {
             title,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
               fontWeight: FontWeight.bold,
+              fontSize: 19,
             ),
           ),
 
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
 
           Text(
             subtitle,
             style: const TextStyle(
               color: Colors.white70,
+              fontSize: 13,
             ),
           ),
-
         ],
       ),
     );
