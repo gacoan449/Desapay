@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
-import '../home/home_screen.dart';
+import '../../widgets/bottom_nav.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -77,7 +77,7 @@ class LoginScreen extends StatelessWidget {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const HomeScreen(),
+                        builder: (_) => const BottomNav(),
                       ),
                     );
                   },
