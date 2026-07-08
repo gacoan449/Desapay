@@ -21,6 +21,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // REVISI: Menentukan warna teks yang tegas agar kontras dengan background putih
+    const Color warnaTeksUtama = Color(0xFF1A1A1A); // Hitam pekat elegan
+    const Color warnaTeksSekunder = Color(0xFF555555); // Abu-abu tua tegas (bukan abu-abu pudar)
+    const Color warnaIkon = Color(0xFF0D47A1); // Biru tua premium untuk ikon agar hidup
+
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
       appBar: AppBar(
@@ -58,6 +63,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    color: warnaTeksUtama, // REVISI WARNA NAMA
                   ),
                 ),
               ),
@@ -65,42 +71,69 @@ class _ProfilScreenState extends State<ProfilScreen> {
               Center(
                 child: Text(
                   data["member"] ?? "Anggota Biasa",
-                  style: const TextStyle(color: Colors.grey),
+                  style: const TextStyle(
+                    color: warnaTeksSekunder, // REVISI WARNA STATUS MEMBER
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
 
               const SizedBox(height: 25),
 
               ListTile(
-                leading: const Icon(Icons.phone),
-                title: const Text("Nomor HP"),
-                subtitle: Text(data["phone"] ?? "-"),
+                leading: const Icon(Icons.phone, color: warnaIkon),
+                title: const Text(
+                  "Nomor HP",
+                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  data["phone"] ?? "-",
+                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
+                ),
               ),
 
               ListTile(
-                leading: const Icon(Icons.email),
-                title: const Text("Email"),
-                subtitle: Text(data["email"] ?? "-"),
+                leading: const Icon(Icons.email, color: warnaIkon),
+                title: const Text(
+                  "Email",
+                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  data["email"] ?? "-",
+                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
+                ),
               ),
 
               ListTile(
-                leading: const Icon(Icons.account_balance_wallet),
-                title: const Text("Saldo"),
-                subtitle: Text("Rp ${data["saldo"] ?? 0}"),
+                leading: const Icon(Icons.account_balance_wallet, color: warnaIkon),
+                title: const Text(
+                  "Saldo",
+                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  "Rp ${data["saldo"] ?? 0}",
+                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
+                ),
               ),
 
               ListTile(
-                leading: const Icon(Icons.stars),
-                title: const Text("Poin"),
-                subtitle: Text("${data["poin"] ?? 0} Poin"),
+                leading: const Icon(Icons.stars, color: warnaIkon),
+                title: const Text(
+                  "Poin",
+                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  "${data["poin"] ?? 0} Poin",
+                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
+                ),
               ),
 
-              const Divider(),
+              const Divider(color: Colors.grey, thickness: 0.5),
 
               ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text("Edit Profil"),
-                trailing: const Icon(Icons.arrow_forward_ios),
+                leading: const Icon(Icons.edit, color: warnaIkon),
+                title: const Text("Edit Profil", style: TextStyle(color: warnaTeksUtama)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -112,36 +145,39 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
 
               ListTile(
-                leading: const Icon(Icons.lock_reset),
-                title: const Text("Ubah Password"),
-                trailing: const Icon(Icons.arrow_forward_ios),
+                leading: const Icon(Icons.lock_reset, color: warnaIkon),
+                title: const Text("Ubah Password", style: TextStyle(color: warnaTeksUtama)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {},
               ),
 
               ListTile(
-                leading: const Icon(Icons.help),
-                title: const Text("Pusat Bantuan"),
-                trailing: const Icon(Icons.arrow_forward_ios),
+                leading: const Icon(Icons.help, color: warnaIkon),
+                title: const Text("Pusat Bantuan", style: TextStyle(color: warnaTeksUtama)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {},
               ),
 
               ListTile(
-                leading: const Icon(Icons.info),
-                title: const Text("Tentang DesaPay"),
-                trailing: const Icon(Icons.arrow_forward_ios),
+                leading: const Icon(Icons.info, color: warnaIkon),
+                title: const Text("Tentang DesaPay", style: TextStyle(color: warnaTeksUtama)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {},
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 30),
 
               SizedBox(
                 height: 50,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.logout),
-                  label: const Text("LOGOUT"),
+                  label: const Text("LOGOUT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: Colors.red[700],
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onPressed: () async {
                     await auth.logout();
