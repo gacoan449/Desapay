@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
+import '../../models/transaksi.dart';
+import '../../services/transaksi_service.dart';
 
 class RiwayatScreen extends StatelessWidget {
   const RiwayatScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final List<Transaksi> data = TransaksiService.semua();
+
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
 
@@ -14,87 +18,83 @@ class RiwayatScreen extends StatelessWidget {
         title: const Text("Riwayat Transaksi"),
       ),
 
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: data.isEmpty
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
 
-        children: const [
+                  Icon(
+                    Icons.receipt_long,
+                    size: 80,
+                    color: Colors.grey,
+                  ),
 
-          RiwayatItem(
-            layanan: "Pulsa Telkomsel",
-            tujuan: "081234567890",
-            nominal: "Rp10.000",
-            status: "Berhasil",
-            warna: Colors.green,
-          ),
+                  SizedBox(height: 15),
 
-          RiwayatItem(
-            layanan: "Token PLN",
-            tujuan: "1234567890",
-            nominal: "Rp50.000",
-            status: "Berhasil",
-            warna: Colors.green,
-          ),
+                  Text(
+                    "Belum ada transaksi",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
 
-          RiwayatItem(
-            layanan: "Top Up DANA",
-            tujuan: "081298765432",
-            nominal: "Rp20.000",
-            status: "Diproses",
-            warna: Colors.orange,
-          ),
+                  SizedBox(height: 8),
 
-        ],
-      ),
-    );
-  }
-}
+                  Text(
+                    "Silakan lakukan transaksi pertama.",
+                    style: TextStyle(
+                      color: Colors.grey,
+                    ),
+                  ),
 
-class RiwayatItem extends StatelessWidget {
+                ],
+              ),
+            )
 
-  final String layanan;
-  final String tujuan;
-  final String nominal;
-  final String status;
-  final Color warna;
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: data.length,
 
-  const RiwayatItem({
-    super.key,
-    required this.layanan,
-    required this.tujuan,
-    required this.nominal,
-    required this.status,
-    required this.warna,
-  });
+              itemBuilder: (context, index) {
 
-  @override
-  Widget build(BuildContext context) {
+                final item = data[index];
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
 
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: warna,
-          child: const Icon(
-            Icons.receipt_long,
-            color: Colors.white,
-          ),
-        ),
+                  child: ListTile(
 
-        title: Text(layanan),
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.receipt),
+                    ),
 
-        subtitle: Text(
-          "$tujuan\n$nominal",
-        ),
+                    title: Text(item.produk),
 
-        trailing: Text(
-          status,
-          style: TextStyle(
-            color: warna,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+                    subtitle: Text(
+                      "${item.tujuan}\nRp ${item.harga}",
+                    ),
+
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+
+                        Text(
+                          item.status,
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                      ],
+                    ),
+
+                  ),
+                );
+              },
+            ),
     );
   }
 }
