@@ -26,4 +26,8 @@ class AuthService {
     return true;
   }
 
+  Future<dynamic> currentUser() async {
+    return null;
+  }
+
 }
