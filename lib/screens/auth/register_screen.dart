@@ -88,6 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       loading = true;
     });
 
+    // Variabel "berhasil" ini menerima tipe String? dari auth.register
     final berhasil = await auth.register(
       nama: namaController.text.trim(),
       email: emailController.text.trim(),
@@ -101,7 +102,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!mounted) return;
 
-    if (berhasil) {
+    // REVISI LOGIKA: Jika bernilai null, berarti registrasi sukses tanpa pesan error
+    if (berhasil == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Pendaftaran berhasil"),
@@ -110,9 +112,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       Navigator.pop(context);
     } else {
+      // Menampilkan pesan error asli yang dikirim dari server Firebase/AuthService Anda
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Pendaftaran gagal"),
+        SnackBar(
+          content: Text(berhasil),
         ),
       );
     }
