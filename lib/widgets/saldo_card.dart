@@ -7,48 +7,91 @@ class SaldoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
-
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: WarnaDesaPay.primary,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xff1565C0),
+            Color(0xff1E88E5),
+            Color(0xff42A5F5),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: WarnaDesaPay.primary.withValues(alpha: 0.30),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
-
-          Text(
-            "Saldo Anda",
-            style: TextStyle(
-              color: Colors.white70,
-            ),
+          const Row(
+            children: [
+              Icon(Icons.account_balance_wallet,
+                  color: Colors.white, size: 22),
+              SizedBox(width: 8),
+              Text(
+                "Saldo DesaPay",
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 15,
+                ),
+              ),
+            ],
           ),
 
-          SizedBox(height: 10),
+          const SizedBox(height: 15),
 
-          Text(
+          const Text(
             "Rp 0",
             style: TextStyle(
+              fontSize: 34,
               color: Colors.white,
-              fontSize: 28,
               fontWeight: FontWeight.bold,
             ),
           ),
 
-          SizedBox(height: 8),
+          const SizedBox(height: 5),
 
-          Text(
+          const Text(
             "Member Silver",
             style: TextStyle(
               color: Colors.white70,
             ),
           ),
 
+          const SizedBox(height: 20),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.add),
+                  label: const Text("Isi Saldo"),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.history),
+                  label: const Text("Riwayat"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
