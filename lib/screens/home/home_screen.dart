@@ -77,7 +77,7 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             SizedBox(
-              height: 140,
+              height: 165,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: const [
@@ -126,8 +126,9 @@ class HomeScreen extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 4,
-              mainAxisSpacing: 20,
-              crossAxisSpacing: 10,
+              childAspectRatio: 0.78,
+              mainAxisSpacing: 18,
+              crossAxisSpacing: 12,
 
               children: [
 
@@ -219,39 +220,109 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 30),
 
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.local_offer),
-                title: const Text("Promo Hari Ini"),
-                subtitle: const Text(
-                  "Nikmati harga spesial Pulsa, Paket Data, Token PLN dan E-Wallet.",
-                ),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.orange,
+                    child: Icon(
+                      Icons.local_offer,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Promo Hari Ini",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                          ),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          "Cashback hingga 10% untuk Pulsa, PLN dan E-Wallet.",
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 15),
 
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.support_agent),
-                title: const Text("Pusat Bantuan"),
-                subtitle: const Text(
-                  "WhatsApp : 085642131263\nEmail : gacoan449@gmail.com",
-                ),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.green,
+                    child: Icon(
+                      Icons.support_agent,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Pusat Bantuan",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                          ),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          "WhatsApp\n085642131263",
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 15),
 
-            Card(
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: ListTile(
-                leading: const Icon(
-                  Icons.receipt_long,
-                  color: Colors.blue,
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.blue,
+                  child: Icon(
+                    Icons.receipt_long,
+                    color: Colors.white,
+                  ),
                 ),
-                title: const Text("Riwayat Transaksi"),
+                title: const Text(
+                  "Riwayat Transaksi",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 subtitle: const Text(
-                  "Lihat semua transaksi yang pernah dilakukan",
+                  "Lihat semua transaksi Anda",
                 ),
                 trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: () {
