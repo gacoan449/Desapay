@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
+import '../../widgets/banner_promo.dart';
+import '../../widgets/menu_item.dart';
+import '../../widgets/saldo_card.dart';
+
+import '../pulsa/pulsa_screen.dart';
+import '../paket/paket_screen.dart';
+import '../pln/pln_screen.dart';
+import '../ewallet/ewallet_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -11,7 +19,14 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: WarnaDesaPay.background,
 
       appBar: AppBar(
+        elevation: 0,
         title: const Text("DesaPay"),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Icon(Icons.notifications_none),
+          )
+        ],
       ),
 
       body: SingleChildScrollView(
@@ -22,47 +37,38 @@ class HomeScreen extends StatelessWidget {
 
           children: [
 
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: WarnaDesaPay.primary,
-                borderRadius: BorderRadius.circular(18),
+            const Text(
+              "Selamat Datang 👋",
+              style: TextStyle(
+                fontSize: 16,
               ),
+            ),
 
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            const SizedBox(height: 5),
 
-                  Text(
-                    "Saldo Anda",
-                    style: TextStyle(
-                      color: Colors.white70,
-                    ),
-                  ),
-
-                  SizedBox(height: 10),
-
-                  Text(
-                    "Rp 0",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                ],
+            const Text(
+              "Pengguna DesaPay",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
               ),
             ),
 
             const SizedBox(height: 20),
 
+            const SaldoCard(),
+
+            const SizedBox(height: 20),
+
+            const BannerPromo(),
+
+            const SizedBox(height: 25),
+
             const Text(
-              "Menu Utama",
+              "Layanan",
               style: TextStyle(
-                fontSize: 18,
                 fontWeight: FontWeight.bold,
+                fontSize: 18,
               ),
             ),
 
@@ -72,93 +78,99 @@ class HomeScreen extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 4,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+              mainAxisSpacing: 20,
+              crossAxisSpacing: 10,
 
-              children: const [
+              children: [
 
-                _MenuItem(Icons.phone_android,"Pulsa"),
-                _MenuItem(Icons.wifi,"Data"),
-                _MenuItem(Icons.flash_on,"PLN"),
-                _MenuItem(Icons.account_balance_wallet,"E-Wallet"),
-                _MenuItem(Icons.receipt_long,"Tagihan"),
-                _MenuItem(Icons.history,"Riwayat"),
-                _MenuItem(Icons.support_agent,"Bantuan"),
-                _MenuItem(Icons.person,"Profil"),
+                MenuItem(
+                  icon: Icons.phone_android,
+                  title: "Pulsa",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PulsaScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                MenuItem(
+                  icon: Icons.wifi,
+                  title: "Data",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PaketScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                MenuItem(
+                  icon: Icons.flash_on,
+                  title: "PLN",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlnScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                MenuItem(
+                  icon: Icons.account_balance_wallet,
+                  title: "E-Wallet",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const EwalletScreen(),
+                      ),
+                    );
+                  },
+                ),
 
               ],
             ),
 
-            const SizedBox(height: 25),
+            const SizedBox(height: 30),
 
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(15),
-              ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.local_offer),
 
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                title: const Text("Promo Hari Ini"),
 
-                  Text(
-                    "🔥 Promo Hari Ini",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  SizedBox(height: 8),
-
-                  Text(
-                    "Pulsa mulai Rp5.000\nToken PLN\nTop Up E-Wallet",
-                  ),
-
-                ],
+                subtitle: const Text(
+                  "Pulsa, Paket Data dan Token PLN lebih hemat.",
+                ),
               ),
             ),
+
+            const SizedBox(height: 15),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.support_agent),
+
+                title: const Text("Butuh Bantuan?"),
+
+                subtitle: const Text(
+                  "WhatsApp 085642131263",
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25),
 
           ],
         ),
       ),
     );
-  }
-}
-
-class _MenuItem extends StatelessWidget {
-
-  final IconData icon;
-  final String title;
-
-  const _MenuItem(this.icon,this.title);
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Column(
-      children: [
-
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: WarnaDesaPay.primary.withOpacity(.1),
-          child: Icon(
-            icon,
-            color: WarnaDesaPay.primary,
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12),
-        ),
-
-      ],
-    );
-
   }
 }
