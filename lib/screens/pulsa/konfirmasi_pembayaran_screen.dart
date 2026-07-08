@@ -1,8 +1,8 @@
-import '../../models/transaksi.dart';
-import '../../services/transaksi_service.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
+import '../../models/transaksi.dart';
+import '../../services/transaksi_service.dart';
 
 class KonfirmasiPembayaranScreen extends StatelessWidget {
   final String nomor;
@@ -18,57 +18,42 @@ class KonfirmasiPembayaranScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
-    const admin = 1500;
-    final total = harga + admin;
+    const int admin = 1500;
+    final int total = harga + admin;
 
     return Scaffold(
       backgroundColor: WarnaDesaPay.background,
-
       appBar: AppBar(
         title: const Text("Konfirmasi Pembayaran"),
       ),
-
       body: Padding(
         padding: const EdgeInsets.all(16),
-
         child: Column(
-
           children: [
-
             Card(
               child: Column(
-
                 children: [
-
                   ListTile(
                     leading: const Icon(Icons.phone_android),
                     title: const Text("Nomor Tujuan"),
                     subtitle: Text(nomor),
                   ),
-
-                  const Divider(),
-
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.shopping_bag),
                     title: const Text("Produk"),
                     subtitle: Text(produk),
                   ),
-
-                  const Divider(),
-
+                  const Divider(height: 1),
                   ListTile(
                     title: const Text("Harga"),
                     trailing: Text("Rp $harga"),
                   ),
-
                   ListTile(
                     title: const Text("Biaya Admin"),
                     trailing: const Text("Rp 1.500"),
                   ),
-
-                  const Divider(),
-
+                  const Divider(height: 1),
                   ListTile(
                     title: const Text(
                       "Total Pembayaran",
@@ -76,7 +61,6 @@ class KonfirmasiPembayaranScreen extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     trailing: Text(
                       "Rp $total",
                       style: const TextStyle(
@@ -86,63 +70,42 @@ class KonfirmasiPembayaranScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
                 ],
               ),
             ),
-
             const Spacer(),
-
             SizedBox(
               width: double.infinity,
               height: 55,
-
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.payment),
                 label: const Text("BAYAR SEKARANG"),
-
                 onPressed: () {
-
-  TransaksiService.tambah(
-
-    Transaksi(
-      tujuan: nomor,
-      produk: produk,
-      harga: harga,
-      status: "Berhasil",
-      tanggal: DateTime.now(),
-    ),
-
-  );
-
-  ScaffoldMessenger.of(context).showSnackBar(
-
-    const SnackBar(
-      content: Text(
-        "Transaksi berhasil disimpan.",
-      ),
-    ),
-
-  );
-
-  Navigator.popUntil(context, (route) => route.isFirst);
-
-                }
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-
-                    const SnackBar(
-                      content: Text(
-                        "Tahap berikutnya akan terhubung ke Tripay.",
-                      ),
+                  TransaksiService.tambah(
+                    Transaksi(
+                      tujuan: nomor,
+                      produk: produk,
+                      harga: harga,
+                      status: "Berhasil",
+                      tanggal: DateTime.now(),
                     ),
-
                   );
 
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Transaksi berhasil disimpan.",
+                      ),
+                    ),
+                  );
+
+                  Navigator.popUntil(
+                    context,
+                    (route) => route.isFirst,
+                  );
                 },
               ),
             ),
-
           ],
         ),
       ),
