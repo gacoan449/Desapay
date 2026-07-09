@@ -9,6 +9,7 @@ import '../ewallet/ewallet_screen.dart';
 import '../layanan/layanan_screen.dart';
 import '../riwayat/riwayat_screen.dart';
 import '../notifikasi/notifikasi_screen.dart';
+import 'widgets/kotak_saldo.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FC),
-      // ✅ Sudah dibungkus RefreshIndicator + SingleChildScrollView dengan benar
       body: RefreshIndicator(
         onRefresh: () async {
           setState(() {});
@@ -120,93 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              //=============================
-              // KARTU SALDO
-              //=============================
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.12), blurRadius: 18, offset: const Offset(0, 8))],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text("Saldo DesaPay", style: TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          IconButton(
-                            splashRadius: 22,
-                            onPressed: () => setState(() => saldoTerlihat = !saldoTerlihat),
-                            icon: Icon(saldoTerlihat ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Text(
-                          saldoTerlihat ? rupiah.format(saldo) : "Rp ••••••••",
-                          key: ValueKey(saldoTerlihat),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 33, color: Color(0xff1565C0)),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                              decoration: BoxDecoration(color: const Color(0xffE8F5E9), borderRadius: BorderRadius.circular(14)),
-                              child: Column(children: [
-                                const Icon(Icons.savings, color: Colors.green),
-                                const SizedBox(height: 6),
-                                const Text("Cashback", style: TextStyle(fontSize: 12, color: Colors.black54)),
-                                const SizedBox(height: 4),
-                                Text(rupiah.format(cashback), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                              ]),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                              decoration: BoxDecoration(color: const Color(0xffFFF8E1), borderRadius: BorderRadius.circular(14)),
-                              child: Column(children: [
-                                const Icon(Icons.stars, color: Colors.orange),
-                                const SizedBox(height: 6),
-                                const Text("Poin", style: TextStyle(fontSize: 12, color: Colors.black54)),
-                                const SizedBox(height: 4),
-                                Text("$poin Poin", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                              ]),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xff1565C0),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                          ),
-                          onPressed: () {},
-                          icon: const Icon(Icons.add_circle_outline),
-                          label: const Text("ISI SALDO", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              const KotakSaldo(),
 
               const SizedBox(height: 24),
 
@@ -228,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 30),
 
-              // ✅ MENU LAYANAN - HANYA SATU GRID SAJA TIDAK ADA DOBEL
               const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Layanan DesaPay", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
               const SizedBox(height: 18),
               Padding(
@@ -259,7 +172,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // INFO APLIKASI
               const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Info DesaPay", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
               const SizedBox(height: 15),
               SizedBox(
@@ -277,7 +189,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 25),
 
-              // PUSAT BANTUAN
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: InkWell(
@@ -308,7 +219,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              // CEK UPDATE
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
@@ -329,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 25),
 
-              // FOOTER
               Center(child: Column(children: [
                 const Icon(Icons.account_balance_wallet, color: Color(0xff1976D2), size: 55),
                 const SizedBox(height: 10),
