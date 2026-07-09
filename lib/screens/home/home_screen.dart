@@ -94,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FC), 
       
+      // 1. APPBAR UTAMA
       appBar: AppBar(
         backgroundColor: WarnaDesaPay.primary,
         elevation: 0,
@@ -112,7 +113,6 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 26),
             onPressed: _bukaKameraQRIS,
-            tooltip: "Pindai QRIS",
           ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 26),
@@ -130,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
+            // Dudukan Atas Kotak Saldo
             Stack(
               children: [
                 Container(
@@ -152,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 20),
 
+            // 2. GRID MENU UTAMA 4x2 INTERAKTIF (KODE MELEBUR TANPA FUNGSI LUAR)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Container(
@@ -171,71 +173,66 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisSpacing: 10,
                   childAspectRatio: 0.85,
                   children: [
-                    _itemMenuDana(Icons.phone_android_rounded, "Pulsa", Colors.orange, const PulsaScreen()),
-                    _itemMenuDana(Icons.wifi_rounded, "Data", Colors.blue, const PaketScreen()),
-                    _itemMenuDana(Icons.flash_on_rounded, "Listrik PLN", Colors.amber.shade600, const PlnScreen()),
-                    _itemMenuDana(Icons.account_balance_wallet_rounded, "E-Wallet", Colors.purple, const EwalletScreen()),
-                    _itemMenuDana(Icons.health_and_safety_rounded, "BPJS", Colors.teal, const PascabayarScreen(jenisLayanan: "BPJS")),
-                    _itemMenuDana(Icons.water_drop_rounded, "PDAM", Colors.lightBlue, const PascabayarScreen(jenisLayanan: "PDAM")),
-                    _itemMenuDana(Icons.tv_rounded, "TV Kabel", Colors.redAccent, const PascabayarScreen(jenisLayanan: "TV KABEL")),
-                    _itemMenuDana(Icons.grid_view_rounded, "Lihat Semua", Colors.grey.shade700, const LayananScreen()),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: InkWell(
-                onTap: _bukaWhatsAppPusatBantuan,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.green.shade600, Colors.green.shade400],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                    // --- MENU PULSA ---
+                    InkWell(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen())),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: Colors.orange.withOpacity(0.09), shape: BoxShape.circle),
+                            child: const Icon(Icons.phone_android_rounded, color: Colors.orange, size: 26),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text("Pulsa", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87))
+                        ],
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.green.withOpacity(0.2), spreadRadius: 1, blurRadius: 10, offset: const Offset(0, 4))
-                    ]
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Pusat Bantuan DesaPay", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 4),
-                            Text("Ada kendala transaksi? Hubungi CS WhatsApp kami 24 Jam nonstop.", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11, height: 1.4)),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
-                    ],
-                  ),
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 25),
+                    // --- MENU DATA ---
+                    InkWell(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaketScreen())),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.09), shape: BoxShape.circle),
+                            child: const Icon(Icons.wifi_rounded, color: Colors.blue, size: 26),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text("Data", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87))
+                        ],
+                      ),
+                    ),
 
-            SizedBox(
-              height: 130,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                physics: const BouncingScrollPhysics(),
-                children: [
-                  _bannerPromoMewah("Untung Melimpah", "Setiap transaksi pulsa dan token, otomatis harga modal dipotong termurah se-kecamatan.", Colors.blue.shade600, Icons.auto_graph_rounded),
+                    // --- MENU LISTRIK PLN ---
+                    InkWell(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen())),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: Colors.amber.withOpacity(0.09), shape: BoxShape.circle),
+                            child: Icon(Icons.flash_on_rounded, color: Colors.amber.shade600, size: 26),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text("Listrik PLN", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87))
+                        ],
+                      ),
+                    ),
+
+                    // --- MENU E-WALLET ---
+                    InkWell(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EwalletScreen())),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
