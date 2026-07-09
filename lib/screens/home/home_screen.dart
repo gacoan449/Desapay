@@ -43,213 +43,223 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FC),
+      // ✅ Struktur sudah aman: RefreshIndicator -> SingleChildScrollView -> Column
       body: RefreshIndicator(
         onRefresh: () async {
           setState(() {});
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
 
-              //=============================
-              // HEADER
-              //=============================
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 55,
-                  bottom: 30,
-                ),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xff1565C0), Color(0xff1E88E5)],
+                //=============================
+                // HEADER
+                //=============================
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 55,
+                    bottom: 30,
                   ),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(35),
-                    bottomRight: Radius.circular(35),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 58,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Icon(Icons.account_circle, size: 38, color: Color(0xff1565C0)),
-                        ),
-                        const SizedBox(width: 15),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text("Selamat Datang", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                              SizedBox(height: 4),
-                              Text("Pengguna DesaPay", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
-                              SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
-                                  SizedBox(width: 5),
-                                  Text("Member Gold", style: TextStyle(color: Colors.amber, fontSize: 13)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotifikasiScreen()));
-                          },
-                          icon: const Icon(Icons.notifications_none, color: Colors.white, size: 30),
-                        ),
-                      ],
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xff1565C0), Color(0xff1E88E5)],
                     ),
-                  ],
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(35),
+                      bottomRight: Radius.circular(35),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 58,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(Icons.account_circle, size: 38, color: Color(0xff1565C0)),
+                          ),
+                          const SizedBox(width: 15),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("Selamat Datang", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                                SizedBox(height: 4),
+                                Text("Pengguna DesaPay", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
+                                SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
+                                    SizedBox(width: 5),
+                                    Text("Member Gold", style: TextStyle(color: Colors.amber, fontSize: 13)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotifikasiScreen()));
+                            },
+                            icon: const Icon(Icons.notifications_none, color: Colors.white, size: 30),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              const KotakSaldo(),
-
-              const SizedBox(height: 24),
-
-              // AKSES CEPAT
-              const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Akses Cepat", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 15),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(children: [
-                  Expanded(child: _quickButton(icon: Icons.send_rounded, title: "Transfer", color: const Color(0xff1976D2), onTap: () {})),
-                  const SizedBox(width: 10),
-                  Expanded(child: _quickButton(icon: Icons.qr_code_scanner, title: "Scan", color: const Color(0xff00897B), onTap: () {})),
-                  const SizedBox(width: 10),
-                  Expanded(child: _quickButton(icon: Icons.account_balance_wallet, title: "Top Up", color: const Color(0xffEF6C00), onTap: () {})),
-                  const SizedBox(width: 10),
-                  Expanded(child: _quickButton(icon: Icons.qr_code_2, title: "QRIS", color: const Color(0xff7B1FA2), onTap: () {})),
-                ]),
-              ),
-
-              const SizedBox(height: 30),
-
-              const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Layanan DesaPay", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 18),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 20,
-                  childAspectRatio: .82,
-                  children: [
-                    menuHome(Icons.phone_android, "Pulsa"),
-                    menuHome(Icons.wifi, "Data"),
-                    menuHome(Icons.flash_on, "PLN"),
-                    menuHome(Icons.receipt_long, "Tagihan"),
-                    menuHome(Icons.account_balance_wallet, "Top Up"),
-                    menuHome(Icons.send, "Transfer"),
-                    menuHome(Icons.qr_code_scanner, "Scan"),
-                    menuHome(Icons.qr_code_2, "QRIS"),
-                    menuHome(Icons.account_balance, "Bank"),
-                    menuHome(Icons.savings, "Tabungan"),
-                    menuHome(Icons.shopping_cart, "Belanja"),
-                    menuHome(Icons.grid_view_rounded, "Semua"),
-                  ],
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: KotakSaldo(),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Info DesaPay", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-              const SizedBox(height: 15),
-              SizedBox(
-                height: 170,
-                child: ListView(
+                // AKSES CEPAT
+                const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Akses Cepat", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 15),
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _artikelCard(gambar: Icons.newspaper, warna: Colors.blue, judul: "DesaPay Resmi Diluncurkan", isi: "Nikmati pembayaran digital yang aman, cepat dan mudah untuk seluruh Indonesia."),
-                    _artikelCard(gambar: Icons.security, warna: Colors.green, judul: "Tips Keamanan", isi: "Jangan pernah memberikan PIN maupun OTP kepada siapapun."),
-                    _artikelCard(gambar: Icons.local_offer, warna: Colors.orange, judul: "Promo Cashback", isi: "Bayar Pulsa, PLN dan E-Wallet dapat cashback setiap hari."),
-                  ],
+                  child: Row(children: [
+                    Expanded(child: _quickButton(icon: Icons.send_rounded, title: "Transfer", color: const Color(0xff1976D2), onTap: () {})),
+                    const SizedBox(width: 10),
+                    Expanded(child: _quickButton(icon: Icons.qr_code_scanner, title: "Scan", color: const Color(0xff00897B), onTap: () {})),
+                    const SizedBox(width: 10),
+                    Expanded(child: _quickButton(icon: Icons.account_balance_wallet, title: "Top Up", color: const Color(0xffEF6C00), onTap: () {})),
+                    const SizedBox(width: 10),
+                    Expanded(child: _quickButton(icon: Icons.qr_code_2, title: "QRIS", color: const Color(0xff7B1FA2), onTap: () {})),
+                  ]),
                 ),
-              ),
 
-              const SizedBox(height: 25),
+                const SizedBox(height: 30),
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: InkWell(
-                  onTap: () async {
-                    final urlWa = Uri.parse("https://wa.me/6285642131263");
-                    if (await canLaunchUrl(urlWa)) {
-                      await launchUrl(urlWa, mode: LaunchMode.externalApplication);
-                    } else {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Aplikasi WhatsApp tidak ditemukan")));
-                    }
-                  },
+                const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Layanan DesaPay", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 20,
+                    childAspectRatio: .82,
+                    children: [
+                      menuHome(Icons.phone_android, "Pulsa"),
+                      menuHome(Icons.wifi, "Data"),
+                      menuHome(Icons.flash_on, "PLN"),
+                      menuHome(Icons.receipt_long, "Tagihan"),
+                      menuHome(Icons.account_balance_wallet, "Top Up"),
+                      menuHome(Icons.send, "Transfer"),
+                      menuHome(Icons.qr_code_scanner, "Scan"),
+                      menuHome(Icons.qr_code_2, "QRIS"),
+                      menuHome(Icons.account_balance, "Bank"),
+                      menuHome(Icons.savings, "Tabungan"),
+                      menuHome(Icons.shopping_cart, "Belanja"),
+                      menuHome(Icons.grid_view_rounded, "Semua"),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("Info DesaPay", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 15),
+                SizedBox(
+                  height: 170,
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _artikelCard(gambar: Icons.newspaper, warna: Colors.blue, judul: "DesaPay Resmi Diluncurkan", isi: "Nikmati pembayaran digital yang aman, cepat dan mudah untuk seluruh Indonesia."),
+                      _artikelCard(gambar: Icons.security, warna: Colors.green, judul: "Tips Keamanan", isi: "Jangan pernah memberikan PIN maupun OTP kepada siapapun."),
+                      _artikelCard(gambar: Icons.local_offer, warna: Colors.orange, judul: "Promo Cashback", isi: "Bayar Pulsa, PLN dan E-Wallet dapat cashback setiap hari."),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 25),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: InkWell(
+                    onTap: () async {
+                      final urlWa = Uri.parse("https://wa.me/6285642131263");
+                      if (await canLaunchUrl(urlWa)) {
+                        await launchUrl(urlWa, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Aplikasi WhatsApp tidak ditemukan")));
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(color: const Color(0xFFE0F2F1), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.06), blurRadius: 5)]),
+                      child: const Row(children: [
+                        CircleAvatar(radius: 26, backgroundColor: Color(0xFF00897B), child: Icon(Icons.support_agent, color: Colors.white, size: 28)),
+                        SizedBox(width: 15),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF00796B))),
+                          SizedBox(height: 6),
+                          Text("Hubungi via WhatsApp\n085642131263", style: TextStyle(color: Color(0xFF00796B), height: 1.5)),
+                        ])),
+                      ]),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: const Color(0xFFE0F2F1), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.06), blurRadius: 5)]),
-                    child: const Row(children: [
-                      CircleAvatar(radius: 26, backgroundColor: Color(0xFF00897B), child: Icon(Icons.support_agent, color: Colors.white, size: 28)),
-                      SizedBox(width: 15),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF00796B))),
-                        SizedBox(height: 6),
-                        Text("Hubungi via WhatsApp\n085642131263", style: TextStyle(color: Color(0xFF00796B), height: 1.5)),
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6)]),
+                    child: Row(children: [
+                      const CircleAvatar(backgroundColor: Color(0xff1976D2), child: Icon(Icons.system_update, color: Colors.white)),
+                      const SizedBox(width: 15),
+                      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text("Versi Aplikasi", style: TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(height: 4),
+                        Text("DesaPay v1.0.0", style: TextStyle(color: Colors.grey)),
                       ])),
+                      ElevatedButton(onPressed: () {}, child: const Text("Cek")),
                     ]),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 25),
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6)]),
-                  child: Row(children: [
-                    const CircleAvatar(backgroundColor: Color(0xff1976D2), child: Icon(Icons.system_update, color: Colors.white)),
-                    const SizedBox(width: 15),
-                    const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text("Versi Aplikasi", style: TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(height: 4),
-                      Text("DesaPay v1.0.0", style: TextStyle(color: Colors.grey)),
-                    ])),
-                    ElevatedButton(onPressed: () {}, child: const Text("Cek")),
+                const Center(
+                  child: Column(children: [
+                    Icon(Icons.account_balance_wallet, color: Color(0xff1976D2), size: 55),
+                    SizedBox(height: 10),
+                    Text("DesaPay", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 6),
+                    Text("Dompet Digital Indonesia", style: TextStyle(color: Colors.grey)),
+                    SizedBox(height: 15),
+                    Text("© 2026 DesaPay Indonesia", style: TextStyle(color: Colors.grey.shade600)),
+                    SizedBox(height: 30),
                   ]),
                 ),
-              ),
-
-              const SizedBox(height: 25),
-
-              Center(child: Column(children: [
-                const Icon(Icons.account_balance_wallet, color: Color(0xff1976D2), size: 55),
-                const SizedBox(height: 10),
-                const Text("DesaPay", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                const Text("Dompet Digital Indonesia", style: TextStyle(color: Colors.grey)),
-                const SizedBox(height: 15),
-                Text("© 2026 DesaPay Indonesia", style: TextStyle(color: Colors.grey.shade600)),
-                const SizedBox(height: 30),
-              ])),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -289,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             gradient: const LinearGradient(colors: [Color(0xff2196F3), Color(0xff1565C0)]),
-            boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(.25), blurRadius: 10, offset: const Offset(0,5))],
+            boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(.25), blurRadius: 10, offset: Offset(0,5))],
           ),
           child: Icon(icon, color: Colors.white, size: 30),
         ),
