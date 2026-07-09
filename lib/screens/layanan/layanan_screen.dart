@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 
-// Panggil semua halaman layar produk yang sudah kita buat otomatis
+// Import halaman-halaman yang sudah dibuat otomatis tunggal
 import 'paket_screen.dart';
 import 'pln_screen.dart';
 import 'ewallet_screen.dart';
-// Catatan: Jika Anda sudah punya file PulsaScreen, silakan aktifkan import di bawah ini
-// import 'pulsa_screen.dart'; 
+import 'pulsa_screen.dart';
+import 'pascabayar_screen.dart'; // Import halaman pascabayar tunggal baru kita
 
 class LayananScreen extends StatelessWidget {
   const LayananScreen({super.key});
@@ -24,20 +24,19 @@ class LayananScreen extends StatelessWidget {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
         children: [
-          // 1. PULSA (Sementara memunculkan SnackBar, siap diarahkan ke PulsaScreen)
+          // 1. PULSA (Sudah Otomatis)
           MenuLayanan(
             icon: Icons.phone_android,
             title: "Pulsa",
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Menu Pulsa Reguler sedang kita siapkan otomatis")),
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PulsaScreen()),
               );
-              // Nanti jika PulsaScreen sudah ada, hapus SnackBar di atas lalu aktifkan kode ini:
-              // Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()));
             },
           ),
 
-          // 2. PAKET DATA (Sudah Terhubung & Otomatis)
+          // 2. PAKET DATA (Sudah Otomatis)
           MenuLayanan(
             icon: Icons.wifi,
             title: "Paket Data",
@@ -49,7 +48,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 3. PLN (Sudah Terhubung & Otomatis)
+          // 3. PLN (Sudah Otomatis)
           MenuLayanan(
             icon: Icons.flash_on,
             title: "PLN",
@@ -61,7 +60,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 4. E-WALLET (Sudah Terhubung & Otomatis)
+          // 4. E-WALLET (Sudah Otomatis)
           MenuLayanan(
             icon: Icons.account_balance_wallet,
             title: "E-Wallet",
@@ -80,25 +79,40 @@ class LayananScreen extends StatelessWidget {
             onTap: () => _tampilkanPesanBelumTersedia(context, "Voucher Game"),
           ),
 
-          // 6. BPJS (Pengembangan Selanjutnya)
+          // 6. BPJS (SEKARANG OTOMATIS)
           MenuLayanan(
             icon: Icons.health_and_safety,
             title: "BPJS",
-            onTap: () => _tampilkanPesanBelumTersedia(context, "BPJS"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "BPJS")),
+              );
+            },
           ),
 
-          // 7. PDAM (Pengembangan Selanjutnya)
+          // 7. PDAM (SEKARANG OTOMATIS)
           MenuLayanan(
             icon: Icons.water_drop,
             title: "PDAM",
-            onTap: () => _tampilkanPesanBelumTersedia(context, "PDAM"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "PDAM")),
+              );
+            },
           ),
 
-          // 8. TV KABEL (Pengembangan Selanjutnya)
+          // 8. TV KABEL (SEKARANG OTOMATIS)
           MenuLayanan(
             icon: Icons.tv,
             title: "TV Kabel",
-            onTap: () => _tampilkanPesanBel_umTersedia(context, "TV Kabel"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "TV KABEL")),
+              );
+            },
           ),
 
           // 9. LAINNYA
@@ -112,7 +126,6 @@ class LayananScreen extends StatelessWidget {
     );
   }
 
-  // Fungsi pembantu untuk memunculkan pesan menu yang belum diotomatiskan
   void _tampilkanPesanBelumTersedia(BuildContext context, String namaLayanan) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -122,11 +135,10 @@ class LayananScreen extends StatelessWidget {
   }
 }
 
-// Komponen tombol menu yang menerima aksi ketukan (onTap) secara dinamis
 class MenuLayanan extends StatelessWidget {
   final IconData icon;
   final String title;
-  final VoidCallback onTap; // Menampung perintah klik dari halaman utama
+  final VoidCallback onTap;
 
   const MenuLayanan({
     required this.icon,
@@ -140,7 +152,7 @@ class MenuLayanan extends StatelessWidget {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap, // Menjalankan fungsi perpindahan halaman saat ditekan
+        onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
