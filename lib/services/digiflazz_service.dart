@@ -57,7 +57,6 @@ class DigiflazzService {
     required String customerNo,   
   }) async {
     try {
-      // Membuat Nomor Referensi unik otomatis agar transaksi tidak bentrok
       String refId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
 
       String signRaw = _username + _apiKey + refId;
@@ -116,6 +115,40 @@ class DigiflazzService {
       }
     } catch (e) {
       return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi: $e'};
+    }
+  }
+
+  // ==========================================
+  // 4. FUNGSI CEK STATUS DEPOSIT (BARU)
+  // ==========================================
+  Future<Map<String, dynamic>> cekStatusDeposit({
+    required int jumlahNominal,
+  }) async {
+    try {
+      // Menggunakan tanda pengenal keamanan deposit yang sama
+      String signRaw = _username + _apiKey + 'deposit';
+      String sign = md5.convert(utf8.encode(signRaw)).toString();
+
+      final response = await http.post(
+        Uri.parse(_baseUrlDeposit),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "username": _username,
+          "amount": jumlahNominal,
+          "Bank": "BCA",
+          "owner_name": "Pemilik DesaPay",
+          "sign": sign
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'] ?? {'status': 'Gagal', 'message': 'Gagal memuat status'};
+      } else {
+        return {'status': 'Gagal', 'message': 'Server merespon status ${response.statusCode}'};
+      }
+    } catch (e) {
+      return {'status': 'Gagal', 'message': 'Error: $e'};
     }
   }
 }
