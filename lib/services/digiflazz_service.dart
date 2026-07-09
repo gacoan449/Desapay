@@ -3,13 +3,12 @@ import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 
 class DigiflazzService {
-  // Menggunakan URL resmi Digiflazz untuk menarik data
+  // Endpoint resmi Digiflazz untuk menarik data daftar harga (pricelist)
   final String _baseUrl = 'https://digiflazz.com';
   
-  // Masukkan username Digiflazz Anda yang menggunakan huruf kecil semua
-  final String _username = 'desapay'; 
-  // Nanti setelah di-ACC, ganti teks ini dengan API Key asli dari dashboard Digiflazz Anda
-  final String _apiKey = 'api_key_rahasia_anda'; 
+  // Data akun Anda (Sudah terisi otomatis)
+  final String _username = 'rukaxigqnvno'; 
+  final String _apiKey = 'dev-cfc06820-7b62-11f1-b538-03d592ffb07f'; 
 
   Future<List<dynamic>> ambilSemuaProduk() async {
     try {
@@ -31,10 +30,11 @@ class DigiflazzService {
         final data = jsonDecode(response.body);
         List<dynamic> produkAsli = data['data'] ?? [];
         
-        // MARKUP UNTUNG GLOBAL: Otomatis menaikkan semua harga modal server sebesar Rp 500
-        int keuntunganKita = 500;
+        // MARKUP UNTUNG GLOBAL: Otomatis menaikkan semua harga modal server sebesar Rp 1.000
+        int keuntunganKita = 1000;
 
         return produkAsli.map((item) {
+          // Menambahkan harga modal dari Digiflazz dengan keuntungan Rp 1.000
           item['price'] = (item['price'] ?? 0) + keuntunganKita;
           return item;
         }).toList();
