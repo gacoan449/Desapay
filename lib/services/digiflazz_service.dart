@@ -3,16 +3,17 @@ import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 
 class DigiflazzService {
-  // Endpoint resmi Digiflazz
+  // Semua Alamat URL Resmi Digiflazz
   final String _baseUrlPriceList = 'https://digiflazz.com';
   final String _baseUrlTransaction = 'https://digiflazz.com';
+  final String _baseUrlDeposit = 'https://digiflazz.com';
   
-  // Data akun Anda (Development/Testing)
+  // Data akun testing Anda (Ganti ke Production Key jika nanti sudah siap rilis)
   final String _username = 'rukaxigqnvno'; 
   final String _apiKey = 'dev-cfc06820-7b62-11f1-b538-03d592ffb07f'; 
 
   // ==========================================
-  // 1. FUNGSI AMBIL DAFTAR HARGA (PRICELIST)
+  // 1. FUNGSI AMBIL DAFTAR HARGA + UNTUNG 1RB
   // ==========================================
   Future<List<dynamic>> ambilSemuaProduk() async {
     try {
@@ -49,17 +50,16 @@ class DigiflazzService {
   }
 
   // ==========================================
-  // 2. FUNGSI TEMBAK TRANSAKSI UTAMA (BARU)
+  // 2. FUNGSI TEMBAK TRANSAKSI PULSA/TOKEN/E-WALLET
   // ==========================================
   Future<Map<String, dynamic>> kirimTransaksi({
-    required String buyerSkuCode, // Kode produk (contoh: xld10, pln20)
-    required String customerNo,   // Nomor HP atau nomor meteran PLN pembeli
+    required String buyerSkuCode, 
+    required String customerNo,   
   }) async {
     try {
-      // Membuat Ref ID unik otomatis berdasarkan waktu saat ini agar tidak bentrok
+      // Membuat Nomor Referensi unik otomatis agar transaksi tidak bentrok
       String refId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
 
-      // Aturan enkripsi transaksi Digiflazz: MD5(username + apiKey + ref_id)
       String signRaw = _username + _apiKey + refId;
       String sign = md5.convert(utf8.encode(signRaw)).toString();
 
@@ -77,7 +77,39 @@ class DigiflazzService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Mengembalikan data hasil transaksi dari server (sukses/gagal/pending)
+        return data['data'] ?? {'status': 'Gagal', 'message': 'Format response salah'};
+      } else {
+        return {'status': 'Gagal', 'message': 'Server merespon dengan status ${response.statusCode}'};
+      }
+    } catch (e) {
+      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi: $e'};
+    }
+  }
+
+  // ==========================================
+  // 3. FUNGSI MINTA TIKET DEPOSIT / ISI SALDO
+  // ==========================================
+  Future<Map<String, dynamic>> mintaTiketDeposit({
+    required int jumlahNominal, 
+  }) async {
+    try {
+      String signRaw = _username + _apiKey + 'deposit';
+      String sign = md5.convert(utf8.encode(signRaw)).toString();
+
+      final response = await http.post(
+        Uri.parse(_baseUrlDeposit),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "username": _username,
+          "amount": jumlahNominal,
+          "Bank": "BCA", 
+          "owner_name": "Pemilik DesaPay", 
+          "sign": sign
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         return data['data'] ?? {'status': 'Gagal', 'message': 'Format response salah'};
       } else {
         return {'status': 'Gagal', 'message': 'Server merespon dengan status ${response.statusCode}'};
