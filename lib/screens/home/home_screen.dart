@@ -100,7 +100,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text("Pusat Bantuan DesaPay", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                         SizedBox(height: 4),
-                        Text("Ada kendala transaksi? Hubungi CS WhatsApp kami 24 Jam nonstop.", style: TextStyle(color: Colors.whiteBB, fontSize: 11)),
+                        // PERBAIKAN DI SINI: Menggunakan warna resmi Colors.white70 agar tidak error build lagi
+                        Text("Ada kendala transaksi? Hubungi CS WhatsApp kami 24 Jam nonstop.", style: TextStyle(color: Colors.white70, fontSize: 11)),
                       ])),
                       const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
                     ],
