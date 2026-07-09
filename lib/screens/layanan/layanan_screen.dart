@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 
-// Import halaman-halaman yang sudah dibuat otomatis tunggal
-import 'paket_screen.dart';
-import 'pln_screen.dart';
-import 'ewallet_screen.dart';
-import 'pulsa_screen.dart';
-import 'pascabayar_screen.dart'; // Import halaman pascabayar tunggal baru kita
+// PEMBETULAN IMPORT PATH: Keluar sub-folder layanan dengan tanda ../
+import '../paket/paket_screen.dart';
+import '../pln/pln_screen.dart';
+import '../ewallet/ewallet_screen.dart';
+import '../pulsa/pulsa_screen.dart';
+import '../pascabayar/pascabayar_screen.dart'; 
 
 class LayananScreen extends StatelessWidget {
   const LayananScreen({super.key});
@@ -24,7 +24,7 @@ class LayananScreen extends StatelessWidget {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
         children: [
-          // 1. PULSA (Sudah Otomatis)
+          // 1. PULSA (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.phone_android,
             title: "Pulsa",
@@ -36,7 +36,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 2. PAKET DATA (Sudah Otomatis)
+          // 2. PAKET DATA (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.wifi,
             title: "Paket Data",
@@ -48,7 +48,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 3. PLN (Sudah Otomatis)
+          // 3. PLN (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.flash_on,
             title: "PLN",
@@ -60,7 +60,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 4. E-WALLET (Sudah Otomatis)
+          // 4. E-WALLET (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.account_balance_wallet,
             title: "E-Wallet",
@@ -72,14 +72,14 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 5. VOUCHER GAME (Pengembangan Selanjutnya)
+          // 5. VOUCHER GAME
           MenuLayanan(
             icon: Icons.sports_esports,
             title: "Voucher Game",
             onTap: () => _tampilkanPesanBelumTersedia(context, "Voucher Game"),
           ),
 
-          // 6. BPJS (SEKARANG OTOMATIS)
+          // 6. BPJS (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.health_and_safety,
             title: "BPJS",
@@ -91,7 +91,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 7. PDAM (SEKARANG OTOMATIS)
+          // 7. PDAM (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.water_drop,
             title: "PDAM",
@@ -103,7 +103,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 8. TV KABEL (SEKARANG OTOMATIS)
+          // 8. TV KABEL (Hapus const ilegal)
           MenuLayanan(
             icon: Icons.tv,
             title: "TV Kabel",
@@ -165,10 +165,7 @@ class MenuLayanan extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ],
         ),
