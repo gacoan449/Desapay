@@ -20,10 +20,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
 
-  // Fungsi Launcher WhatsApp Jalur Aman (Bebas Error Android Hell)
+  // Fungsi Launcher WhatsApp Jalur Aman Tanpa Mengubah Android Manifest
   Future<void> _bukaWhatsAppPusatBantuan() async {
     final String nomorWa = "6285642131263"; 
     final String teksPesan = Uri.encodeComponent("Halo CS DesaPay, saya butuh bantuan terkait transaksi...");
+    // Menggunakan URL web universal api.whatsapp agar kompatibel dan aman dari pemblokiran
     final Uri urlAman = Uri.parse("https://whatsapp.com");
 
     try {
@@ -101,8 +102,9 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         title: Row(
           children: [
+            // MEMANGGIL LOGO BARU: Menggunakan nama file ChatGPT yang pas sesuai pubspec.yaml Anda
             Image.asset(
-              'assets/images/logo_desapay.png',
+              'ChatGPT Image 8 Jul 2026, 22.03.40.png',
               height: 35,
               errorBuilder: (context, error, stackTrace) => const Icon(Icons.wallet, color: Colors.white, size: 30),
             ),
@@ -229,13 +231,3 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
                     ],
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 25),
-
-            // 4. SPANDUK KARTU BANNER INFO PROMO GESER
-            SizedBox(
-              height: 130,
