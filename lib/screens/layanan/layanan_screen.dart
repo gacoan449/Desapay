@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 
-// PEMBETULAN IMPORT PATH: Keluar sub-folder layanan dengan tanda ../
+// JALUR IMPORT GLOBAL (Menggunakan penanda keluar folder yang tepat)
 import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../pulsa/pulsa_screen.dart';
-import '../pascabayar/pascabayar_screen.dart'; 
+import '../pascabayar_screen.dart'; // Jalur aman keluar sub-folder
 
 class LayananScreen extends StatelessWidget {
   const LayananScreen({super.key});
@@ -24,7 +24,7 @@ class LayananScreen extends StatelessWidget {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
         children: [
-          // 1. PULSA (Hapus const ilegal)
+          // 1. PULSA
           MenuLayanan(
             icon: Icons.phone_android,
             title: "Pulsa",
@@ -36,7 +36,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 2. PAKET DATA (Hapus const ilegal)
+          // 2. PAKET DATA
           MenuLayanan(
             icon: Icons.wifi,
             title: "Paket Data",
@@ -48,7 +48,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 3. PLN (Hapus const ilegal)
+          // 3. PLN
           MenuLayanan(
             icon: Icons.flash_on,
             title: "PLN",
@@ -60,7 +60,7 @@ class LayananScreen extends StatelessWidget {
             },
           ),
 
-          // 4. E-WALLET (Hapus const ilegal)
+          // 4. E-WALLET
           MenuLayanan(
             icon: Icons.account_balance_wallet,
             title: "E-Wallet",
@@ -79,38 +79,38 @@ class LayananScreen extends StatelessWidget {
             onTap: () => _tampilkanPesanBelumTersedia(context, "Voucher Game"),
           ),
 
-          // 6. BPJS (Hapus const ilegal)
+          // 6. BPJS (KATA CONST DI DEPAN PASCABAYAR SCREEN SUDAH DIHAPUS)
           MenuLayanan(
             icon: Icons.health_and_safety,
             title: "BPJS",
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "BPJS")),
+                MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "BPJS")),
               );
             },
           ),
 
-          // 7. PDAM (Hapus const ilegal)
+          // 7. PDAM (KATA CONST DI DEPAN PASCABAYAR SCREEN SUDAH DIHAPUS)
           MenuLayanan(
             icon: Icons.water_drop,
             title: "PDAM",
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "PDAM")),
+                MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "PDAM")),
               );
             },
           ),
 
-          // 8. TV KABEL (Hapus const ilegal)
+          // 8. TV KABEL (KATA CONST DI DEPAN PASCABAYAR SCREEN SUDAH DIHAPUS)
           MenuLayanan(
             icon: Icons.tv,
             title: "TV Kabel",
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "TV KABEL")),
+                MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "TV KABEL")),
               );
             },
           ),
