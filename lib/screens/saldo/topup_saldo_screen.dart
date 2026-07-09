@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
-// Hubungkan ke service digiflazz
 import '../../services/digiflazz_service.dart'; 
+// Panggil halaman struk pembayaran yang dikirimkan tadi
+import 'payment_screen.dart'; 
 
 class TopupSaldoScreen extends StatefulWidget {
   const TopupSaldoScreen({super.key});
@@ -31,8 +32,6 @@ class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Kita panggil fungsi _nominal dengan mengirimkan Teks dan Angka Murni
           _nominal("Rp10.000", 10000),
           _nominal("Rp20.000", 20000),
           _nominal("Rp50.000", 50000),
@@ -62,7 +61,6 @@ class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
     );
   }
 
-  // Fungsi konfirmasi dan menembak tiket deposit ke Digiflazz
   void _prosesMintaTiket(String teksNominal, int angkaMurni) {
     showDialog(
       context: context,
@@ -77,56 +75,54 @@ class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context); // Tutup dialog tanya
+              Navigator.pop(context); // Tutup dialog konfirmasi
 
-              // Tampilkan loading screen
+              // Tampilkan lingkaran loading
               showDialog(
                 context: context,
                 barrierDismissible: false,
                 builder: (context) => const Center(child: CircularProgressIndicator()),
               );
 
-              // Tembak API request deposit ke Digiflazz
+              // Ambil tiket deposit ke Digiflazz
               Map<String, dynamic> hasil = await _digiflazzService.mintaTiketDeposit(
                 jumlahNominal: angkaMurni,
               );
 
-              if (mounted) Navigator.pop(context); // Tutup loading screen
+              if (mounted) Navigator.pop(context); // Tutup loading
 
-              String statusDeposit = hasil['rc'] == '00' ? 'Sukses' : 'Gagal';
-              String pesanServer = hasil['message'] ?? 'Tidak ada pesan';
-              
-              // Digiflazz akan memberikan nominal unik baru di field 'amount'
-              int nominalHarusDitransfer = hasil['amount'] ?? angkaMurni;
+              // Cek jika request disetujui server (Response Code: 00)
+              if (hasil.isNotEmpty && hasil['rc'] == '00') {
+                // Modifikasi struktur data agar cocok dengan kebutuhan data di PaymentScreen
+                Map<String, dynamic> dataBungkus = {
+                  "data": {
+                    "payment_name": "Transfer Bank ${hasil['bank'] ?? 'BCA'}",
+                    "amount": hasil['amount'] ?? angkaMurni,
+                    "reference": "DEP-${DateTime.now().millisecondsSinceEpoch}",
+                    "status": "UNPAID / BELUM TRANSFER",
+                    // Jika kelak versi live menyertakan kode bayar atau url gambar QRIS
+                    "pay_code": "A/N: ${hasil['owner_name'] ?? '-'}", 
+                    "qr_url": null 
+                  }
+                };
 
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(
-                      statusDeposit == 'Gagal' ? "❌ Gagal Mengambil Tiket" : "✅ Tiket Deposit Berhasil",
-                      style: TextStyle(
-                        color: statusDeposit == 'Gagal' ? Colors.red : Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
+                // Buka halaman PaymentScreen secara otomatis dengan membawa data tiket
+                if (mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PaymentScreen(data: dataBungkus),
                     ),
-                    content: Text(
-                      statusDeposit == 'Gagal' 
-                      ? "Pesan: $pesanServer"
-                      : "Silakan transfer tepat sampai 3 angka terakhir:\n\n"
-                        "💰 TOTAL: Rp $nominalHarusDitransfer\n"
-                        "🏦 BANK: ${hasil['bank'] ?? 'BCA'}\n"
-                        "👤 A/N: ${hasil['owner_name'] ?? '-'}\n\n"
-                        "Keterangan: $pesanServer",
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Paham"),
-                      ),
-                    ],
-                  ),
-                );
+                  );
+                }
+              } else {
+                // Tampilkan notifikasi jika server menolak permintaan tiket
+                String pesanGagal = hasil['message'] ?? 'Gagal menghubungi server';
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Gagal: $pesanGagal"), backgroundColor: Colors.red),
+                  );
+                }
               }
             },
             child: const Text("Proses"),
