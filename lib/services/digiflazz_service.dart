@@ -119,13 +119,12 @@ class DigiflazzService {
   }
 
   // ==========================================
-  // 4. FUNGSI CEK STATUS DEPOSIT (BARU)
+  // 4. FUNGSI CEK STATUS DEPOSIT 
   // ==========================================
   Future<Map<String, dynamic>> cekStatusDeposit({
     required int jumlahNominal,
   }) async {
     try {
-      // Menggunakan tanda pengenal keamanan deposit yang sama
       String signRaw = _username + _apiKey + 'deposit';
       String sign = md5.convert(utf8.encode(signRaw)).toString();
 
@@ -143,12 +142,13 @@ class DigiflazzService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data'] ?? {'status': 'Gagal', 'message': 'Gagal memuat status'};
+        // Kita bungkus data kembaliannya agar serasi dengan PaymentScreen
+        return data['data'] ?? {};
       } else {
-        return {'status': 'Gagal', 'message': 'Server merespon status ${response.statusCode}'};
+        return {};
       }
     } catch (e) {
-      return {'status': 'Gagal', 'message': 'Error: $e'};
+      return {};
     }
   }
 }
