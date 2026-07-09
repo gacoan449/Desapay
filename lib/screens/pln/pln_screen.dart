@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:crypto/crypto.dart';
 import '../../config/warna.dart';
-// Hubungkan ke service digiflazz yang sudah dibuat sebelumnya
+// Hubungkan ke service digiflazz yang sudah kita update
 import '../../services/digiflazz_service.dart'; 
 
 class PlnScreen extends StatefulWidget {
@@ -14,7 +12,6 @@ class PlnScreen extends StatefulWidget {
 }
 
 class _PlnScreenState extends State<PlnScreen> {
-  // Variabel untuk mengontrol menu mana yang sedang aktif
   bool _isMenuTokenAktif = false; 
 
   final TextEditingController _nomorController = TextEditingController();
@@ -23,7 +20,6 @@ class _PlnScreenState extends State<PlnScreen> {
   List<dynamic> _daftarToken = [];
   bool _sedangMemuat = false;
 
-  // Fungsi otomatis mengambil data dari Digiflazz
   Future<void> _panggilProdukDigiflazz() async {
     setState(() {
       _sedangMemuat = true;
@@ -31,7 +27,6 @@ class _PlnScreenState extends State<PlnScreen> {
 
     List<dynamic> semuaProduk = await _digiflazzService.ambilSemuaProduk();
     
-    // Menyaring khusus produk PLN Prabayar saja
     List<dynamic> produkPln = semuaProduk.where((produk) {
       return produk['category'] == 'PLN' && produk['brand'] == 'PLN';
     }).toList();
@@ -47,13 +42,12 @@ class _PlnScreenState extends State<PlnScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isMenuTokenAktif ? "Beli Token PLN" : "PLN"),
-        // Tombol kembali jika sedang berada di dalam menu Token
         leading: _isMenuTokenAktif 
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 setState(() {
-                  _isMenuTokenAktif = false; // Kembali ke menu utama PLN
+                  _isMenuTokenAktif = false;
                 });
               },
             )
@@ -67,7 +61,6 @@ class _PlnScreenState extends State<PlnScreen> {
     );
   }
 
-  // TAMPILAN AWAL: Berisi pilihan Token PLN dan Tagihan PLN
   Widget _tampilanMenuUtama() {
     return Column(
       children: [
@@ -79,9 +72,9 @@ class _PlnScreenState extends State<PlnScreen> {
             trailing: const Icon(Icons.arrow_forward_ios),
             onTap: () {
               setState(() {
-                _isMenuTokenAktif = true; // Aktifkan halaman isi token
+                _isMenuTokenAktif = true;
               });
-              _panggilProdukDigiflazz(); // Ambil harga dari server
+              _panggilProdukDigiflazz();
             },
           ),
         ),
@@ -103,7 +96,6 @@ class _PlnScreenState extends State<PlnScreen> {
     );
   }
 
-  // TAMPILAN KEDUA: Muncul otomatis setelah tombol "Token PLN" ditekan
   Widget _tampilanFormToken() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,10 +160,11 @@ class _PlnScreenState extends State<PlnScreen> {
     );
   }
 
-  // Dialog Popup Konfirmasi Bayar
+  // DIALOG KONFIRMASI YANG SUDAH TERHUBUNG KE TRANSAKSI ASLI DIGIFLAZZ
   void _prosesKonfirmasiBayar(dynamic produk) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text("Konfirmasi Pembelian"),
         content: Text(
@@ -182,12 +175,59 @@ class _PlnScreenState extends State<PlnScreen> {
             child: const Text("Batal"),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Bagian ini siap kita hubungkan ke fungsi transaksi nembak saldo
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Memproses ${produk['buyer_sku_code']} ke ${_nomorController.text}")),
+            onPressed: () async {
+              Navigator.pop(context); // Tutup popup tanya
+
+              // Munculkan lingkaran loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator()),
               );
+
+              // Tembak API Transaksi
+              Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
+                buyerSkuCode: produk['buyer_sku_code'],
+                customerNo: _nomorController.text,
+              );
+
+              if (mounted) Navigator.pop(context); // Tutup lingkaran loading
+
+              String statusTransaksi = hasil['status'] ?? 'Gagal';
+              String pesanServer = hasil['sn'] ?? hasil['message'] ?? 'Tidak ada pesan';
+
+              // Munculkan struk hasil akhir
+              if (mounted) {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text(
+                      statusTransaksi == 'Gagal' ? "❌ Transaksi Gagal" : "⏳ Transaksi Diproses",
+                      style: TextStyle(
+                        color: statusTransaksi == 'Gagal' ? Colors.red : Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    content: Text(
+                      "Produk: ${produk['product_name']}\n"
+                      "Tujuan: ${_nomorController.text}\n"
+                      "Status Server: $statusTransaksi\n\n"
+                      "Keterangan/SN:\n$pesanServer",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          if (statusTransaksi != 'Gagal') {
+                            _nomorController.clear();
+                          }
+                        },
+                        child: const Text("OK"),
+                      ),
+                    ],
+                  ),
+                );
+              }
             },
             child: const Text("Bayar Sekarang"),
           ),
