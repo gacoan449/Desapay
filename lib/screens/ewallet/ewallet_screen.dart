@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:crypto/crypto.dart';
 import '../../config/warna.dart';
-// Pastikan jalur import DigiflazzService di bawah ini sudah sesuai dengan proyek Anda
+// Hubungkan ke service digiflazz yang sudah kita update
 import '../../services/digiflazz_service.dart'; 
 
 class EwalletScreen extends StatefulWidget {
@@ -14,7 +12,6 @@ class EwalletScreen extends StatefulWidget {
 }
 
 class _EwalletScreenState extends State<EwalletScreen> {
-  // Variabel untuk mengontrol status menu dan nama E-Wallet yang dipilih
   bool _isMenuDetailAktif = false;
   String _ewalletTerpilih = "";
 
@@ -24,7 +21,6 @@ class _EwalletScreenState extends State<EwalletScreen> {
   List<dynamic> _daftarProdukEwallet = [];
   bool _sedangMemuat = false;
 
-  // Fungsi otomatis mengambil data dari Digiflazz dan menyaring berdasarkan brand E-Wallet
   Future<void> _panggilProdukEwallet(String brand) async {
     setState(() {
       _sedangMemuat = true;
@@ -32,13 +28,10 @@ class _EwalletScreenState extends State<EwalletScreen> {
 
     List<dynamic> semuaProduk = await _digiflazzService.ambilSemuaProduk();
     
-    // Menyaring produk berdasarkan kategori E-Money dan mencocokkan nama brand (DANA, OVO, dll)
-    // Digiflazz biasanya menggunakan huruf besar untuk brand e-money
     List<dynamic> produkDisaring = semuaProduk.where((produk) {
       String kategori = (produk['category'] ?? '').toString().toUpperCase();
       String namaBrand = (produk['brand'] ?? '').toString().toUpperCase();
       
-      // Filter untuk kategori E-Money / E-Wallet dan mencocokkan substring nama brand
       return (kategori.contains('E-MONEY') || kategori.contains('VOUCHER')) && 
              namaBrand.contains(brand.toUpperCase());
     }).toList();
@@ -55,14 +48,13 @@ class _EwalletScreenState extends State<EwalletScreen> {
       backgroundColor: WarnaDesaPay.background,
       appBar: AppBar(
         title: Text(_isMenuDetailAktif ? "Top Up $_ewalletTerpilih" : "Top Up E-Wallet"),
-        // Tombol kembali jika sedang berada di dalam menu detail produk
         leading: _isMenuDetailAktif 
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 setState(() {
-                  _isMenuDetailAktif = false; // Kembali ke daftar E-Wallet utama
-                  _nomorController.clear();  // Bersihkan inputan nomor HP
+                  _isMenuDetailAktif = false;
+                  _nomorController.clear();
                 });
               },
             )
@@ -75,7 +67,6 @@ class _EwalletScreenState extends State<EwalletScreen> {
     );
   }
 
-  // TAMPILAN AWAL: Daftar pilihan E-Wallet jualan Anda
   Widget _tampilanMenuUtama() {
     return ListView(
       children: [
@@ -88,7 +79,6 @@ class _EwalletScreenState extends State<EwalletScreen> {
     );
   }
 
-  // Widget pembantu untuk membuat baris menu E-Wallet
   Widget _menu(IconData icon, String title, String subtitle) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -103,15 +93,14 @@ class _EwalletScreenState extends State<EwalletScreen> {
         onTap: () {
           setState(() {
             _ewalletTerpilih = title;
-            _isMenuDetailAktif = true; // Buka form pengisian
+            _isMenuDetailAktif = true;
           });
-          _panggilProdukEwallet(title); // Ambil harga produk dari Digiflazz khusus brand ini
+          _panggilProdukEwallet(title);
         },
       ),
     );
   }
 
-  // TAMPILAN KEDUA: Muncul otomatis setelah salah satu E-Wallet ditekan
   Widget _tampilanFormEwallet() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,12 +130,7 @@ class _EwalletScreenState extends State<EwalletScreen> {
           child: _sedangMemuat
               ? const Center(child: CircularProgressIndicator())
               : _daftarProdukEwallet.isEmpty
-                  ? const Center(
-                      child: Text(
-                        "Produk tidak ditemukan.\nPastikan IP sudah di-whitelist di Digiflazz.",
-                        textAlign: TextAlign.center,
-                      ),
-                    )
+                  ? const Center(child: Text("Produk tidak ditemukan.\nPastikan IP sudah di-whitelist.", textAlign: TextAlign.center))
                   : ListView.builder(
                       itemCount: _daftarProdukEwallet.length,
                       itemBuilder: (context, index) {
@@ -182,10 +166,11 @@ class _EwalletScreenState extends State<EwalletScreen> {
     );
   }
 
-  // Dialog Popup Konfirmasi Bayar E-Wallet
+  // DIALOG KONFIRMASI YANG SUDAH TERHUBUNG KE TRANSAKSI ASLI DIGIFLAZZ
   void _prosesKonfirmasiBayar(dynamic produk) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text("Konfirmasi Pembelian"),
         content: Text(
@@ -196,12 +181,59 @@ class _EwalletScreenState extends State<EwalletScreen> {
             child: const Text("Batal"),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Bagian ini siap kita hubungkan ke fungsi transaksi nembak saldo di langkah berikutnya
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Memproses ${produk['buyer_sku_code']} ke ${_nomorController.text}")),
+            onPressed: () async {
+              Navigator.pop(context); // Tutup popup tanya
+
+              // Munculkan lingkaran loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator()),
               );
+
+              // Tembak API Transaksi
+              Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
+                buyerSkuCode: produk['buyer_sku_code'],
+                customerNo: _nomorController.text,
+              );
+
+              if (mounted) Navigator.pop(context); // Tutup lingkaran loading
+
+              String statusTransaksi = hasil['status'] ?? 'Gagal';
+              String pesanServer = hasil['sn'] ?? hasil['message'] ?? 'Tidak ada pesan';
+
+              // Munculkan struk hasil akhir
+              if (mounted) {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text(
+                      statusTransaksi == 'Gagal' ? "❌ Transaksi Gagal" : "⏳ Transaksi Diproses",
+                      style: TextStyle(
+                        color: statusTransaksi == 'Gagal' ? Colors.red : Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    content: Text(
+                      "Produk: ${produk['product_name']}\n"
+                      "Tujuan: ${_nomorController.text}\n"
+                      "Status Server: $statusTransaksi\n\n"
+                      "Keterangan/SN:\n$pesanServer",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          if (statusTransaksi != 'Gagal') {
+                            _nomorController.clear();
+                          }
+                        },
+                        child: const Text("OK"),
+                      ),
+                    ],
+                  ),
+                );
+              }
             },
             child: const Text("Bayar Sekarang"),
           ),
