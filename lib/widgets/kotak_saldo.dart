@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../config/warna.dart';
-// Hubungkan ke layanan API Digiflazz Anda
-import '../../services/digiflazz_service.dart'; 
+import '../config/warna.dart';
+import '../services/digiflazz_service.dart'; 
 
 class KotakSaldo extends StatefulWidget {
   const KotakSaldo({super.key});
@@ -19,10 +18,9 @@ class _KotakSaldoState extends State<KotakSaldo> {
   @override
   void initState() {
     super.initState();
-    _ambilSaldoTerbaru(); // Saldo otomatis ditarik saat aplikasi pertama dibuka
+    _ambilSaldoTerbaru(); 
   }
 
-  // Fungsi mandiri untuk mengambil sisa saldo modal dari Digiflazz
   Future<void> _ambilSaldoTerbaru() async {
     if (!mounted) return;
     setState(() {
@@ -45,14 +43,13 @@ class _KotakSaldoState extends State<KotakSaldo> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
-      // Gunakan warna utama DesaPay Anda sebagai latar belakang kotak
       color: WarnaDesaPay.primary, 
       child: Padding(
         padding: const EdgeInsets.all(18.0),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.between,
+          // KUNCINYA DI SINI: Sudah diperbaiki menggunakan kapital yang benar agar tidak error build
+          mainAxisAlignment: MainAxisAlignment.spaceBetween, 
           children: [
-            // Bagian Informasi Angka Saldo
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -92,8 +89,6 @@ class _KotakSaldoState extends State<KotakSaldo> {
                     ),
               ],
             ),
-
-            // Tombol Refresh Kecil untuk update saldo tanpa perlu restart aplikasi
             Container(
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.15),
