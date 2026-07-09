@@ -24,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _bukaWhatsAppPusatBantuan() async {
     final String nomorWa = "6285642131263"; 
     final String teksPesan = Uri.encodeComponent("Halo CS DesaPay, saya butuh bantuan terkait transaksi...");
-    // Menggunakan URL web universal api.whatsapp agar kompatibel dan aman dari pemblokiran
     final Uri urlAman = Uri.parse("https://whatsapp.com");
 
     try {
@@ -59,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const Spacer(),
-            // Kotak Bidik Kamera QRIS
             Container(
               width: 250,
               height: 250,
@@ -94,15 +92,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FC), // Latar belakang abu cerah khas dompet digital
+      backgroundColor: const Color(0xFFF5F9FC), 
       
-      // 1. APPBAR ATAS MEWAH ALA DANA
       appBar: AppBar(
         backgroundColor: WarnaDesaPay.primary,
         elevation: 0,
         title: Row(
           children: [
-            // MEMANGGIL LOGO BARU: Menggunakan nama file ChatGPT yang pas sesuai pubspec.yaml Anda
             Image.asset(
               'ChatGPT Image 8 Jul 2026, 22.03.40.png',
               height: 35,
@@ -134,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
-            // Header Biru Atas & Dudukan Kotak Saldo
             Stack(
               children: [
                 Container(
@@ -150,14 +145,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
-                  child: KotakSaldo(), // Memanggil komponen saldo otomatis kita
+                  child: KotakSaldo(), 
                 ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            // 2. GRID MENU UTAMA 4x2 INTERAKTIF DAN MENARIK ALA DANA
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Container(
@@ -192,7 +186,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 20),
 
-            // 3. SPANDUK PUSAT BANTUAN WHATSAPP MEWAH & MENARIK (KLIK LANGSUNG TEMBAK)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: InkWell(
@@ -202,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.green.shade600, Colors.emerald.shade400],
+                      colors: [Colors.green.shade600, Colors.green.shade400],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -231,3 +224,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
                     ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            SizedBox(
+              height: 130,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  _bannerPromoMewah("Untung Melimpah", "Setiap transaksi pulsa dan token, otomatis harga modal dipotong termurah se-kecamatan.", Colors.blue.shade600, Icons.auto_graph_rounded),
