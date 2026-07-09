@@ -8,6 +8,7 @@ import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../pascabayar_screen.dart';
+import '../topup_saldo_screen.dart'; // Import halaman isi saldo Anda
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,51 +17,170 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Fungsi Hubungi Pusat Bantuan Jalur Aman Universal
-  Future<void> _bukaWhatsApp() async {
-    final Uri url = Uri.parse("https://whatsapp.com...");
-    try { await launchUrl(url, mode: LaunchMode.platformDefault); } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal: $e")));
+  // 1. FUNGSI PUSAT BANTUAN JALUR UTUH (ANTI-ERROR)
+  Future<void> _bukaWhatsAppPusatBantuan() async {
+    final String nomorWa = "6285642131263"; 
+    final String teksPesan = Uri.encodeComponent("Halo CS DesaPay, saya butuh bantuan terkait kendala transaksi...");
+    final Uri urlAman = Uri.parse("https://whatsapp.com");
+
+    try {
+      await launchUrl(urlAman, mode: LaunchMode.platformDefault);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal membuka WhatsApp: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
+  }
+
+  // 2. FUNGSI SIMULASI KAMERA SCAN QRIS DANA STYLE
+  void _bukaKameraQRIS() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: const Text("PINDAI QRIS DESAPAY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              leading: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.blue.shade400, width: 4),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Center(
+                child: Icon(Icons.qr_code_scanner_rounded, size: 100, color: Colors.white24),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text("Arahkan kamera ke kode QRIS DesaPay", style: TextStyle(color: Colors.white70)),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FC),
+      
+      // BAR ATAS DENGAN TOMBOL SCAN QRIS DAN LONCENG NOTIFIKASI
       appBar: AppBar(
         backgroundColor: WarnaDesaPay.primary,
         elevation: 0,
         title: Row(
           children: [
-            Image.asset('ChatGPT Image 8 Jul 2026, 22.03.40.png', height: 35,
-              errorBuilder: (_, __, ___) => const Icon(Icons.wallet, color: Colors.white)),
+            Image.asset(
+              'ChatGPT Image 8 Jul 2026, 22.03.40.png', 
+              height: 35,
+              errorBuilder: (_, __, ___) => const Icon(Icons.wallet, color: Colors.white),
+            ),
             const SizedBox(width: 8),
             const Text("DesaPay", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 26),
+            onPressed: _bukaKameraQRIS, // Aktif membuka lembar scan kamera
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 26),
+            onPressed: () {},
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
+
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
-            // Top Blue Header & Dudukan Kotak Saldo
+            // Dudukan Atas Biru untuk Kotak Saldo
             Stack(
               children: [
-                Container(height: 60, decoration: BoxDecoration(color: WarnaDesaPay.primary,
-                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)))),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: KotakSaldo()),
+                Container(
+                  height: 100, // Diperpanjang agar gradasi muat rapi
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: WarnaDesaPay.primary,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(24),
+                      bottomRight: Radius.circular(24),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
+                  child: Column(
+                    children: [
+                      KotakSaldo(),
+                      const SizedBox(height: 10),
+                      
+                      // KELUHAN TERJAWAB: MEMUNCUKKAN TOMBOL TOP UP SALDO DISAMPING KOTAK
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const TopupSaldoScreen()),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_circle_outline_rounded, color: WarnaDesaPay.primary, size: 22),
+                                const SizedBox(width: 10),
+                                Text(
+                                  "ISI SALDO / TOP UP AGEN",
+                                  style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
 
-            // GRID MENU 4x2 INTERAKTIF ALA DANA
+            const SizedBox(height: 25),
+
+            // GRID MENU UTAMA 4x2 DANA STYLE
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.06), spreadRadius: 3, blurRadius: 15)]),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(color: Colors.grey.withOpacity(0.06), spreadRadius: 3, blurRadius: 15)
+                  ]
+                ),
                 child: GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -75,73 +195,42 @@ class _HomeScreenState extends State<HomeScreen> {
                     _menuItem(Icons.account_balance_wallet_rounded, "E-Wallet", Colors.purple, const EwalletScreen()),
                     _menuItem(Icons.health_and_safety_rounded, "BPJS", Colors.teal, const PascabayarScreen(jenisLayanan: "BPJS")),
                     _menuItem(Icons.water_drop_rounded, "PDAM", Colors.lightBlue, const PascabayarScreen(jenisLayanan: "PDAM")),
-                    _menuItem(Icons.tv_rounded, "TV Kabel", Colors.redAccent, const PascabayarScreen(jenisLayanan: "TV KABEL")),
-                    _menuItem(Icons.grid_view_rounded, "Lainnya", Colors.grey.shade700, const LayananScreen()),
+                    _itemMenuLainnya(Icons.tv_rounded, "TV Kabel", Colors.redAccent, const PascabayarScreen(jenisLayanan: "TV KABEL")),
+                    _itemMenuLainnya(Icons.grid_view_rounded, "Lainnya", Colors.grey.shade700, const LayananScreen()),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 20),
 
-            // PUSAT BANTUAN WHATSAPP MEWAH
+            const SizedBox(height: 25),
+
+            // PUSAT BANTUAN WHATSAPP MEWAH (SUDAH DIPERBAIKI LINK UTUHNYA)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: InkWell(
-                onTap: _bukaWhatsApp,
+                onTap: _bukaWhatsAppPusatBantuan,
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade600, Colors.green.shade400]),
-                    borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.2), blurRadius: 10)]),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green.shade600, Colors.green.shade400],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: Colors.green.withOpacity(0.2), blurRadius: 10)
+                    ]
+                  ),
                   child: Row(
                     children: [
-                      CircleAvatar(backgroundColor: Colors.white.withOpacity(0.2), child: const Icon(Icons.support_agent_rounded, color: Colors.white)),
+                      CircleAvatar(
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        child: const Icon(Icons.support_agent_rounded, color: Colors.white),
+                      ),
                       const SizedBox(width: 16),
-                      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text("Pusat Bantuan DesaPay", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                        SizedBox(height: 4),
-                        // PERBAIKAN DI SINI: Menggunakan warna resmi Colors.white70 agar tidak error build lagi
-                        Text("Ada kendala transaksi? Hubungi CS WhatsApp kami 24 Jam nonstop.", style: TextStyle(color: Colors.white70, fontSize: 11)),
-                      ])),
-                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 25),
-
-            // FOOTER IDENTITAS BRAND RESMI
-            Column(
-              children: [
-                Icon(Icons.widgets_outlined, size: 35, color: WarnaDesaPay.primary.withOpacity(0.3)),
-                const SizedBox(height: 6),
-                Text("Aplikasi Keagenan Modern Nusantara", style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500)),
-                Text("© 2026 DesaPay Indonesia • Rilis Sukses", style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
-              ],
-            ),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Fungsi Pembantu Ringkas Pembuat Tombol Menu Grid
-  Widget _menuItem(IconData icon, String label, Color warna, Widget tujuan) {
-    return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => tujuan)),
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: warna.withOpacity(0.09), shape: BoxShape.circle),
-            child: Icon(icon, color: warna, size: 26)),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
-            textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis)
-        ],
-      ),
-    );
-  }
-}
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
