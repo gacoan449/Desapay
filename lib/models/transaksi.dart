@@ -1,17 +1,15 @@
 class Transaksi {
-
-  final String tujuan;
   final String produk;
+  final String tujuan;
   final int harga;
   final String status;
-  final DateTime tanggal;
+  final String tanggal;
 
   Transaksi({
-    required this.tujuan,
     required this.produk,
+    required this.tujuan,
     required this.harga,
     required this.status,
     required this.tanggal,
   });
-
 }
