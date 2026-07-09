@@ -7,14 +7,15 @@ class DigiflazzService {
   final String _baseUrlPriceList = 'https://digiflazz.com';
   final String _baseUrlTransaction = 'https://digiflazz.com';
   final String _baseUrlDeposit = 'https://digiflazz.com';
+  final String _baseUrlCekSaldo = 'https://api.digiflazz.com/v1/cek-saldo';
   
   // Data akun testing Anda (Ganti ke Production Key jika nanti sudah siap rilis)
   final String _username = 'rukaxigqnvno'; 
   final String _apiKey = 'dev-cfc06820-7b62-11f1-b538-03d592ffb07f'; 
 
-  // ==========================================
-  // 1. FUNGSI AMBIL DAFTAR HARGA + UNTUNG 1RB
-  // ==========================================
+  // ===================================================
+  // 1. FUNGSI AMBIL DAFTAR HARGA + MARKUP UNTUNG Rp 1.000
+  // ===================================================
   Future<List<dynamic>> ambilSemuaProduk() async {
     try {
       String signRaw = _username + _apiKey + 'pricelist';
@@ -34,7 +35,6 @@ class DigiflazzService {
         final data = jsonDecode(response.body);
         List<dynamic> produkAsli = data['data'] ?? [];
         
-        // MARKUP UNTUNG GLOBAL: Rp 1.000
         int keuntunganKita = 1000;
 
         return produkAsli.map((item) {
@@ -49,9 +49,9 @@ class DigiflazzService {
     }
   }
 
-  // ==========================================
-  // 2. FUNGSI TEMBAK TRANSAKSI PULSA/TOKEN/E-WALLET
-  // ==========================================
+  // ===================================================
+  // 2. FUNGSI TEMBAK TRANSAKSI PULSA/TOKEN/E-WALLET/PPOB
+  // ===================================================
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode, 
     required String customerNo,   
@@ -85,9 +85,9 @@ class DigiflazzService {
     }
   }
 
-  // ==========================================
-  // 3. FUNGSI MINTA TIKET DEPOSIT / ISI SALDO
-  // ==========================================
+  // ===================================================
+  // 3. FUNGSI MINTA TIKET DEPOSIT / ISI SALDO AGEN
+  // ===================================================
   Future<Map<String, dynamic>> mintaTiketDeposit({
     required int jumlahNominal, 
   }) async {
@@ -118,9 +118,9 @@ class DigiflazzService {
     }
   }
 
-  // ==========================================
-  // 4. FUNGSI CEK STATUS DEPOSIT 
-  // ==========================================
+  // ===================================================
+  // 4. FUNGSI CEK STATUS TRANSFER DEPOSIT AGEN
+  // ===================================================
   Future<Map<String, dynamic>> cekStatusDeposit({
     required int jumlahNominal,
   }) async {
@@ -142,13 +142,43 @@ class DigiflazzService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Kita bungkus data kembaliannya agar serasi dengan PaymentScreen
         return data['data'] ?? {};
       } else {
         return {};
       }
     } catch (e) {
       return {};
+    }
+  }
+
+  // ===================================================
+  // 5. FUNGSI CEK SALDO MODAL UTAMA AGEN (BARU UTUH)
+  // ===================================================
+  Future<int> cekSaldoModal() async {
+    try {
+      // Rumus wajib enkripsi saldo sesuai dokumen panduan: md5(username + apiKey + "depo")
+      String signRaw = _username + _apiKey + "depo";
+      String sign = md5.convert(utf8.encode(signRaw)).toString();
+
+      final response = await http.post(
+        Uri.parse(_baseUrlCekSaldo),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "cmd": "deposit",
+          "username": _username,
+          "sign": sign
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // Mengambil angka nominal saldo murni dari field 'deposit' di database Digiflazz
+        return data['data']['deposit'] ?? 0;
+      } else {
+        return 0;
+      }
+    } catch (e) {
+      return 0;
     }
   }
 }
