@@ -1,609 +1,210 @@
 import 'package:flutter/material.dart';
-import '../../config/warna.dart';
-import '../../services/digiflazz_service.dart';
 
-class PaketScreen extends StatefulWidget {
-  const PaketScreen({super.key});
+class PaketDataScreen extends StatefulWidget {
+  const PaketDataScreen({super.key});
 
   @override
-  State<PaketScreen> createState() => _PaketScreenState();
+  State<PaketDataScreen> createState() => _PaketDataScreenState();
 }
 
-class _PaketScreenState extends State<PaketScreen> {
+class _PaketDataScreenState extends State<PaketDataScreen> {
+  final TextEditingController _nomorController = TextEditingController();
+  String _operatorTerdeteksi = "-";
 
-  final TextEditingController nomorController =
-      TextEditingController();
+  // DATABASE SIMULASI PRODUK DIGIFLAZZ (Mewakili Semua Operator)
+  final List<Map<String, dynamic>> _produkDigiflazzRaw = [
+    // TELKOMSEL
+    {"kode": "T1", "nama": "Telkomsel Data Flash 1GB", "harga_modal": 12000, "desc": "Masa aktif 30 hari. Full 24 Jam di semua jaringan."},
+    {"kode": "T2", "nama": "Telkomsel Combo Sakti 15GB", "harga_modal": 72000, "desc": "Kuota Utama 15GB + 300 Menit Nelpon + 400 SMS Telkomsel."},
+    // INDOSAT
+    {"kode": "I1", "nama": "Indosat Freedom Internet 2GB", "harga_modal": 14500, "desc": "Kuota utama berlaku 30 hari full tanpa pembagian zonasi."},
+    {"kode": "I2", "nama": "Indosat Freedom Combo 30GB", "harga_modal": 89000, "desc": "Kuota Utama 30GB + Nelpon Puas Sepuasnya ke sesama Indosat."},
+    // XL
+    {"kode": "X1", "nama": "XL Xtra Combo Flex 5GB", "harga_modal": 22000, "desc": "Masa aktif 30 hari + Bebas pilih bonus kuota aplikasi di Jakarta."},
+    {"kode": "X2", "nama": "XL Xtra HotRod Max 40GB", "harga_modal": 125000, "desc": "Kuota besar 40GB Nasional di jaringan super cepat 4G/5G."},
+    // AXIS
+    {"kode": "A1", "nama": "Axis Bronet 2GB 24 Jam", "harga_modal": 9500, "desc": "Kuota data internet gratis Axis 2GB berlaku penuh selama 30 hari."},
+    {"kode": "A2", "nama": "Axis Owsem 16GB + Games", "harga_modal": 43000, "desc": "Kuota Utama + Kuota Malam + Kuota Unlimited Games sepuasnya."},
+    // THREE (3)
+    {"kode": "31", "nama": "Tri Happy 3GB Bulanan", "harga_modal": 16000, "desc": "Kuota Happy 3GB full 24 jam gratis tanpa kuota lokal/malam."},
+    {"kode": "32", "nama": "Tri AlwaysOn (AON) 50GB", "harga_modal": 98000, "desc": "Masa aktif kuota mengikuti masa aktif kartu SIM Anda (Masa aktif panjang)."},
+    // SMARTFREN
+    {"kode": "S1", "nama": "Smartfren Unlimited Harian 1GB/Hari", "harga_modal": 25000, "desc": "Masa aktif 28 Hari dengan FUP 1GB per hari kecepatan penuh."},
+    {"kode": "S2", "nama": "Smartfren Kuota Nonstop 45GB", "harga_modal": 67000, "desc": "Kuota utama 45GB + akses internet nonstop setelah kuota habis."},
+  ];
 
-  final DigiflazzService _digiflazzService =
-      DigiflazzService();
+  List<Map<String, dynamic>> _produkDitampilkan = [];
 
-  List<dynamic> daftarPaket = [];
-
-  bool loading = false;
-
-  String operator = "";
-
-  @override
-  void dispose() {
-    nomorController.dispose();
-    super.dispose();
+  // 1. RUMUS LOGIKA AMBIL UNTUNG (MARKUP HARGA)
+  int hitungHargaJual(int hargaModal) {
+    if (hargaModal < 50000) {
+      return hargaModal + 1000; // Nominal sedikit, untung Rp1.000
+    } else {
+      return hargaModal + 2000; // Nominal banyak, untung Rp2.000
+    }
   }
 
-  // ==========================
-  // DETEKSI OPERATOR
-  // ==========================
+  // 2. LOGIKA DETEKSI OTOMATIS MULTI OPERATOR INDONESIA
+  void _cekNomor(String nomor) {
+    if (nomor.length >= 4) {
+      String prefiks = nomor.substring(0, 4);
+      String operatorDitemukan = "-";
+      
+      // Daftar Prefiks Operator Seluler Terlengkap
+      final Map<String, List<String>> daftarPrefiksOperator = {
+        "TELKOMSEL": ['0811', '0812', '0813', '0821', '0822', '0823', '0851', '0852', '0853'],
+        "INDOSAT": ['0814', '0815', '0816', '0855', '0856', '0857', '0858'],
+        "XL": ['0817', '0818', '0819', '0859', '0877', '0878'],
+        "AXIS": ['0831', '0832', '0833', '0838'],
+        "THREE": ['0895', '0896', '0897', '0898', '0899'],
+        "SMARTFREN": ['0881', '0882', '0883', '0884', '0885', '0886', '0887', '0888', '0889']
+      };
 
-  void deteksiOperator(String nomor) {
-
-    if (nomor.length < 4) {
+      // Mencari kecocokan prefiks
+      for (var entry in daftarPrefiksOperator.entries) {
+        if (entry.value.contains(prefiks)) {
+          operatorDitemukan = entry.key;
+          break;
+        }
+      }
 
       setState(() {
-        operator = "";
-        daftarPaket.clear();
+        _operatorTerdeteksi = operatorDitemukan;
+        
+        if (operatorDitemukan != "-") {
+          // Otomatis filter produk berdasarkan operator yang terdeteksi teks namanya
+          _produkDitampilkan = _produkDigiflazzRaw.where((produk) {
+            return produk['nama'].toString().toUpperCase().contains(operatorDitemukan);
+          }).toList();
+        } else {
+          _produkDitampilkan = [];
+        }
       });
-
-      return;
-    }
-
-    String prefix = nomor.substring(0, 4);
-
-    if ([
-      "0811","0812","0813",
-      "0821","0822","0823",
-      "0851","0852","0853"
-    ].contains(prefix)) {
-
-      operator = "TELKOMSEL";
-
-    } else if ([
-      "0814","0815","0816",
-      "0855","0856","0857","0858"
-    ].contains(prefix)) {
-
-      operator = "INDOSAT";
-
-    } else if ([
-      "0817","0818","0819",
-      "0859","0877","0878"
-    ].contains(prefix)) {
-
-      operator = "XL";
-
-    } else if ([
-      "0831","0832","0833","0838"
-    ].contains(prefix)) {
-
-      operator = "AXIS";
-
-    } else if ([
-      "0895","0896","0897",
-      "0898","0899"
-    ].contains(prefix)) {
-
-      operator = "THREE";
-
-    } else if ([
-      "0881","0882","0883",
-      "0884","0885","0886",
-      "0887","0888","0889"
-    ].contains(prefix)) {
-
-      operator = "SMARTFREN";
-
     } else {
-
-      operator = "";
-
+      setState(() {
+        _operatorTerdeteksi = "-";
+        _produkDitampilkan = [];
+      });
     }
-
-    setState(() {});
-
-    if (operator.isNotEmpty) {
-      ambilProduk(operator);
-    }
-
-  }
-
-  // ==========================
-  // AMBIL PRODUK DIGIFLAZZ
-  // ==========================
-
-  Future<void> ambilProduk(String brand) async {
-
-    setState(() {
-      loading = true;
-    });
-
-    List<dynamic> semuaProduk =
-        await _digiflazzService.ambilSemuaProduk();
-
-    daftarPaket =
-        semuaProduk.where((item) {
-
-      String kategori =
-          (item["category"] ?? "")
-              .toString()
-              .toUpperCase();
-
-      String merk =
-          (item["brand"] ?? "")
-              .toString()
-              .toUpperCase();
-
-      return kategori.contains("DATA") &&
-          merk.contains(brand);
-
-    }).toList();
-
-    daftarPaket.sort(
-      (a,b)=>
-      (a["price"]??0)
-          .compareTo(b["price"]??0),
-    );
-
-    setState(() {
-      loading = false;
-    });
-
   }
 
   @override
   Widget build(BuildContext context) {
+    // Definisi Warna Tema Mewah & Kontras Tinggi (Menghalau background putih bawaan HP)
+    const colorPrimary = Color(0xFF0F172A); // Midnight Navy Premium
+    const colorAccent = Color(0xFFF59E0B);  // Amber Gold / Emas Menyala
+    const colorCard = Color(0xFF1E293B);    // Deep Slate Blue untuk Card Produk
+    const colorTextLight = Color(0xFFF8FAFC); 
 
     return Scaffold(
-
-      backgroundColor:
-          WarnaDesaPay.background,
-
+      backgroundColor: Colors.white, // Background HP dasar putih bersih
       appBar: AppBar(
-
-        backgroundColor:
-            WarnaDesaPay.primary,
-
-        foregroundColor:
-            Colors.white,
-
+        title: const Text('Isi Paket Data', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: colorPrimary,
         elevation: 0,
-
-        title: const Text(
-          "Paket Data",
-          style: TextStyle(
-            fontWeight:
-                FontWeight.bold,
-          ),
-        ),
-
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-
-      body: Padding(
-
-        padding:
-            const EdgeInsets.all(16),
-
-        child: Column(
-
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-
-          children: [
-
-            const Text(
-
-              "Nomor Tujuan",
-
-              style: TextStyle(
-
-                fontSize: 16,
-
-                fontWeight:
-                    FontWeight.bold,
-
-                color: Colors.black87,
-
+      body: Column(
+        children: [
+          // KOTAK HEADER (Desain gelap melengkung super kontras)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 25),
+            decoration: const BoxDecoration(
+              color: colorPrimary,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
               ),
-
             ),
-
-            const SizedBox(
-              height: 10,
-            ),
-
-            TextField(
-
-              controller:
-                  nomorController,
-
-              keyboardType:
-                  TextInputType.phone,
-
-              onChanged:
-                  deteksiOperator,
-
-              style:
-                  const TextStyle(
-
-                color:
-                    Colors.black,
-
-                fontWeight:
-                    FontWeight.w600,
-
-              ),
-
-              decoration:
-                  InputDecoration(
-
-                filled: true,
-
-                fillColor:
-                    Colors.white,
-
-                hintText:
-                    "08xxxxxxxxxx",
-
-                prefixIcon:
-                    const Icon(
-
-                  Icons.phone_android,
-
-                  color:
-                      Colors.green,
-
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Nomor Pelanggan",
+                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-                    const SizedBox(height: 18),
-
-            if (operator.isNotEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.green.shade200,
-                  ),
-                ),
-                child: Row(
-                  children: [
-
-                    const Icon(
-                      Icons.sim_card,
-                      color: Colors.green,
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    Expanded(
-                      child: Text(
-                        "Operator : $operator",
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                const SizedBox(height: 8),
+                
+                // INPUT FIELD PREMIUM GAYA NEON
+                TextField(
+                  controller: _nomorController,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
+                  onChanged: _cekNomor,
+                  decoration: InputDecoration(
+                    hintText: "Contoh: 0812xxxx",
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), letterSpacing: 0),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.08),
+                    prefixIcon: const Icon(Icons.phone_android, color: colorAccent),
+                    suffixIcon: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorAccent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.bolt, size: 14, color: colorPrimary),
+                          const SizedBox(width: 4),
+                          Text(
+                            _operatorTerdeteksi,
+                            style: const TextStyle(color: colorPrimary, fontWeight: FontWeight.bold, fontSize: 11),
+                          ),
+                        ],
                       ),
                     ),
-
-                  ],
-                ),
-              ),
-
-            const SizedBox(height: 18),
-
-            Expanded(
-
-              child: loading
-
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
-
-                  : nomorController.text.length < 4
-
-                      ? const Center(
-                          child: Text(
-                            "Masukkan nomor HP terlebih dahulu",
-                            style: TextStyle(
-                              color: Colors.grey,
-                            ),
-                          ),
-                        )
-
-                      : daftarPaket.isEmpty
-
-                          ? const Center(
-                              child: Text(
-                                "Produk tidak ditemukan.",
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            )
-
-                          : GridView.builder(
-
-                              itemCount: daftarPaket.length,
-
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-
-                                crossAxisCount: 2,
-
-                                crossAxisSpacing: 12,
-
-                                mainAxisSpacing: 12,
-
-                                childAspectRatio: 1.35,
-
-                              ),
-
-                              itemBuilder: (context, index) {
-
-                                final produk =
-                                    daftarPaket[index];
-
-                                return InkWell(
-
-                                  borderRadius:
-                                      BorderRadius.circular(16),
-
-                                  onTap: () =>
-                                      prosesBayar(produk),
-
-                                  child: Container(
-
-                                    padding:
-                                        const EdgeInsets.all(12),
-
-                                    decoration: BoxDecoration(
-
-                                      color: Colors.white,
-
-                                      borderRadius:
-                                          BorderRadius.circular(16),
-
-                                      boxShadow: [
-
-                                        BoxShadow(
-
-                                          color: Colors.grey
-                                              .withOpacity(0.15),
-
-                                          blurRadius: 10,
-
-                                          offset: const Offset(0, 3),
-
-                                        ),
-
-                                      ],
-
-                                    ),
-
-                                    child: Column(
-
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-
-                                      children: [
-
-                                        const Icon(
-                                          Icons.wifi,
-                                          color: Colors.green,
-                                          size: 34,
-                                        ),
-
-                                        const SizedBox(height: 8),
-
-                                        Text(
-
-                                          produk["product_name"] ?? "-",
-
-                                          maxLines: 2,
-
-                                          overflow:
-                                              TextOverflow.ellipsis,
-
-                                          textAlign: TextAlign.center,
-
-                                          style: const TextStyle(
-
-                                            fontWeight: FontWeight.bold,
-
-                                            fontSize: 13,
-
-                                            color: Colors.black87,
-
-                                          ),
-
-                                        ),
-
-                                        const SizedBox(height: 8),
-
-                                        Text(
-
-                                          "Rp ${produk["price"]}",
-
-                                          style: const TextStyle(
-
-                                            color: Colors.green,
-
-                                            fontWeight: FontWeight.bold,
-
-                                            fontSize: 16,
-
-                                          ),
-
-                                        ),
-
-                                      ],
-
-                                    ),
-
-                                  ),
-
-                                );
-
-                              },
-
-                            ),
-              ),
-        ),
-      ),
-    );
-  }
-
-  //=====================================
-  // PROSES PEMBELIAN KE DIGIFLAZZ
-  //=====================================
-
-  Future<void> prosesBayar(dynamic produk) async {
-
-    bool? lanjut = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text("Konfirmasi Pembelian"),
-          content: Text(
-            "Produk : ${produk['product_name']}\n\n"
-            "Nomor : ${nomorController.text}\n"
-            "Harga : Rp ${produk['price']}",
-          ),
-          actions: [
-
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
-              child: const Text("Batal"),
-            ),
-
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
-              child: const Text("Bayar"),
-            ),
-
-          ],
-        );
-      },
-    );
-
-    if (lanjut != true) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    final hasil =
-        await _digiflazzService.kirimTransaksi(
-      buyerSkuCode: produk["buyer_sku_code"],
-      customerNo: nomorController.text,
-    );
-
-    if (mounted) {
-      Navigator.pop(context);
-    }
-
-    String status =
-        (hasil["status"] ?? "PENDING")
-            .toString()
-            .toUpperCase();
-
-    String pesan =
-        hasil["sn"] ??
-        hasil["message"] ??
-        "Menunggu respon server.";
-
-    Color warna = Colors.orange;
-    IconData icon = Icons.access_time;
-
-    if (status == "SUKSES") {
-      warna = Colors.green;
-      icon = Icons.check_circle;
-    } else if (status == "GAGAL") {
-      warna = Colors.red;
-      icon = Icons.cancel;
-    }
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-
-          title: Row(
-            children: [
-
-              Icon(
-                icon,
-                color: warna,
-              ),
-
-              const SizedBox(width: 8),
-
-              Expanded(
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    color: warna,
-                    fontWeight: FontWeight.bold,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: colorAccent, width: 1.5),
+                    ),
                   ),
                 ),
-              ),
-
-            ],
-          ),
-
-          content: SingleChildScrollView(
-            child: Text(
-              "Produk : ${produk['product_name']}\n\n"
-              "Nomor : ${nomorController.text}\n\n"
-              "$pesan",
+              ],
             ),
           ),
 
-          actions: [
+          // AREA DAFTAR PRODUK YANG MUNCUL OTOMATIS
+          Expanded(
+            child: _produkDitampilkan.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.perm_phone_msg_outlined, size: 60, color: colorPrimary.withOpacity(0.15)),
+                        const SizedBox(height: 12),
+                        Text(
+                          "Masukkan nomor HP pelanggan Anda",
+                          style: TextStyle(color: colorPrimary.withOpacity(0.4), fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Produk akan otomatis muncul sesuai operator",
+                          style: TextStyle(color: colorPrimary.withOpacity(0.3), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _produkDitampilkan.length,
+                    itemBuilder: (context, index) {
+                      final item = _produkDitampilkan[index];
+                      int modal = item['harga_modal'];
+                      int hargaJual = hitungHargaJual(modal); // Menjalankan rumus untung dinamis
 
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
+                      // Mengubah angka biasa menjadi format Rupiah ber-titik (Contoh: 12000 -> 12.000)
+                      String hargaFormat = hargaJual.toString().replaceAllMapped(
+                        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+                        (Match m) => '${m[1]}.'
+                      );
 
-                Navigator.pop(context);
-
-                nomorController.clear();
-
-                setState(() {
-                  operator = "";
-                  daftarPaket.clear();
-                });
-
-              },
-              child: const Text("Selesai"),
-            ),
-
-          ],
-        );
-      },
-    );
-  }
-
-            }
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 14),
