@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-class PaketDataScreen extends StatefulWidget {
-  const PaketDataScreen({super.key});
+class PaketScreen extends StatefulWidget {
+  const PaketScreen({super.key});
 
   @override
-  State<PaketDataScreen> createState() => _PaketDataScreenState();
+  State<PaketScreen> createState() => _PaketScreenState();
 }
 
-class _PaketDataScreenState extends State<PaketDataScreen> {
+class _PaketScreenState extends State<PaketScreen> {
   final TextEditingController _nomorController = TextEditingController();
   String _operatorTerdeteksi = "-";
 
@@ -38,7 +38,7 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
   // 1. RUMUS LOGIKA AMBIL UNTUNG (MARKUP HARGA)
   int hitungHargaJual(int hargaModal) {
     if (hargaModal < 50000) {
-      return hargaModal + 1000; // Nominal sedikit, untung Rp1.000
+      return hargaModal + 1000; // Nominal dikit, untung Rp1.000
     } else {
       return hargaModal + 2000; // Nominal banyak, untung Rp2.000
     }
@@ -50,7 +50,6 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
       String prefiks = nomor.substring(0, 4);
       String operatorDitemukan = "-";
       
-      // Daftar Prefiks Operator Seluler Terlengkap
       final Map<String, List<String>> daftarPrefiksOperator = {
         "TELKOMSEL": ['0811', '0812', '0813', '0821', '0822', '0823', '0851', '0852', '0853'],
         "INDOSAT": ['0814', '0815', '0816', '0855', '0856', '0857', '0858'],
@@ -60,7 +59,6 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
         "SMARTFREN": ['0881', '0882', '0883', '0884', '0885', '0886', '0887', '0888', '0889']
       };
 
-      // Mencari kecocokan prefiks
       for (var entry in daftarPrefiksOperator.entries) {
         if (entry.value.contains(prefiks)) {
           operatorDitemukan = entry.key;
@@ -70,9 +68,7 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
 
       setState(() {
         _operatorTerdeteksi = operatorDitemukan;
-        
         if (operatorDitemukan != "-") {
-          // Otomatis filter produk berdasarkan operator yang terdeteksi teks namanya
           _produkDitampilkan = _produkDigiflazzRaw.where((produk) {
             return produk['nama'].toString().toUpperCase().contains(operatorDitemukan);
           }).toList();
@@ -90,14 +86,13 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Definisi Warna Tema Mewah & Kontras Tinggi (Menghalau background putih bawaan HP)
-    const colorPrimary = Color(0xFF0F172A); // Midnight Navy Premium
-    const colorAccent = Color(0xFFF59E0B);  // Amber Gold / Emas Menyala
-    const colorCard = Color(0xFF1E293B);    // Deep Slate Blue untuk Card Produk
+    const colorPrimary = Color(0xFF0F172A); 
+    const colorAccent = Color(0xFFF59E0B);  
+    const colorCard = Color(0xFF1E293B);    
     const colorTextLight = Color(0xFFF8FAFC); 
 
     return Scaffold(
-      backgroundColor: Colors.white, // Background HP dasar putih bersih
+      backgroundColor: Colors.white, 
       appBar: AppBar(
         title: const Text('Isi Paket Data', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: colorPrimary,
@@ -106,7 +101,6 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
       ),
       body: Column(
         children: [
-          // KOTAK HEADER (Desain gelap melengkung super kontras)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 25),
@@ -125,8 +119,6 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
                   style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 8),
-                
-                // INPUT FIELD PREMIUM GAYA NEON
                 TextField(
                   controller: _nomorController,
                   keyboardType: TextInputType.phone,
@@ -170,8 +162,6 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
               ],
             ),
           ),
-
-          // AREA DAFTAR PRODUK YANG MUNCUL OTOMATIS
           Expanded(
             child: _produkDitampilkan.isEmpty
                 ? Center(
@@ -198,9 +188,8 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
                     itemBuilder: (context, index) {
                       final item = _produkDitampilkan[index];
                       int modal = item['harga_modal'];
-                      int hargaJual = hitungHargaJual(modal); // Menjalankan rumus untung dinamis
+                      int hargaJual = hitungHargaJual(modal);
 
-                      // Mengubah angka biasa menjadi format Rupiah ber-titik (Contoh: 12000 -> 12.000)
                       String hargaFormat = hargaJual.toString().replaceAllMapped(
                         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
                         (Match m) => '${m[1]}.'
@@ -208,3 +197,17 @@ class _PaketDataScreenState extends State<PaketDataScreen> {
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: colorCard, 
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorPrimary.withOpacity(0.12),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            )
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Theme(
