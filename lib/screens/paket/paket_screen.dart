@@ -125,7 +125,7 @@ class _PaketScreenState extends State<PaketScreen> {
                   style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
                   onChanged: _cekNomor,
                   decoration: InputDecoration(
-                    hintText: "Contoh: 0812xxxx",
+                    hintText: "Contioh: 0812xxxx",
                     hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), letterSpacing: 0),
                     filled: true,
                     fillColor: Colors.white.withOpacity(0.08),
@@ -210,5 +210,4 @@ class _PaketScreenState extends State<PaketScreen> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: Theme(
-                            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                          child: ExpansionTile(
