@@ -419,4 +419,197 @@ class _PulsaScreenState extends State<PulsaScreen> {
         ),
       ),
     );
-                                     }
+     }
+ Future<void> _prosesKonfirmasiBayar(dynamic produk) async {
+
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Konfirmasi Pembelian"),
+          content: Text(
+            "Produk : ${produk['product_name']}\n\n"
+            "Nomor : ${nomorController.text}\n\n"
+            "Harga : Rp ${produk['price']}\n\n"
+            "Lanjutkan pembelian?",
+          ),
+          actions: [
+
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text("Batal"),
+            ),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text("Bayar"),
+            ),
+
+          ],
+        );
+      },
+    );
+
+    if (setuju != true) return;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    final hasil = await _digiflazzService.kirimTransaksi(
+      buyerSkuCode: produk["buyer_sku_code"],
+      customerNo: nomorController.text,
+    );
+
+    if (mounted) {
+      Navigator.pop(context);
+    }
+
+    final status =
+        (hasil["status"] ?? "GAGAL").toString().toUpperCase();
+
+    final pesan =
+        hasil["sn"] ??
+        hasil["message"] ??
+        "Tidak ada keterangan dari server.";
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+
+          title: Row(
+            children: [
+
+              Icon(
+                status == "GAGAL"
+                    ? Icons.cancel
+                    : Icons.check_circle,
+                color: status == "GAGAL"
+                    ? Colors.red
+                    : Colors.green,
+              ),
+
+              const SizedBox(width: 8),
+
+              Expanded(
+                child: Text(
+                  status == "GAGAL"
+                      ? "Transaksi Gagal"
+                      : "Transaksi Diproses",
+                ),
+              ),
+
+            ],
+          ),
+
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+
+              Text(
+                "Produk",
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              Text(
+                produk["product_name"] ?? "-",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                "Nomor",
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              Text(
+                nomorController.text,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                "Status",
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              Text(
+                status,
+                style: TextStyle(
+                  color: status == "GAGAL"
+                      ? Colors.red
+                      : Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                "Keterangan",
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              Text(pesan),
+
+            ],
+          ),
+
+          actions: [
+
+            ElevatedButton(
+              onPressed: () {
+
+                Navigator.pop(context);
+
+                if (status != "GAGAL") {
+
+                  nomorController.clear();
+
+                  setState(() {
+                    _operatorTerdeteksi = "";
+                    _daftarPulsaReguler.clear();
+                  });
+
+                }
+
+              },
+              child: const Text("Selesai"),
+            ),
+
+          ],
+        );
+      },
+    );
+  }
+
+}
