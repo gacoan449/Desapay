@@ -29,17 +29,19 @@ class _PaketScreenState extends State<PaketScreen> {
     super.dispose();
   }
 
-  //==============================
+  // ==========================
   // DETEKSI OPERATOR
-  //==============================
+  // ==========================
 
   void deteksiOperator(String nomor) {
 
     if (nomor.length < 4) {
+
       setState(() {
         operator = "";
         daftarPaket.clear();
       });
+
       return;
     }
 
@@ -99,11 +101,12 @@ class _PaketScreenState extends State<PaketScreen> {
     if (operator.isNotEmpty) {
       ambilProduk(operator);
     }
+
   }
 
-  //==============================
+  // ==========================
   // AMBIL PRODUK DIGIFLAZZ
-  //==============================
+  // ==========================
 
   Future<void> ambilProduk(String brand) async {
 
@@ -114,14 +117,15 @@ class _PaketScreenState extends State<PaketScreen> {
     List<dynamic> semuaProduk =
         await _digiflazzService.ambilSemuaProduk();
 
-    daftarPaket = semuaProduk.where((item) {
+    daftarPaket =
+        semuaProduk.where((item) {
 
-      final kategori =
+      String kategori =
           (item["category"] ?? "")
               .toString()
               .toUpperCase();
 
-      final merk =
+      String merk =
           (item["brand"] ?? "")
               .toString()
               .toUpperCase();
@@ -134,12 +138,13 @@ class _PaketScreenState extends State<PaketScreen> {
     daftarPaket.sort(
       (a,b)=>
       (a["price"]??0)
-      .compareTo(b["price"]??0),
+          .compareTo(b["price"]??0),
     );
 
     setState(() {
       loading = false;
     });
+
   }
 
   @override
@@ -147,94 +152,105 @@ class _PaketScreenState extends State<PaketScreen> {
 
     return Scaffold(
 
-      backgroundColor: WarnaDesaPay.background,
+      backgroundColor:
+          WarnaDesaPay.background,
 
       appBar: AppBar(
+
+        backgroundColor:
+            WarnaDesaPay.primary,
+
+        foregroundColor:
+            Colors.white,
+
         elevation: 0,
-        backgroundColor: WarnaDesaPay.primary,
-        foregroundColor: Colors.white,
+
         title: const Text(
           "Paket Data",
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
+
       ),
 
       body: Padding(
-        padding: const EdgeInsets.all(16),
+
+        padding:
+            const EdgeInsets.all(16),
 
         child: Column(
+
           crossAxisAlignment:
               CrossAxisAlignment.start,
 
           children: [
 
             const Text(
+
               "Nomor Tujuan",
+
               style: TextStyle(
-                fontWeight: FontWeight.bold,
+
                 fontSize: 16,
+
+                fontWeight:
+                    FontWeight.bold,
+
                 color: Colors.black87,
+
               ),
+
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(
+              height: 10,
+            ),
 
             TextField(
-              controller: nomorController,
-              keyboardType: TextInputType.phone,
-              onChanged: deteksiOperator,
 
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
+              controller:
+                  nomorController,
+
+              keyboardType:
+                  TextInputType.phone,
+
+              onChanged:
+                  deteksiOperator,
+
+              style:
+                  const TextStyle(
+
+                color:
+                    Colors.black,
+
+                fontWeight:
+                    FontWeight.w600,
+
               ),
 
-              decoration: InputDecoration(
+              decoration:
+                  InputDecoration(
 
                 filled: true,
-                fillColor: Colors.white,
 
-                hintText: "08xxxxxxxxxx",
+                fillColor:
+                    Colors.white,
 
-                prefixIcon: const Icon(
+                hintText:
+                    "08xxxxxxxxxx",
+
+                prefixIcon:
+                    const Icon(
+
                   Icons.phone_android,
-                  color: Colors.green,
-                ),
 
-                suffixText:
-                    operator.isEmpty
-                        ? null
-                        : operator,
+                  color:
+                      Colors.green,
 
-                suffixStyle:
-                    const TextStyle(
-                  color: Colors.green,
-                  fontWeight:
-                      FontWeight.bold,
                 ),
-
-                border:
-                    OutlineInputBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                          14),
-                ),
-
-                focusedBorder:
-                    OutlineInputBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                          14),
-                  borderSide:
-                      const BorderSide(
-                    color: Colors.green,
-                    width: 2,
-                  ),
-                ),
-              ),
-            ),const SizedBox(height: 18),
+                    const SizedBox(height: 18),
 
             if (operator.isNotEmpty)
               Container(
@@ -259,7 +275,7 @@ class _PaketScreenState extends State<PaketScreen> {
 
                     Expanded(
                       child: Text(
-                        "Operator terdeteksi : $operator",
+                        "Operator : $operator",
                         style: const TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
@@ -272,15 +288,14 @@ class _PaketScreenState extends State<PaketScreen> {
                 ),
               ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
             Expanded(
 
               child: loading
 
                   ? const Center(
-                      child:
-                          CircularProgressIndicator(),
+                      child: CircularProgressIndicator(),
                     )
 
                   : nomorController.text.length < 4
@@ -307,8 +322,7 @@ class _PaketScreenState extends State<PaketScreen> {
 
                           : GridView.builder(
 
-                              itemCount:
-                                  daftarPaket.length,
+                              itemCount: daftarPaket.length,
 
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
@@ -323,8 +337,7 @@ class _PaketScreenState extends State<PaketScreen> {
 
                               ),
 
-                              itemBuilder:
-                                  (context, index) {
+                              itemBuilder: (context, index) {
 
                                 final produk =
                                     daftarPaket[index];
@@ -332,46 +345,33 @@ class _PaketScreenState extends State<PaketScreen> {
                                 return InkWell(
 
                                   borderRadius:
-                                      BorderRadius.circular(
-                                          16),
+                                      BorderRadius.circular(16),
 
-                                  onTap: () {
-
-                                    prosesBayar(
-                                      produk,
-                                    );
-
-                                  },
+                                  onTap: () =>
+                                      prosesBayar(produk),
 
                                   child: Container(
 
                                     padding:
-                                        const EdgeInsets.all(
-                                            12),
+                                        const EdgeInsets.all(12),
 
-                                    decoration:
-                                        BoxDecoration(
+                                    decoration: BoxDecoration(
 
-                                      color:
-                                          Colors.white,
+                                      color: Colors.white,
 
                                       borderRadius:
-                                          BorderRadius.circular(
-                                              16),
+                                          BorderRadius.circular(16),
 
                                       boxShadow: [
 
                                         BoxShadow(
 
                                           color: Colors.grey
-                                              .withOpacity(
-                                                  0.15),
+                                              .withOpacity(0.15),
 
                                           blurRadius: 10,
 
-                                          offset:
-                                              const Offset(
-                                                  0, 3),
+                                          offset: const Offset(0, 3),
 
                                         ),
 
@@ -382,68 +382,52 @@ class _PaketScreenState extends State<PaketScreen> {
                                     child: Column(
 
                                       mainAxisAlignment:
-                                          MainAxisAlignment
-                                              .center,
+                                          MainAxisAlignment.center,
 
                                       children: [
 
                                         const Icon(
                                           Icons.wifi,
-                                          color:
-                                              Colors.green,
+                                          color: Colors.green,
                                           size: 34,
                                         ),
 
-                                        const SizedBox(
-                                          height: 8,
-                                        ),
+                                        const SizedBox(height: 8),
 
                                         Text(
 
-                                          produk[
-                                                  "product_name"] ??
-                                              "-",
-
-                                          textAlign:
-                                              TextAlign
-                                                  .center,
+                                          produk["product_name"] ?? "-",
 
                                           maxLines: 2,
 
                                           overflow:
-                                              TextOverflow
-                                                  .ellipsis,
+                                              TextOverflow.ellipsis,
 
-                                          style:
-                                              const TextStyle(
+                                          textAlign: TextAlign.center,
 
-                                            color: Colors.black87,
+                                          style: const TextStyle(
 
-                                            fontWeight:
-                                                FontWeight
-                                                    .bold,
+                                            fontWeight: FontWeight.bold,
 
                                             fontSize: 13,
+
+                                            color: Colors.black87,
 
                                           ),
 
                                         ),
 
-                                        const SizedBox(
-                                          height: 8,
-                                        ),
+                                        const SizedBox(height: 8),
 
                                         Text(
 
                                           "Rp ${produk["price"]}",
 
-                                          style:
-                                              const TextStyle(
+                                          style: const TextStyle(
 
                                             color: Colors.green,
 
-                                            fontWeight:
-                                                FontWeight.bold,
+                                            fontWeight: FontWeight.bold,
 
                                             fontSize: 16,
 
@@ -462,16 +446,13 @@ class _PaketScreenState extends State<PaketScreen> {
                               },
 
                             ),
-
-            ),
-
-          ],
-
+              ),
         ),
-
       ),
+    );
+  }
 
-    );//=====================================
+  //=====================================
   // PROSES PEMBELIAN KE DIGIFLAZZ
   //=====================================
 
@@ -484,9 +465,7 @@ class _PaketScreenState extends State<PaketScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          title: const Text(
-            "Konfirmasi Pembelian",
-          ),
+          title: const Text("Konfirmasi Pembelian"),
           content: Text(
             "Produk : ${produk['product_name']}\n\n"
             "Nomor : ${nomorController.text}\n"
@@ -527,7 +506,7 @@ class _PaketScreenState extends State<PaketScreen> {
       ),
     );
 
-    Map<String, dynamic> hasil =
+    final hasil =
         await _digiflazzService.kirimTransaksi(
       buyerSkuCode: produk["buyer_sku_code"],
       customerNo: nomorController.text,
@@ -547,9 +526,8 @@ class _PaketScreenState extends State<PaketScreen> {
         hasil["message"] ??
         "Menunggu respon server.";
 
-    Color warna;
-
-    IconData icon;
+    Color warna = Colors.orange;
+    IconData icon = Icons.access_time;
 
     if (status == "SUKSES") {
       warna = Colors.green;
@@ -557,9 +535,6 @@ class _PaketScreenState extends State<PaketScreen> {
     } else if (status == "GAGAL") {
       warna = Colors.red;
       icon = Icons.cancel;
-    } else {
-      warna = Colors.orange;
-      icon = Icons.access_time;
     }
 
     if (!mounted) return;
@@ -569,8 +544,7 @@ class _PaketScreenState extends State<PaketScreen> {
       builder: (_) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(18),
           ),
 
           title: Row(
@@ -588,8 +562,7 @@ class _PaketScreenState extends State<PaketScreen> {
                   status,
                   style: TextStyle(
                     color: warna,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
@@ -619,11 +592,8 @@ class _PaketScreenState extends State<PaketScreen> {
                 nomorController.clear();
 
                 setState(() {
-
                   operator = "";
-
                   daftarPaket.clear();
-
                 });
 
               },
@@ -636,4 +606,4 @@ class _PaketScreenState extends State<PaketScreen> {
     );
   }
 
-  }
+            }
