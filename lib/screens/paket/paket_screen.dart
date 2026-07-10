@@ -234,8 +234,7 @@ class _PaketScreenState extends State<PaketScreen> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
+            ),const SizedBox(height: 18),
 
             if (operator.isNotEmpty)
               Container(
@@ -472,8 +471,7 @@ class _PaketScreenState extends State<PaketScreen> {
 
       ),
 
-    );
-    //=====================================
+    );//=====================================
   // PROSES PEMBELIAN KE DIGIFLAZZ
   //=====================================
 
