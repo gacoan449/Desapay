@@ -192,7 +192,7 @@ class _PaketScreenState extends State<PaketScreen> {
 
                       String hargaFormat = hargaJual.toString().replaceAllMapped(
                         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
-                        (Match m) => '${m[1]}.'
+                        (Match m) => '${m}.'
                       );
 
                       return Container(
@@ -211,3 +211,4 @@ class _PaketScreenState extends State<PaketScreen> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: Theme(
+                            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
