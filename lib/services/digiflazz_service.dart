@@ -11,7 +11,7 @@ class DigiflazzService {
   
   // Data akun testing Anda (Ganti ke Production Key jika nanti sudah siap rilis)
   final String _username = 'rukaxigqnvno'; 
-  final String _apiKey = 'dev-cfc06820-7b62-11f1-b538-03d592ffb07f'; 
+  final String _apiKey = ba2b7ab6-33b0-5a48-b7f7-56a2f1b30d0b
 
   // ===================================================
   // 1. FUNGSI AMBIL DAFTAR HARGA + MARKUP UNTUNG Rp 1.000
