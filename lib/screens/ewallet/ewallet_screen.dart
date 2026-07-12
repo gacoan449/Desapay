@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
-// Hubungkan ke service digiflazz yang sudah kita update
 import '../../services/digiflazz_service.dart'; 
 
 class EwalletScreen extends StatefulWidget {
-  const EwalletScreen({super.key});
+  final String? jenisEwallet;
+
+  const EwalletScreen({this.jenisEwallet, super.key});
 
   @override
   State<EwalletScreen> createState() => _EwalletScreenState();
@@ -21,20 +22,50 @@ class _EwalletScreenState extends State<EwalletScreen> {
   List<dynamic> _daftarProdukEwallet = [];
   bool _sedangMemuat = false;
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.jenisEwallet != null) {
+      _ewalletTerpilih = widget.jenisEwallet!;
+      _isMenuDetailAktif = true;
+      _panggilProdukEwallet(widget.jenisEwallet!);
+    }
+  }
+
   Future<void> _panggilProdukEwallet(String brand) async {
     setState(() {
       _sedangMemuat = true;
     });
 
     List<dynamic> semuaProduk = await _digiflazzService.ambilSemuaProduk();
+    String kataKunciBrand = brand.toUpperCase();
     
+    if (kataKunciBrand.contains("GOJEK") || kataKunciBrand.contains("GOPAY")) {
+      kataKunciBrand = "GO-PAY"; 
+    } else if (kataKunciBrand.contains("GRAB")) {
+      kataKunciBrand = "GRAB";
+    } else if (kataKunciBrand.contains("MAXIM")) {
+      kataKunciBrand = "MAXIM";
+    } else if (kataKunciBrand.contains("INDRIVE")) {
+      kataKunciBrand = "INDRIVE";
+    }
+
     List<dynamic> produkDisaring = semuaProduk.where((produk) {
       String kategori = (produk['category'] ?? '').toString().toUpperCase();
       String namaBrand = (produk['brand'] ?? '').toString().toUpperCase();
       
-      return (kategori.contains('E-MONEY') || kategori.contains('VOUCHER')) && 
-             namaBrand.contains(brand.toUpperCase());
+      return (kategori.contains('E-MONEY') || 
+              kategori.contains('VOUCHER') || 
+              kategori.contains('GAME') || 
+              kategori.contains('PPOB')) && 
+             (namaBrand.contains(kataKunciBrand) || kataKunciBrand.contains(namaBrand));
     }).toList();
+
+    produkDisaring.sort((a, b) {
+      int hargaA = int.tryParse(a['price'].toString()) ?? 0;
+      int hargaB = int.tryParse(b['price'].toString()) ?? 0;
+      return hargaA.compareTo(hargaB);
+    });
 
     setState(() {
       _daftarProdukEwallet = produkDisaring;
@@ -52,10 +83,14 @@ class _EwalletScreenState extends State<EwalletScreen> {
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
-                setState(() {
-                  _isMenuDetailAktif = false;
-                  _nomorController.clear();
-                });
+                if (widget.jenisEwallet != null) {
+                  Navigator.pop(context);
+                } else {
+                  setState(() {
+                    _isMenuDetailAktif = false;
+                    _nomorController.clear();
+                  });
+                }
               },
             )
           : null,
@@ -75,6 +110,9 @@ class _EwalletScreenState extends State<EwalletScreen> {
         _menu(Icons.account_balance_wallet, "GoPay", "Top Up Saldo GoPay"),
         _menu(Icons.account_balance_wallet, "ShopeePay", "Top Up Saldo ShopeePay"),
         _menu(Icons.account_balance_wallet, "LinkAja", "Top Up Saldo LinkAja"),
+        _menu(Icons.local_taxi, "MAXIM", "Top Up Saldo Driver/Customer Maxim"),
+        _menu(Icons.directions_car, "GRAB", "Top Up Saldo Driver/Customer Grab"),
+        _menu(Icons.motorcycle, "Gojek Driver", "Top Up Saldo Driver Gojek"),
       ],
     );
   }
@@ -84,7 +122,7 @@ class _EwalletScreenState extends State<EwalletScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: WarnaDesaPay.primary.withValues(alpha: 0.1),
+          backgroundColor: WarnaDesaPay.primary.withOpacity(0.1),
           child: Icon(icon, color: WarnaDesaPay.primary),
         ),
         title: Text(title),
@@ -130,7 +168,12 @@ class _EwalletScreenState extends State<EwalletScreen> {
           child: _sedangMemuat
               ? const Center(child: CircularProgressIndicator())
               : _daftarProdukEwallet.isEmpty
-                  ? const Center(child: Text("Produk tidak ditemukan.\nPastikan IP sudah di-whitelist.", textAlign: TextAlign.center))
+                  ? const Center(
+                      child: Text(
+                        "Produk tidak ditemukan.\nPastikan IP sudah di-whitelist atau saldo Digiflazz terisi.", 
+                        textAlign: TextAlign.center
+                      ),
+                    )
                   : ListView.builder(
                       itemCount: _daftarProdukEwallet.length,
                       itemBuilder: (context, index) {
@@ -166,7 +209,6 @@ class _EwalletScreenState extends State<EwalletScreen> {
     );
   }
 
-  // DIALOG KONFIRMASI YANG SUDAH TERHUBUNG KE TRANSAKSI ASLI DIGIFLAZZ
   void _prosesKonfirmasiBayar(dynamic produk) {
     showDialog(
       context: context,
@@ -182,27 +224,24 @@ class _EwalletScreenState extends State<EwalletScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context); // Tutup popup tanya
+              Navigator.pop(context);
 
-              // Munculkan lingkaran loading
               showDialog(
                 context: context,
                 barrierDismissible: false,
                 builder: (context) => const Center(child: CircularProgressIndicator()),
               );
 
-              // Tembak API Transaksi
               Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
                 buyerSkuCode: produk['buyer_sku_code'],
                 customerNo: _nomorController.text,
               );
 
-              if (mounted) Navigator.pop(context); // Tutup lingkaran loading
+              if (mounted) Navigator.pop(context); 
 
               String statusTransaksi = hasil['status'] ?? 'Gagal';
               String pesanServer = hasil['sn'] ?? hasil['message'] ?? 'Tidak ada pesan';
 
-              // Munculkan struk hasil akhir
               if (mounted) {
                 showDialog(
                   context: context,
@@ -233,12 +272,3 @@ class _EwalletScreenState extends State<EwalletScreen> {
                     ],
                   ),
                 );
-              }
-            },
-            child: const Text("Bayar Sekarang"),
-          ),
-        ],
-      ),
-    );
-  }
-}
