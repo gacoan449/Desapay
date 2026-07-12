@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 import '../../services/digiflazz_service.dart'; 
+import 'ewallet_dialog.dart'; // Import file dialog baru
 
 class EwalletScreen extends StatefulWidget {
   final String? jenisEwallet;
@@ -198,7 +198,13 @@ class _EwalletScreenState extends State<EwalletScreen> {
                                 );
                                 return;
                               }
-                              _prosesKonfirmasiBayar(produk);
+                              // Memanggil fungsi eksternal dari file ewallet_dialog.dart
+                              prosesKonfirmasiBayar(
+                                context: context,
+                                produk: produk,
+                                nomorController: _nomorController,
+                                digiflazzService: _digiflazzService,
+                              );
                             },
                           ),
                         );
@@ -208,67 +214,4 @@ class _EwalletScreenState extends State<EwalletScreen> {
       ],
     );
   }
-
-  void _prosesKonfirmasiBayar(dynamic produk) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("Konfirmasi Pembelian"),
-        content: Text(
-            "Apakah Anda yakin ingin mengisi ${produk['product_name']} ke nomor ${_nomorController.text} seharga Rp ${produk['price']}?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator()),
-              );
-
-              Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
-                buyerSkuCode: produk['buyer_sku_code'],
-                customerNo: _nomorController.text,
-              );
-
-              if (mounted) Navigator.pop(context); 
-
-              String statusTransaksi = hasil['status'] ?? 'Gagal';
-              String pesanServer = hasil['sn'] ?? hasil['message'] ?? 'Tidak ada pesan';
-
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(
-                      statusTransaksi == 'Gagal' ? "❌ Transaksi Gagal" : "⏳ Transaksi Diproses",
-                      style: TextStyle(
-                        color: statusTransaksi == 'Gagal' ? Colors.red : Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    content: Text(
-                      "Produk: ${produk['product_name']}\n"
-                      "Tujuan: ${_nomorController.text}\n"
-                      "Status Server: $statusTransaksi\n\n"
-                      "Keterangan/SN:\n$pesanServer",
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          if (statusTransaksi != 'Gagal') {
-                            _nomorController.clear();
-                          }
-                        },
-                        child: const Text("OK"),
-                      ),
-                    ],
-                  ),
-                );
+}
