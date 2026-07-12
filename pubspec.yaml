@@ -25,7 +25,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  # 🔴 BARIS BARU: Wajib didaftarkan di sini agar terminal GitHub mengenali perintah generator icon
   flutter_launcher_icons: ^0.13.1
 
 flutter:
@@ -38,6 +37,6 @@ flutter:
 # ATURAN PEMBUATAN ICON LUAR (LAUNCHER ICON) DESAPAY
 flutter_launcher_icons:
   android: "launcher_icon"
-  ios: true
+  ios: false
   image_path: "assets/logo/logo.png"
   min_sdk_android: 21
