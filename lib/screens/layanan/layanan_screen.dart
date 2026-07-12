@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 
-// JALUR IMPORT GLOBAL (Tetap dipertahankan untuk navigasi utama)
+// JALUR IMPORT GLOBAL
 import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../pulsa/pulsa_screen.dart';
 import '../pascabayar_screen.dart'; 
+
+// IMPORT FILE PEMBANTU BARU YANG KITA BUAT DI LANGKAH 1
+import 'menu_model.dart';
 
 class LayananScreen extends StatelessWidget {
   const LayananScreen({super.key});
@@ -29,9 +32,7 @@ class LayananScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ----------------------------------------------------
             // KATEGORI 1: PULSA & DATA OPERATOR
-            // ----------------------------------------------------
             _buildJudulSubKategori("Pulsa & Paket Data"),
             _buildGridMenu([
               MenuModel(Icons.phone_android_rounded, "Pulsa", Colors.orange, () => _pindahHalaman(context, const PulsaScreen())),
@@ -57,30 +58,26 @@ class LayananScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ----------------------------------------------------
             // KATEGORI 2: E-WALLET & OJEK ONLINE
-            // ----------------------------------------------------
             _buildJudulSubKategori("E-Wallet & E-Money"),
             _buildGridMenu([
-              MenuModel(Icons.directions_car_filled_rounded, "MAXIM", Colors.yellow.shade800, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.electric_moped_rounded, "GRAB Driver", Colors.green, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.two_wheeler_rounded, "inDrive", Colors.lightGreen, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.motorcycle_rounded, "Gojek Driver", Colors.green.shade700, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.shopping_bag_rounded, "ShopeePay", Colors.deepOrange, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.account_balance_wallet_rounded, "DANA", Colors.blue, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.payment_rounded, "LinkAja", Colors.red, () => _pindahHalaman(context, const EwalletScreen())),
-              MenuModel(Icons.credit_card_rounded, "OVO", Colors.indigo, () => _pindahHalaman(context, const EwalletScreen())),
+              MenuModel(Icons.directions_car_filled_rounded, "MAXIM", Colors.yellow.shade800, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "MAXIM"))),
+              MenuModel(Icons.electric_moped_rounded, "GRAB Driver", Colors.green, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "GRAB"))),
+              MenuModel(Icons.two_wheeler_rounded, "inDrive", Colors.lightGreen, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "INDRIVE"))),
+              MenuModel(Icons.motorcycle_rounded, "Gojek Driver", Colors.green.shade700, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "Gojek Driver"))),
+              MenuModel(Icons.shopping_bag_rounded, "ShopeePay", Colors.deepOrange, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "ShopeePay"))),
+              MenuModel(Icons.account_balance_wallet_rounded, "DANA", Colors.blue, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "DANA"))),
+              MenuModel(Icons.payment_rounded, "LinkAja", Colors.red, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "LinkAja"))),
+              MenuModel(Icons.credit_card_rounded, "OVO", Colors.indigo, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "OVO"))),
               MenuModel(Icons.account_box_rounded, "KASPRO", Colors.purple, () => _tampilkanPesan(context, "KASPRO")),
-              MenuModel(Icons.wallet_rounded, "GOPAY", Colors.teal, () => _pindahHalaman(context, const EwalletScreen())),
+              MenuModel(Icons.wallet_rounded, "GOPAY", Colors.teal, () => _pindahHalaman(context, const EwalletScreen(jenisEwallet: "GoPay"))),
               MenuModel(Icons.store_rounded, "i.saku Indomaret", Colors.orange, () => _tampilkanPesan(context, "i.saku")),
               MenuModel(Icons.subway_rounded, "e-Toll", Colors.cyan, () => _tampilkanPesan(context, "e-Toll")),
             ]),
 
             const SizedBox(height: 24),
 
-            // ----------------------------------------------------
             // KATEGORI 3: TAGIHAN BULANAN / PASCABAYAR
-            // ----------------------------------------------------
             _buildJudulSubKategori("Tagihan Bulanan & PPOB"),
             _buildGridMenu([
               MenuModel(Icons.receipt_long_rounded, "Pascabayar", Colors.teal, () => _pindahHalaman(context, PascabayarScreen(jenisLayanan: "PASCABAYAR"))),
@@ -95,9 +92,7 @@ class LayananScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ----------------------------------------------------
             // KATEGORI 4: VOUCHER GAME
-            // ----------------------------------------------------
             _buildJudulSubKategori("Voucher & Mobile Game"),
             _buildGridMenu([
               MenuModel(Icons.sports_esports_rounded, "Game Lainnya", Colors.amber, () => _tampilkanPesan(context, "Game Lainnya")),
@@ -115,38 +110,43 @@ class LayananScreen extends StatelessWidget {
     );
   }
 
-  // Widget Pembantu untuk Membuat Judul Sub-Kategori yang Tegas
   Widget _buildJudulSubKategori(String judul) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 4),
       child: Text(
         judul,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-        ),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
       ),
     );
   }
 
-  // Widget Pembantu Grid Agar Layout Rapih Berisi 4 Kolom Sesuai Gambar Contoh Anda
   Widget _buildGridMenu(List<MenuModel> itemMenus) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4, // 🔴 Menampilkan 4 Kolom Sejajar agar Padat & Mewah
+        crossAxisCount: 4,
         crossAxisSpacing: 10,
         mainAxisSpacing: 16,
-        childAspectRatio: 0.82, // Mengatur tinggi-lebar kotak menu
+        childAspectRatio: 0.82,
       ),
       itemCount: itemMenus.length,
       itemBuilder: (context, index) {
-        final item = itemMenus[index];
-        return MenuLayananUnit(item: item);
+        return MenuLayananUnit(item: itemMenus[index]);
       },
     );
   }
 
   void _pindahHalaman(BuildContext context, Widget targetHalaman) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => targetHalaman));
+  }
+
+  void _tampilkanPesan(BuildContext context, String namaLayanan) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Layanan $namaLayanan otomatis tersambung ke Digiflazz"),
+        backgroundColor: WarnaDesaPay.primary,
+      ),
+    );
+  }
+}
