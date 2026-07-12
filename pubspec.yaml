@@ -29,12 +29,13 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # DAFTAR ASET GAMBAR LOGO DESAPAY (Format spasi diatur pas agar bebas error)
+  # DAFTAR ASET GAMBAR LOGO DESAPAY
   assets:
-    - "ChatGPT Image 8 Jul 2026, 22.03.40.png"
+    - assets/logo/logo.png
+
 # ATURAN PEMBUATAN ICON LUAR (LAUNCHER ICON) DESAPAY
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "ChatGPT Image 8 Jul 2026, 22.03.40.png" # Diarahkan langsung ke file gambar HP Anda
+  image_path: "assets/logo/logo.png"
   min_sdk_android: 21
