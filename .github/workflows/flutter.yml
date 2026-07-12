@@ -30,9 +30,9 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    # 🔴 BARIS BARU: Menjalankan generator untuk menimpa logo bawaan Flutter dengan logo DesaPay Anda
+    # Menjalankan generator ikon khusus untuk platform Android saja
     - name: Generate Launcher Icons
-      run: flutter pub run flutter_launcher_icons
+      run: dart run flutter_launcher_icons
 
     # Mengubah build ke --release agar aplikasi lebih ringan dan siap pakai
     - name: Build APK
