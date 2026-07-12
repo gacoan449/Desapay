@@ -22,32 +22,31 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _bukaWhatsApp() async {
-
     const nomor = "6285642131263";
-
-    final Uri url = Uri.parse(
-      "https://wa.me/$nomor?text=${Uri.encodeComponent("Halo CS DesaPay, saya mengalami kendala transaksi.")}",
+    
+    // Menggunakan struktur Uri.https yang jauh lebih bersih dan aman
+    final Uri url = Uri.https(
+      'wa.me',
+      '/$nomor',
+      {'text': 'Halo CS DesaPay, saya mengalami kendala transaksi.'},
     );
 
-    if (await canLaunchUrl(url)) {
-
+    try {
+      // LANGSUNG TEMBAK: Membuka WhatsApp secara eksternal tanpa canLaunchUrl
       await launchUrl(
         url,
         mode: LaunchMode.externalApplication,
       );
-
-    } else {
-
+    } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("WhatsApp tidak tersedia"),
+          content: Text("Gagal membuka WhatsApp. Pastikan aplikasi WA terinstall."),
         ),
       );
-
     }
   }
+
 
   void _qrisBelumAktif() {
 
