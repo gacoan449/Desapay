@@ -11,7 +11,9 @@ class DigiflazzService {
   
   // Data akun testing Anda (Ganti ke Production Key jika nanti sudah siap rilis)
   final String _username = 'rukaxigqnvno'; 
-  final String _apiKey = ba2b7ab6-33b0-5a48-b7f7-56a2f1b30d0b
+  
+  // PERBAIKAN: API Key sekarang dibungkus tanda petik string dengan benar agar tidak error matematika
+  final String _apiKey = "ba2b7ab6-33b0-5a48-b7f7-56a2f1b30d0b";
 
   // ===================================================
   // 1. FUNGSI AMBIL DAFTAR HARGA + MARKUP UNTUNG Rp 1.000
@@ -156,7 +158,6 @@ class DigiflazzService {
   // ===================================================
   Future<int> cekSaldoModal() async {
     try {
-      // Rumus wajib enkripsi saldo sesuai dokumen panduan: md5(username + apiKey + "depo")
       String signRaw = _username + _apiKey + "depo";
       String sign = md5.convert(utf8.encode(signRaw)).toString();
 
@@ -172,7 +173,6 @@ class DigiflazzService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Mengambil angka nominal saldo murni dari field 'deposit' di database Digiflazz
         return data['data']['deposit'] ?? 0;
       } else {
         return 0;
