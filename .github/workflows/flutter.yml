@@ -23,18 +23,23 @@ jobs:
       with:
         channel: 'stable'
 
-    # BARIS BARU: Otomatis membuat folder android yang hilang sebelum build
+    # Otomatis membuat folder android yang hilang sebelum build
     - name: Auto Generate Android Folder
       run: flutter create . --platforms=android
 
     - name: Install dependencies
       run: flutter pub get
 
+    # 🔴 BARIS BARU: Menjalankan generator untuk menimpa logo bawaan Flutter dengan logo DesaPay Anda
+    - name: Generate Launcher Icons
+      run: flutter pub run flutter_launcher_icons
+
+    # Mengubah build ke --release agar aplikasi lebih ringan dan siap pakai
     - name: Build APK
-      run: flutter build apk --debug
+      run: flutter build apk --release
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: flutter-app-debug
-        path: build/app/outputs/flutter-apk/app-debug.apk
+        name: flutter-app-release
+        path: build/app/outputs/flutter-apk/app-release.apk
