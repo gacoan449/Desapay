@@ -25,6 +25,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  # 🔴 BARIS BARU: Wajib didaftarkan di sini agar terminal GitHub mengenali perintah generator icon
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
