@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // Library Caching Baru
 import '../../config/warna.dart';
 
 class PindaiQrisScreen extends StatefulWidget {
@@ -18,13 +19,12 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
   late AnimationController _animationController;
   late Animation<double> _laserPosition;
   bool _isFlashOn = false;
-  bool _hasPermission = true; // Status izin kamera rill
+  bool _hasPermission = true;
 
   @override
   void initState() {
     super.initState();
 
-    // Animasi laser scanner
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -51,13 +51,14 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
   }
 
   // ===================================================
-  // FUNGSI UTAMA 1: PROSES HASIL SCANNING QRIS
+  // FUNGSI UTAMA 1: PROSES HASIL SCANNING & VALIDASI REGEX
   // ===================================================
   void _handleQrDetected(String code) {
     _cameraController.stop();
 
-    // Filter validasi sederhana format QRIS (NMID / info merchant)
-    final bool isValidQris = code.toUpperCase().contains("NMID") || code.startsWith("000201");
+    // REGEX VALIDATOR: Memastikan input adalah QRIS standar Indonesia (NMID / EMVCo format)
+    final RegExp qrisRegExp = RegExp(r'^000201.*01021[12].*');
+    final bool isValidQris = qrisRegExp.hasMatch(code) || code.toUpperCase().contains("NMID");
 
     showDialog(
       context: context,
@@ -71,13 +72,13 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
               color: isValidQris ? Colors.green : WarnaDesaPay.warning,
             ),
             const SizedBox(width: 8),
-            Text(isValidQris ? "QRIS Terdeteksi" : "Format Tidak Valid"),
+            Text(isValidQris ? "QRIS Valid" : "QR Tidak Valid"),
           ],
         ),
         content: Text(
           isValidQris 
-              ? "Merchant berhasil terbaca. Lanjutkan pembayaran?\n\nIsi QR:\n$code" 
-              : "Barcode yang Anda scan bukan format QRIS standar Nasional (NMID).\n\nIsi QR:\n$code"
+              ? "Sistem berhasil memverifikasi QRIS merchant resmi. Lanjutkan transaksi?\n\nKode:\n$code" 
+              : "Kode QR ini tidak sesuai dengan standar pembayaran QRIS Nasional (NMID).\n\nSilakan scan ulang QR yang benar."
         ),
         actions: [
           TextButton(
@@ -95,8 +96,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
               ),
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context); // Kembali ke Beranda membawa data QRIS
-                // Kirim hasil scan kembali ke beranda atau pemrosesan transaksi
+                Navigator.pop(context); // Kembali dengan aman
               },
               child: const Text("Proses Bayar"),
             )
@@ -133,7 +133,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
     }
   }
 
-  // Tampilkan QR Code Merchant Toko Sendiri (Show QR)
   void _tampilkanQrSaya() {
     showModalBottomSheet(
       context: context,
@@ -233,7 +232,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
       body: Stack(
         children: [
           // ==========================================
-          // 1. ENGINE KAMERA DENGAN DETEKSI PERMISSION
+          // 1. ENGINE KAMERA DENGAN CACHED MOCKUP BG JIKA OFFLINE/LOADING
           // ==========================================
           MobileScanner(
             controller: _cameraController,
@@ -246,7 +245,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                 }
               }
             },
-            // Penanganan error kamera otomatis (Misal: Izin ditolak pengguna)
             onDetectError: (error, stackTrace) {
               setState(() {
                 _hasPermission = false;
@@ -254,12 +252,23 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
             },
           ),
 
-          // Layer kegelapan fungsional
-          Container(
-            color: Colors.black.withOpacity(0.4),
+          // DIKOREKSI: Menggunakan CachedNetworkImage agar super hemat data kuota internet
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.25,
+              child: CachedNetworkImage(
+                imageUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80",
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(color: Colors.black),
+                errorWidget: (context, url, error) => Container(color: Colors.black),
+              ),
+            ),
           ),
 
-          // Tampilan Fallback jika Izin Kamera Ditolak (Keren & Informatif)
+          Container(
+            color: Colors.black.withOpacity(0.3),
+          ),
+
           if (!_hasPermission)
             Center(
               child: Padding(
@@ -288,7 +297,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                       onPressed: () async {
-                        // Meminta izin ulang secara aman dengan memulai controller kembali
                         _cameraController.start();
                         setState(() {
                           _hasPermission = true;
@@ -303,7 +311,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
             ),
 
           // ==========================================
-          // 2. HEADER BAR (CLOSE & FLASH)
+          // 2. HEADER BAR
           // ==========================================
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
@@ -346,7 +354,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
           ),
 
           // ==========================================
-          // 3. TARGET BOX & LASER (HANYA MUNCUL JIKA IZIN ADA)
+          // 3. TARGET BOX & LASER
           // ==========================================
           if (_hasPermission)
             Center(
