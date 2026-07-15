@@ -177,14 +177,15 @@ class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.shield_rounded, color: Colors.amber, size: 14),
-                        SizedBox(width: 6),
+                        const Icon(Icons.shield_rounded, color: Colors.amber, size: 14),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             "Saldo Digiflazz otomatis dicadangkan aman untuk jalur PPOB.",
-                            style: TextStyle(color: Colors.whiteEE, fontSize: 11, height: 1.2),
+                            // DIKOREKSI: Mengganti token non-standar Colors.whiteEE dengan standard SDK safety opacity
+                            style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 11, height: 1.2),
                           ),
                         ),
                       ],
@@ -305,7 +306,7 @@ class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
                   const SizedBox(height: 12),
                   Text(
                     "1. Sistem input nominal bersifat bebas kelipatan terhitung di atas batas minimum.\n"
-                    "2. Setelah kode invoice tiket berhasil diterbitkan, silakan lakukan proses transfer dana sesuai angka nominal presisi.\n"
+                    "2. After kode invoice tiket berhasil diterbitkan, silakan lakukan proses transfer dana sesuai angka nominal presisi.\n"
                     "3. Saldo akun DesaPay akan otomatis disinkronisasi bertambah secara otomatis setelah jaringan bank Digiflazz mengonfirmasi data pembayaran.",
                     style: TextStyle(fontSize: 12, color: Colors.amber.shade900, height: 1.5),
                   ),
