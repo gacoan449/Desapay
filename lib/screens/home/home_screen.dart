@@ -189,7 +189,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER CARD PLATFORM (Wallet Look alike)
               Stack(
                 children: [
                   Container(
@@ -206,7 +205,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
-                        // E-Wallet Main Balanced Platform
                         Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
@@ -225,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               Padding(
                                 padding: const EdgeInsets.all(20),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.between,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         const SizedBox(height: 4),
                                         _isSaldoHidden
                                             ? const Text("••••••••", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87))
-                                            : const KotakSaldo(), // Custom Widget Anda tetap bekerja
+                                            : const KotakSaldo(),
                                       ],
                                     ),
                                     Container(
@@ -299,7 +297,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // GRID MENU UTAMA PPOB LUXURY VERSION
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
@@ -348,14 +345,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // DYNAMIC PROMO CAROUSEL WRAPPER
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.between,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Promo Spesial Hari Ini", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
                         TextButton(onPressed: () {}, child: Text("Lihat Semua", style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold)))
@@ -389,7 +385,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // WHATSAPP SUPPORT PREMIUM CARD
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: InkWell(
@@ -399,14 +394,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.emerald.shade600, Colors.teal.shade500],
+                        colors: [Colors.green.shade600, Colors.teal.shade500],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.emerald.withOpacity(0.15),
+                          color: Colors.green.withOpacity(0.15),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -431,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               SizedBox(height: 4),
                               Text(
                                 "Hubungi Customer Service WhatsApp DesaPay jika ada kendala saldo atau transaksi gateway.",
-                                style: TextStyle(color: Colors.whiteEE, fontSize: 11, height: 1.3),
+                                style: TextStyle(color: Colors.white70, fontSize: 11, height: 1.3),
                               ),
                             ],
                           ),
@@ -446,7 +441,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 36),
 
-              // FOOTER BRANDING BRAND NEW DESAPAY
               Center(
                 child: Column(
                   children: [
@@ -510,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blackDE),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
           ),
         ],
       ),
@@ -539,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.whiteBB, fontSize: 10, height: 1.3),
+                  style: const TextStyle(color: Colors.white70, fontSize: 10, height: 1.3),
                 ),
               ],
             ),
