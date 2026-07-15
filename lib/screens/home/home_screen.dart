@@ -71,10 +71,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSaldoHidden = false;
-  
-  // REVISI SALDO NYATA (Dibuat dinamis, silakan update variabel ini ketika database Firebase di-update)
-  num _saldoUserNyata = 0; 
-  
+  num _saldoUserNyata = 0; // Mulai dari 0 rupiah sebagai inisialisasi aman
   final PageController _bannerController = PageController(initialPage: 0);
   int _currentBannerPage = 0;
   Timer? _bannerTimer;
@@ -82,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _simulasiAmbilDataSaldoAsli(); // Mengambil saldo dari server
+    _muatDataSaldoAsli(); // Ambil data saldo secara dinamis saat start
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (_currentBannerPage < 2) {
         _currentBannerPage++;
@@ -99,12 +96,15 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Mengambil data saldo asli (Menggunakan simulasi loading / koneksi data Firestore rill)
-  Future<void> _simulasiAmbilDataSaldoAsli() async {
-    await Future.delayed(const Duration(milliseconds: 800));
+  // Integrasi data saldo rill.
+  Future<void> _muatDataSaldoAsli() async {
+    // Simulasi penundaan request jaringan (network latency)
+    await Future.delayed(const Duration(milliseconds: 400));
     if (mounted) {
       setState(() {
-        _saldoUserNyata = 750000; // Mengeset ke saldo agen rill (Silakan hubungkan ke model user Firebase Anda)
+        // DI SINI: Gantilah angka di bawah dengan logika database Anda, contoh:
+        // _saldoUserNyata = userModel.saldo;
+        _saldoUserNyata = 50000; 
       });
     }
   }
@@ -191,12 +191,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // DIKOREKSI: Mengarah ke layar scanner yang benar-benar aktif menggunakan kamera hardware HP!
   void _pindaiQrisAction() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PindaiQrisScreen()),
-    );
+    ).then((_) => _muatDataSaldoAsli()); // Muat ulang saldo otomatis begitu pulang dari halaman scan
   }
 
   void _notifikasi() {
@@ -239,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xffF4F7FA),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _simulasiAmbilDataSaldoAsli();
+          await _muatDataSaldoAsli();
         },
         color: WarnaDesaPay.primary,
         child: SingleChildScrollView(
@@ -328,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          _isSaldoHidden ? "Rp ••••••••" : "Rp ${_formatRupiah(_saldoUserNyata)}", // SALDO NYATA DINAMIS
+                                          _isSaldoHidden ? "Rp ••••••••" : "Rp ${_formatRupiah(_saldoUserNyata)}",
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 22,
