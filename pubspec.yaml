@@ -11,15 +11,24 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Utilitas Kriptografi & Data
   crypto: ^3.0.5
   cupertino_icons: ^1.0.8
   http: ^1.2.2
   shared_preferences: ^2.3.2
+  intl: ^0.19.0
+
+  # Firebase Backend Services
   firebase_core: ^3.10.0
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.6.0
+
+  # Fitur Scanner QRIS Kamera & Galeri (Baru & Fungsional)
+  mobile_scanner: ^6.0.0-beta.4
+  image_picker: ^1.1.2
+
+  # Integrasi Browser & WhatsApp External Link
   url_launcher: ^6.3.1
-  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
