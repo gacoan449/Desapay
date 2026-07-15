@@ -1,0 +1,22 @@
+# Kunci Brankas Rahasia DesaPay (Wajib di Paling Atas)
+.env
+.env.production
+.env.development
+
+# Berkas bawaan Flutter & Dart yang tidak perlu diunggah ke GitHub
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Berkas log dan cache sistem
+*.log
+*.crash
+.history/
+.metadata
+
+# Berkas konfigurasi IDE/Editor lokal
+.idea/
+*.iml
+.vscode/
