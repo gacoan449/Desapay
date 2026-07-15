@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/warna.dart';
 import '../../screens/saldo/topup_saldo_screen.dart';
 import '../../screens/riwayat/riwayat_screen.dart';
+import '../pindai/pindai_qris_screen.dart'; // IMPORT KE SCREEN SCANNER BARU ANDA
 import '../layanan/layanan_screen.dart';
 import '../pulsa/pulsa_screen.dart';
 import '../paket/paket_screen.dart';
@@ -76,7 +77,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSaldoHidden = false;
-  final num _saldoUserFake = 1452000; // Contoh saldo utama user
+  final num _saldoUserFake = 1452000; // Contoh saldo utama user DesaPay
   final PageController _bannerController = PageController(initialPage: 0);
   int _currentBannerPage = 0;
   Timer? _bannerTimer;
@@ -129,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _kirimSaldoAction() {
-    // Fungsi khusus untuk menu Transfer / Kirim Uang ke sesama atau bank
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -183,59 +183,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // DIKOREKSI: Membuka layar kamera scanner interaktif yang baru saja kita buat!
   void _pindaiQrisAction() {
-    // Fungsi murni khusus Pindai QRIS Merchant
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Icon(Icons.qr_code_scanner_rounded, size: 72, color: WarnaDesaPay.secondary),
-              const SizedBox(height: 16),
-              const Text(
-                "Pindai QRIS DesaPay",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "Fitur kamera scanner QRIS sedang sinkronisasi enkripsi Bank Indonesia. Kami akan memberi tahu Anda saat lisensi disetujui.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: WarnaDesaPay.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Paham, Terima Kasih", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PindaiQrisScreen()),
     );
   }
 
@@ -269,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final LinearGradient premiumBlueGradient = LinearGradient(
       colors: [
         WarnaDesaPay.primary,
-        const Color(0xFF0F172A), // Menyatu ke Slate gelap agar ornamen batik terlihat bersinar
+        const Color(0xFF0F172A), // Menyatu ke Slate gelap agar aksen batik bersinar
       ],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -286,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ===================================================
-              // 3. BRAND NEW LUXURY HEADER WITH BATIK BACKGROUND
+              // 3. BRAND NEW LUXURY HEADER WITH BATIK ORNAMENTS
               // ===================================================
               Container(
                 width: double.infinity,
@@ -310,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         top: -20,
                         child: Opacity(
                           opacity: 0.08,
-                          child: Icon(Icons.blur_circular_rounded, size: 280, color: Colors.white),
+                          child: const Icon(Icons.blur_circular_rounded, size: 280, color: Colors.white),
                         ),
                       ),
                       Positioned(
@@ -318,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         bottom: -40,
                         child: Opacity(
                           opacity: 0.05,
-                          child: Icon(Icons.all_inclusive_rounded, size: 220, color: WarnaDesaPay.secondary),
+                          child: const Icon(Icons.all_inclusive_rounded, size: 220, color: WarnaDesaPay.secondary),
                         ),
                       ),
 
@@ -454,12 +406,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _topActionItem(
                                   icon: Icons.arrow_upward_rounded,
                                   label: "Kirim",
-                                  onTap: _kirimSaldoAction, // Terpisah
+                                  onTap: _kirimSaldoAction, // Terpisah dari QRIS
                                 ),
                                 _topActionItem(
                                   icon: Icons.qr_code_scanner_rounded,
                                   label: "Pindai",
-                                  onTap: _pindaiQrisAction, // Terpisah
+                                  onTap: _pindaiQrisAction, // Terhubung ke Scanner Mockup Premium!
                                 ),
                                 _topActionItem(
                                   icon: Icons.history_rounded,
@@ -478,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // GRID MENU UTAMA PPOB (TEKS TIDAK AKAN OVERFLOW)
+              // GRID MENU UTAMA PPOB
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
@@ -664,7 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // DESAIN TOMBOL AKSI UTAMA HEADER: DIKOREKSI SIMETRIS & MEMILIKI WADAH GLASS
-  Widget _topActionItem(IconData icon, String label, VoidCallback onTap) {
+  Widget _topActionItem({required IconData icon, required String label, required VoidCallback onTap}) {
     return CustomBounce(
       onTap: onTap,
       child: SizedBox(
