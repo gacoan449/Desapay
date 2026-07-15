@@ -3,19 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/warna.dart';
-import '../../widgets/kotak_saldo.dart';
-
+import '../../screens/saldo/topup_saldo_screen.dart';
+import '../../screens/riwayat/riwayat_screen.dart';
 import '../layanan/layanan_screen.dart';
 import '../pulsa/pulsa_screen.dart';
 import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../pascabayar_screen.dart';
-import '../saldo/topup_saldo_screen.dart';
 
-// ==========================================
-// 1. CUSTOM BOUNCE ANIMATION WIDGET
-// ==========================================
+// ===================================================
+// 1. CUSTOM BOUNCE ANIMATION WIDGET (MICRO-INTERACTION)
+// ===================================================
 class CustomBounce extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -37,7 +36,7 @@ class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 100),
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.92).animate(
+    _scale = Tween<double>(begin: 1.0, end: 0.93).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
   }
@@ -65,9 +64,9 @@ class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderSt
   }
 }
 
-// ==========================================
-// MAIN SCREEN WINDOWS
-// ==========================================
+// ===================================================
+// 2. MAIN HOME SCREEN
+// ===================================================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -77,6 +76,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSaldoHidden = false;
+  final num _saldoUserFake = 1452000; // Contoh saldo utama user
   final PageController _bannerController = PageController(initialPage: 0);
   int _currentBannerPage = 0;
   Timer? _bannerTimer;
@@ -128,7 +128,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _qrisBelumAktif() {
+  void _kirimSaldoAction() {
+    // Fungsi khusus untuk menu Transfer / Kirim Uang ke sesama atau bank
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -149,15 +150,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              Icon(Icons.qr_code_scanner_rounded, size: 72, color: WarnaDesaPay.primary),
+              Icon(Icons.send_to_mobile_rounded, size: 72, color: WarnaDesaPay.primary),
               const SizedBox(height: 16),
               const Text(
-                "QRIS Merchant DesaPay",
+                "Kirim Saldo DesaPay",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                "Fitur internal QRIS sedang dalam tahap sinkronisasi data merchant reguler. Kami akan segera mengaktifkannya untuk Anda.",
+                "Fitur transfer saldo antar agen dan rekening bank sedang dalam pemeliharaan jaringan. Silakan coba beberapa saat lagi.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: WarnaDesaPay.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Baik, Dimengerti", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _pindaiQrisAction() {
+    // Fungsi murni khusus Pindai QRIS Merchant
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Icon(Icons.qr_code_scanner_rounded, size: 72, color: WarnaDesaPay.secondary),
+              const SizedBox(height: 16),
+              const Text(
+                "Pindai QRIS DesaPay",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Fitur kamera scanner QRIS sedang sinkronisasi enkripsi Bank Indonesia. Kami akan memberi tahu Anda saat lisensi disetujui.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
               ),
@@ -187,15 +244,23 @@ class _HomeScreenState extends State<HomeScreen> {
       SnackBar(
         content: const Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.white),
-            SizedBox(width: 10),
-            Text("Kotak masuk Anda masih bersih."),
+            Icon(Icons.mail_outline_rounded, color: Colors.white),
+            SizedBox(width: 12),
+            Text("Kotak masuk Anda masih bersih!"),
           ],
         ),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         backgroundColor: WarnaDesaPay.primary,
       ),
+    );
+  }
+
+  String _formatRupiah(num nominal) {
+    final int value = nominal.toInt();
+    return value.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
     );
   }
 
@@ -204,11 +269,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final LinearGradient premiumBlueGradient = LinearGradient(
       colors: [
         WarnaDesaPay.primary,
-        const Color(0xFF007BE6),
-        const Color(0xFF0086FF),
+        const Color(0xFF0F172A), // Menyatu ke Slate gelap agar ornamen batik terlihat bersinar
       ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
     );
 
     return Scaffold(
@@ -221,89 +285,200 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ==========================================
-              // 2. PREMIUM BLUE HEADER LAYOUT (DANA STYLE)
-              // ==========================================
+              // ===================================================
+              // 3. BRAND NEW LUXURY HEADER WITH BATIK BACKGROUND
+              // ===================================================
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   gradient: premiumBlueGradient,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(36),
+                    bottomRight: Radius.circular(36),
+                  ),
                 ),
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 16,
-                  bottom: 24,
-                  left: 20,
-                  right: 20,
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(36),
+                    bottomRight: Radius.circular(36),
+                  ),
+                  child: Stack(
+                    children: [
+                      // Ornamen Batik / Geometris Megamendung Abstrak di Latar Belakang (Opacity Tipis)
+                      Positioned(
+                        right: -40,
+                        top: -20,
+                        child: Opacity(
+                          opacity: 0.08,
+                          child: Icon(Icons.blur_circular_rounded, size: 280, color: Colors.white),
+                        ),
+                      ),
+                      Positioned(
+                        left: -60,
+                        bottom: -40,
+                        child: Opacity(
+                          opacity: 0.05,
+                          child: Icon(Icons.all_inclusive_rounded, size: 220, color: WarnaDesaPay.secondary),
+                        ),
+                      ),
+
+                      // Konten Utama Header
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top + 16,
+                          bottom: 28,
+                          left: 20,
+                          right: 20,
+                        ),
+                        child: Column(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
-                            ),
-                            const SizedBox(width: 10),
-                            GestureDetector(
-                              onTap: () => setState(() => _isSaldoHidden = !_isSaldoHidden),
-                              child: Row(
-                                children: [
-                                  _isSaldoHidden
-                                      ? const Text("Rp ••••••", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))
-                                      : const DefaultTextStyle(
-                                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                          child: KotakSaldo(),
+                            // BARIS 1: INFORMASI DOMPET & TOMBOL MATANYA
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.15),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Text(
+                                              "Saldo DesaPay",
+                                              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            GestureDetector(
+                                              onTap: () => setState(() => _isSaldoHidden = !_isSaldoHidden),
+                                              child: Icon(
+                                                _isSaldoHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                                size: 16,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    _isSaldoHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                    size: 16,
-                                    color: Colors.white.withOpacity(0.8),
-                                  ),
-                                ],
-                              ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _isSaldoHidden ? "Rp ••••••••" : "Rp ${_formatRupiah(_saldoUserFake)}",
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+
+                                // SISI KANAN: BADGE DESAPAY+ & LONCENG NOTIFIKASI
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(100),
+                                        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
+                                      ),
+                                      child: const Row(
+                                        children: [
+                                          Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 14),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            "DesaPay+",
+                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.2),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    
+                                    // Tombol Lonceng Notifikasi DANA Premium
+                                    GestureDetector(
+                                      onTap: _notifikasi,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(0.12),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 22),
+                                          ),
+                                          Positioned(
+                                            right: 2,
+                                            top: 2,
+                                            child: Container(
+                                              width: 9,
+                                              height: 9,
+                                              decoration: BoxDecoration(
+                                                color: WarnaDesaPay.danger,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: const Color(0xFF1E40AF), width: 1.5),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 32),
+
+                            // BARIS 2: ACTION QUICK GRID (SIMETRIS INDEPENDEN)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _topActionItem(
+                                  icon: Icons.add_rounded,
+                                  label: "Isi Saldo",
+                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen())),
+                                ),
+                                _topActionItem(
+                                  icon: Icons.arrow_upward_rounded,
+                                  label: "Kirim",
+                                  onTap: _kirimSaldoAction, // Terpisah
+                                ),
+                                _topActionItem(
+                                  icon: Icons.qr_code_scanner_rounded,
+                                  label: "Pindai",
+                                  onTap: _pindaiQrisAction, // Terpisah
+                                ),
+                                _topActionItem(
+                                  icon: Icons.history_rounded,
+                                  label: "Riwayat",
+                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiwayatScreen())),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            "DesaPay+",
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _topActionItem(Icons.add_box_rounded, "Isi Saldo", () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen()));
-                        }),
-                        _topActionItem(Icons.arrow_upward_rounded, "Kirim", _qrisBelumAktif),
-                        _topActionItem(Icons.qr_code_scanner_rounded, "Pindai", _qrisBelumAktif),
-                        _topActionItem(Icons.history_rounded, "Riwayat", () {}),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
               const SizedBox(height: 24),
 
-              // GRID MENU UTAMA PPOB WITH CUSTOM BOUNCE EFFECT
+              // GRID MENU UTAMA PPOB (TEKS TIDAK AKAN OVERFLOW)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
@@ -488,18 +663,45 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // DESAIN TOMBOL AKSI UTAMA HEADER: DIKOREKSI SIMETRIS & MEMILIKI WADAH GLASS
   Widget _topActionItem(IconData icon, String label, VoidCallback onTap) {
     return CustomBounce(
       onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.white, size: 32),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: 0.2),
-          ),
-        ],
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12, 
+                fontWeight: FontWeight.bold, 
+                color: Colors.white, 
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
