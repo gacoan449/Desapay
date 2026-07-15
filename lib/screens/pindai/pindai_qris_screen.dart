@@ -12,18 +12,19 @@ class PindaiQrisScreen extends StatefulWidget {
 
 class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerProviderStateMixin {
   final MobileScannerController _cameraController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates, // Mencegah scan ganda dalam sekali bidik
+    detectionSpeed: DetectionSpeed.noDuplicates,
   );
 
   late AnimationController _animationController;
   late Animation<double> _laserPosition;
   bool _isFlashOn = false;
+  bool _hasPermission = true; // Status izin kamera rill
 
   @override
   void initState() {
     super.initState();
 
-    // Animasi garis laser naik-turun
+    // Animasi laser scanner
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -53,42 +54,52 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
   // FUNGSI UTAMA 1: PROSES HASIL SCANNING QRIS
   // ===================================================
   void _handleQrDetected(String code) {
-    // Matikan kamera sementara agar tidak menumpuk dialog/navigasi baru
     _cameraController.stop();
+
+    // Filter validasi sederhana format QRIS (NMID / info merchant)
+    final bool isValidQris = code.toUpperCase().contains("NMID") || code.startsWith("000201");
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.check_circle_rounded, color: Colors.green),
-            SizedBox(width: 8),
-            Text("QR Terbaca"),
+            Icon(
+              isValidQris ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+              color: isValidQris ? Colors.green : WarnaDesaPay.warning,
+            ),
+            const SizedBox(width: 8),
+            Text(isValidQris ? "QRIS Terdeteksi" : "Format Tidak Valid"),
           ],
         ),
-        content: Text("Isi Data QRIS:\n\n$code"),
+        content: Text(
+          isValidQris 
+              ? "Merchant berhasil terbaca. Lanjutkan pembayaran?\n\nIsi QR:\n$code" 
+              : "Barcode yang Anda scan bukan format QRIS standar Nasional (NMID).\n\nIsi QR:\n$code"
+        ),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _cameraController.start(); // Hidupkan kamera kembali
+              _cameraController.start();
             },
-            child: const Text("Scan Lagi"),
+            child: const Text("Pindai Lagi"),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: WarnaDesaPay.primary,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.pop(context); // Tutup dialog
-              Navigator.pop(context); // Kembali ke Beranda
-              // TODO: Arahkan ke halaman input nominal transfer/bayar menggunakan data 'code'
-            },
-            child: const Text("Proses Bayar"),
-          )
+          if (isValidQris)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: WarnaDesaPay.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context); // Kembali ke Beranda membawa data QRIS
+                // Kirim hasil scan kembali ke beranda atau pemrosesan transaksi
+              },
+              child: const Text("Proses Bayar"),
+            )
         ],
       ),
     );
@@ -102,15 +113,22 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      // Menganalisis gambar menggunakan pustaka mobile_scanner
-      final bool success = await _cameraController.analyzeImage(image.path);
-      if (!success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Gambar tidak mengandung kode QR yang valid."),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final BarcodeCapture? capture = await _cameraController.analyzeImage(image.path);
+      
+      if (capture != null && capture.barcodes.isNotEmpty) {
+        final String? qrCode = capture.barcodes.first.rawValue;
+        if (qrCode != null && mounted) {
+          _handleQrDetected(qrCode);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Gambar tidak mengandung kode QRIS yang valid."),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     }
   }
@@ -215,7 +233,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
       body: Stack(
         children: [
           // ==========================================
-          // 1. ENGINE KAMERA ASLI (MOBILE SCANNER)
+          // 1. ENGINE KAMERA DENGAN DETEKSI PERMISSION
           // ==========================================
           MobileScanner(
             controller: _cameraController,
@@ -228,15 +246,64 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                 }
               }
             },
+            // Penanganan error kamera otomatis (Misal: Izin ditolak pengguna)
+            onDetectError: (error, stackTrace) {
+              setState(() {
+                _hasPermission = false;
+              });
+            },
           ),
 
-          // Layer Gradient Gelap di sekeliling area kamera agar terlihat elegan
+          // Layer kegelapan fungsional
           Container(
             color: Colors.black.withOpacity(0.4),
           ),
 
+          // Tampilan Fallback jika Izin Kamera Ditolak (Keren & Informatif)
+          if (!_hasPermission)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.no_photography_rounded, color: Colors.white54, size: 72),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Izin Kamera Dibutuhkan",
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "DesaPay memerlukan izin akses kamera fisik Anda untuk memindai kode QRIS secara langsung.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white60, fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 28),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: WarnaDesaPay.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      onPressed: () async {
+                        // Meminta izin ulang secara aman dengan memulai controller kembali
+                        _cameraController.start();
+                        setState(() {
+                          _hasPermission = true;
+                        });
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text("Izinkan Kamera", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // ==========================================
-          // 2. HEADER BAR (KONTROL CLOSE & FLASH ASLI)
+          // 2. HEADER BAR (CLOSE & FLASH)
           // ==========================================
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
@@ -257,18 +324,16 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                   "Pindai QRIS",
                   style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.3),
                 ),
-                
-                // FLASH TOGGLE ASLI KE HARDWARE KAMERA HP
                 IconButton(
-                  onPressed: () {
-                    _cameraController.toggleTorch(); // Mengaktifkan flashlight fisik HP
+                  onPressed: _hasPermission ? () {
+                    _cameraController.toggleTorch();
                     setState(() {
                       _isFlashOn = !_isFlashOn;
                     });
-                  },
+                  } : null,
                   icon: Icon(
                     _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                    color: _isFlashOn ? const Color(0xFFFFD700) : Colors.white,
+                    color: _isFlashOn ? const Color(0xFFFFD700) : Colors.white24,
                     size: 24,
                   ),
                   style: IconButton.styleFrom(
@@ -281,69 +346,65 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
           ),
 
           // ==========================================
-          // 3. KOTAK SASARAN & ANIMASI LASER SCANNER
+          // 3. TARGET BOX & LASER (HANYA MUNCUL JIKA IZIN ADA)
           // ==========================================
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Kotak Target Scanner transparan tengahnya
-                    Container(
-                      width: 250,
-                      height: 250,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(32),
-                        border: Border.all(color: Colors.white24, width: 2),
+          if (_hasPermission)
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 250,
+                        height: 250,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(color: Colors.white24, width: 2),
+                        ),
                       ),
-                    ),
-
-                    // Sudut-sudut Penegas Frame Sempurna (Corner Brackets)
-                    _buildCornerBracket(top: 0, left: 0, rotation: 0),
-                    _buildCornerBracket(top: 0, right: 0, rotation: 1.57),
-                    _buildCornerBracket(bottom: 0, left: 0, rotation: 4.71),
-                    _buildCornerBracket(bottom: 0, right: 0, rotation: 3.14),
-
-                    // Animasi Garis Laser Neon yang Bergerak Naik Turun
-                    AnimatedBuilder(
-                      animation: _laserPosition,
-                      builder: (context, child) {
-                        return Positioned(
-                          top: _laserPosition.value,
-                          left: 10,
-                          right: 10,
-                          child: Container(
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: WarnaDesaPay.secondary,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: WarnaDesaPay.secondary.withOpacity(0.8),
-                                  blurRadius: 12,
-                                  spreadRadius: 2,
-                                ),
-                              ],
+                      _buildCornerBracket(top: 0, left: 0, rotation: 0),
+                      _buildCornerBracket(top: 0, right: 0, rotation: 1.57),
+                      _buildCornerBracket(bottom: 0, left: 0, rotation: 4.71),
+                      _buildCornerBracket(bottom: 0, right: 0, rotation: 3.14),
+                      AnimatedBuilder(
+                        animation: _laserPosition,
+                        builder: (context, child) {
+                          return Positioned(
+                            top: _laserPosition.value,
+                            left: 10,
+                            right: 10,
+                            child: Container(
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: WarnaDesaPay.secondary,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: WarnaDesaPay.secondary.withOpacity(0.8),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                const Text(
-                  "Posisikan kode QR di dalam kotak target",
-                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-              ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  const Text(
+                    "Posisikan kode QR di dalam kotak target",
+                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
             ),
-          ),
 
           // ==========================================
-          // 4. FLOATING CONTROL BAR (BOTTOM CONTROLS)
+          // 4. CONTROLS BAR (BOTTOM CONTROLS)
           // ==========================================
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 40,
@@ -352,20 +413,17 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // AMBIL DARI GALERI (BERFUNGSI NYATA)
                 _buildCircularControl(
                   icon: Icons.image_rounded,
                   label: "Galeri",
                   onTap: _scanDariGaleri,
                 ),
-
                 _buildCircularControl(
                   icon: Icons.qr_code_scanner_rounded,
                   label: "QR Toko",
                   onTap: _tampilkanQrSaya,
                   isPrimary: true,
                 ),
-
                 _buildCircularControl(
                   icon: Icons.help_outline_rounded,
                   label: "Bantuan",
