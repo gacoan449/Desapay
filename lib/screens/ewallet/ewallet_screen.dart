@@ -1,6 +1,56 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
-import '../../services/digiflazz_service.dart'; 
+import '../../services/digiflazz_service.dart';
+
+// Pembungkus Animasi Memantul (Micro-interaction) untuk E-Wallet Selektor
+class CustomBounce extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const CustomBounce({super.key, required this.child, required this.onTap});
+
+  @override
+  State<CustomBounce> createState() => _CustomBounceState();
+}
+
+class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: widget.child,
+      ),
+    );
+  }
+}
 
 class EwalletScreen extends StatefulWidget {
   final String? jenisEwallet;
@@ -60,41 +110,117 @@ class _EwalletScreenState extends State<EwalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
+      backgroundColor: const Color(0xffF8FAFC),
       appBar: AppBar(
-        title: Text(_isMenuDetailAktif ? "Top Up $_ewalletTerpilih" : "Top Up E-Wallet"),
-        leading: _isMenuDetailAktif ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => widget.jenisEwallet != null ? Navigator.pop(context) : setState(() { _isMenuDetailAktif = false; _nomorController.clear(); })) : null,
+        elevation: 0,
+        backgroundColor: WarnaDesaPay.primary,
+        foregroundColor: Colors.white,
+        title: Text(
+          _isMenuDetailAktif ? "Top Up $_ewalletTerpilih" : "Top Up E-Wallet",
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () {
+            if (_isMenuDetailAktif && widget.jenisEwallet == null) {
+              setState(() {
+                _isMenuDetailAktif = false;
+                _nomorController.clear();
+              });
+            } else {
+              Navigator.pop(context);
+            }
+          },
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: _isMenuDetailAktif ? _tampilanFormEwallet() : _tampilanMenuUtama(),
-      ),
+      body: _isMenuDetailAktif ? _tampilanFormEwallet() : _tampilanMenuUtama(),
     );
   }
 
   Widget _tampilanMenuUtama() {
-    return ListView(
-      children: [
-        _menu(Icons.account_balance_wallet, "DANA", "Top Up Saldo DANA"),
-        _menu(Icons.account_balance_wallet, "OVO", "Top Up Saldo OVO"),
-        _menu(Icons.account_balance_wallet, "GoPay", "Top Up Saldo GoPay"),
-        _menu(Icons.account_balance_wallet, "ShopeePay", "Top Up Saldo ShopeePay"),
-        _menu(Icons.account_balance_wallet, "LinkAja", "Top Up Saldo LinkAja"),
-        _menu(Icons.local_taxi, "MAXIM", "Top Up Saldo Driver/Customer Maxim"),
-        _menu(Icons.directions_car, "GRAB", "Top Up Saldo Driver/Customer Grab"),
-      ],
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Pilih Vendor E-Wallet",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+          ),
+          const SizedBox(height: 16),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 1.25,
+            children: [
+              _buildModernMenuCard("DANA", "Top Up Instan", const Color(0xFF108EE9), Icons.account_balance_wallet_rounded),
+              _buildModernMenuCard("OVO", "Proses Realtime", const Color(0xFF4C2A86), Icons.wallet_membership_rounded),
+              _buildModernMenuCard("GoPay", "Gojek Ecosystem", const Color(0xFF00AED6), Icons.account_balance_wallet_outlined),
+              _buildModernMenuCard("ShopeePay", "Belanja Praktis", const Color(0xFFEE4D2D), Icons.shopping_bag_rounded),
+              _buildModernMenuCard("LinkAja", "BUMN Bersatu", const Color(0xFFE52229), Icons.currency_exchange_rounded),
+              _buildModernMenuCard("MAXIM", "Driver & Customer", const Color(0xFFFFE600), Icons.local_taxi_rounded, textDark: true),
+              _buildModernMenuCard("GRAB", "GrabPay Wallet", const Color(0xFF00B14F), Icons.directions_car_rounded),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _menu(IconData icon, String title, String subtitle) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: CircleAvatar(backgroundColor: WarnaDesaPay.primary.withOpacity(0.1), child: Icon(icon, color: WarnaDesaPay.primary)),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios),
-        onTap: () { setState(() { _ewalletTerpilih = title; _isMenuDetailAktif = true; }); _panggilProdukEwallet(title); },
+  Widget _buildModernMenuCard(String title, String desc, Color color, IconData icon, {bool textDark = false}) {
+    return CustomBounce(
+      onTap: () {
+        setState(() {
+          _ewalletTerpilih = title;
+          _isMenuDetailAktif = true;
+        });
+        _panggilProdukEwallet(title);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, color: textDark ? Colors.black87 : Colors.white, size: 30),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: textDark ? Colors.black87 : Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  desc,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: textDark ? Colors.black54 : Colors.white70,
+                  ),
+                ),
+              ],
+            )
+          ],
+        ),
       ),
     );
   }
@@ -103,37 +229,105 @@ class _EwalletScreenState extends State<EwalletScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Nomor Handphone / ID Akun", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _nomorController,
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(border: const OutlineInputBorder(), hintText: "Contoh: 081234567890", prefixIcon: const Icon(Icons.phone_android), labelText: "Nomor $_ewalletTerpilih"),
+        // FORM PENGISIAN NOMOR HP PREMIUM
+        Container(
+          width: double.infinity,
+          color: Colors.white,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Nomor Handphone / ID Akun $_ewalletTerpilih",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _nomorController,
+                keyboardType: TextInputType.phone,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFFF1F5F9),
+                  hintText: "Contoh: 081234567890",
+                  hintStyle: TextStyle(color: Colors.grey.shade400, letterSpacing: 0),
+                  prefixIcon: Icon(Icons.phone_android_rounded, color: WarnaDesaPay.primary),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 20),
-        Text("Pilih Nominal Saldo $_ewalletTerpilih", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(
+            "Pilih Nominal Pengisian Saldo",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey.shade800),
+          ),
+        ),
         Expanded(
           child: _sedangMemuat
               ? const Center(child: CircularProgressIndicator())
               : _daftarProdukEwallet.isEmpty
-                  ? const Center(child: Text("Produk tidak ditemukan.\nPastikan IP didaftarkan & saldo terisi.", textAlign: TextAlign.center))
+                  ? const Center(
+                      child: Text(
+                        "Produk sedang tidak tersedia.\nSilakan coba beberapa saat lagi.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
                   : ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemCount: _daftarProdukEwallet.length,
                       itemBuilder: (context, index) {
                         final produk = _daftarProdukEwallet[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 6),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.02),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              )
+                            ],
+                          ),
                           child: ListTile(
-                            title: Text(produk['product_name'] ?? '-'),
-                            subtitle: Text("Kode: ${produk['buyer_sku_code']}"),
-                            trailing: Text("Rp ${produk['price']}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            title: Text(
+                              produk['product_name'] ?? '-',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.top(4),
+                              child: Text(
+                                "Kode: ${produk['buyer_sku_code']}",
+                                style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                              ),
+                            ),
+                            trailing: Text(
+                              "Rp ${produk['price']}",
+                              style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
                             onTap: () {
-                              if (_nomorController.text.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Isi nomor HP $_ewalletTerpilih terlebih dahulu!")));
+                              if (_nomorController.text.trim().isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Mohon isi nomor HP tujuan $_ewalletTerpilih!"),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
                                 return;
                               }
-                              _eksekusiBayar(produk);
+                              _prosesBottomSheetKonfirmasi(produk);
                             },
                           ),
                         );
@@ -144,36 +338,185 @@ class _EwalletScreenState extends State<EwalletScreen> {
     );
   }
 
-  void _eksekusiBayar(dynamic produk) {
-    showDialog(
+  // INTEGRASI DIALOG & INVOICE PREMIUM MODAL BOTTOM SHEET
+  void _prosesBottomSheetKonfirmasi(dynamic produk) {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Konfirmasi"),
-        content: Text("Beli ${produk['product_name']} ke ${_nomorController.text}?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
-              Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(buyerSkuCode: produk['buyer_sku_code'], customerNo: _nomorController.text);
-              if (mounted) Navigator.pop(context);
-              
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(hasil['status'] == 'Gagal' ? "❌ Gagal" : "⏳ Diproses"),
-                    content: Text("Status: ${hasil['status'] ?? 'Gagal'}\nSN: ${hasil['sn'] ?? hasil['message'] ?? '-'}"),
-                    actions: [TextButton(onPressed: () { Navigator.pop(context); if(hasil['status'] != 'Gagal') _nomorController.clear(); }, child: const Text("OK"))],
-                  ),
-                );
-              }
-            },
-            child: const Text("Bayar"),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            top: 24,
+            left: 24,
+            right: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Konfirmasi Pembayaran",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              _buildInvoiceRow("Layanan Produk", produk['product_name'] ?? '-'),
+              _buildInvoiceRow("Nomor Tujuan", _nomorController.text),
+              _buildInvoiceRow("Provider Vendor", _ewalletTerpilih),
+              _buildInvoiceRow("Metode Saldo", "Saldo Utama DesaPay"),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Total Pembayaran", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text(
+                    "Rp ${produk['price']}",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: WarnaDesaPay.primary),
+                  )
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: WarnaDesaPay.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context); // Tutup Bottom Sheet Konfirmasi
+                    _eksekusiKirimAPI(produk);
+                  },
+                  child: const Text("Konfirmasi & Bayar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInvoiceRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87)),
         ],
       ),
     );
+  }
+
+  void _eksekusiKirimAPI(dynamic produk) async {
+    // Tampilkan Loading Animator Fullscreen
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    // Kirim Payload data transaksi ke Service Digiflazz
+    Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
+      buyerSkuCode: produk['buyer_sku_code'],
+      customerNo: _nomorController.text,
+    );
+
+    if (mounted) Navigator.pop(context); // Tutup loading animator
+
+    String statusTransaksi = hasil['status'] ?? 'Gagal';
+    String pesanServer = hasil['sn'] ?? hasil['message'] ?? 'Tidak ada serial number';
+
+    if (mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (context) {
+          bool isGagal = statusTransaksi == 'Gagal';
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isGagal ? Icons.cancel_rounded : Icons.check_circle_rounded,
+                  size: 72,
+                  color: isGagal ? Colors.red.shade600 : Colors.green.shade600,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isGagal ? "Transaksi Gagal" : "Transaksi Diproses",
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildInvoiceRow("Produk", produk['product_name'] ?? '-'),
+                      _buildInvoiceRow("Tujuan", _nomorController.text),
+                      _buildInvoiceRow("Status", statusTransaksi),
+                      _buildInvoiceRow("Ref/SN", pesanServer),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isGagal ? Colors.red : WarnaDesaPay.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      if (!isGagal) {
+                        setState(() {
+                          _nomorController.clear();
+                          _isMenuDetailAktif = false;
+                        });
+                      }
+                    },
+                    child: const Text("Selesai", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
   }
 }
