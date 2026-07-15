@@ -3,6 +3,56 @@ import '../../config/warna.dart';
 import '../../services/digiflazz_service.dart';
 import 'payment_screen.dart';
 
+// Pembungkus Animasi Memantul (Micro-interaction) Premium saat Chip / Tombol Ditekan
+class CustomBounce extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const CustomBounce({super.key, required this.child, required this.onTap});
+
+  @override
+  State<CustomBounce> createState() => _CustomBounceState();
+}
+
+class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class TopupSaldoScreen extends StatefulWidget {
   const TopupSaldoScreen({super.key});
 
@@ -11,14 +61,9 @@ class TopupSaldoScreen extends StatefulWidget {
 }
 
 class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
-
   final DigiflazzService _digiflazzService = DigiflazzService();
-
-  final TextEditingController _nominalController =
-      TextEditingController();
-
+  final TextEditingController _nominalController = TextEditingController();
   int _saldo = 0;
-
   bool _loadingSaldo = true;
 
   @override
@@ -27,345 +72,389 @@ class _TopupSaldoScreenState extends State<TopupSaldoScreen> {
     _ambilSaldo();
   }
 
+  @override
+  void dispose() {
+    _nominalController.dispose();
+    super.dispose();
+  }
+
   Future<void> _ambilSaldo() async {
     try {
       final saldo = await _digiflazzService.cekSaldoModal();
-
       if (!mounted) return;
-
       setState(() {
         _saldo = saldo;
         _loadingSaldo = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-
-      setState(() {
-        _loadingSaldo = false;
-      });
+      setState(() => _loadingSaldo = false);
     }
   }
 
   String rupiah(int angka) {
     String hasil = angka.toString();
-
     final reg = RegExp(r'(\d)(?=(\d{3})+(?!\d))');
-
     return "Rp ${hasil.replaceAllMapped(reg, (m) => "${m[1]}.")}";
+  }
+
+  void _setNominalPintas(String value) {
+    setState(() {
+      _nominalController.text = value;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
-
+      backgroundColor: const Color(0xffF8FAFC),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
         title: const Text(
-          "Isi Saldo DesaPay",
+          "Isi Saldo Akun",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
-
-      body: ListView(
-        padding: const EdgeInsets.all(18),
-
-        children: [
-
-          Container(
-            padding: const EdgeInsets.all(20),
-
-            decoration: BoxDecoration(
-              color: WarnaDesaPay.primary,
-              borderRadius: BorderRadius.circular(20),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ==========================================
+            // 1. PREMIUM BLUE GRADIENT WALLET CARD
+            // ==========================================
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [WarnaDesaPay.primary, const Color(0xFF007BE6)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: WarnaDesaPay.primary.withOpacity(0.15),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet_rounded, color: Colors.white.withOpacity(0.7), size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        "Saldo Agen / Modal Saat Ini",
+                        style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _loadingSaldo
+                      ? const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : Text(
+                          rupiah(_saldo),
+                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
+                        ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.shield_rounded, color: Colors.amber, size: 14),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            "Saldo Digiflazz otomatis dicadangkan aman untuk jalur PPOB.",
+                            style: TextStyle(color: Colors.whiteEE, fontSize: 11, height: 1.2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
 
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+            const SizedBox(height: 32),
+            Text("Masukkan Nominal Pengisian", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+            const SizedBox(height: 12),
 
+            // ==========================================
+            // 3. MODERN FLOATING INPUT FIELD
+            // ==========================================
+            TextField(
+              controller: _nominalController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                prefixText: "Rp ",
+                prefixStyle: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 20),
+                hintText: "0",
+                hintStyle: TextStyle(color: Colors.grey.shade300, fontWeight: FontWeight.normal),
+                contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: WarnaDesaPay.primary, width: 2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text("* Batas minimal deposit nominal adalah Rp10.000", style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ==========================================
+            // 2. INSTANT NOMINAL SHORTCUT CHIPS
+            // ==========================================
+            Row(
               children: [
-
-                const Text(
-                  "Saldo Modal Anda",
-                  style: TextStyle(
-                    color: Colors.white70,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                _loadingSaldo
-                    ? const CircularProgressIndicator(
-                        color: Colors.white,
-                      )
-                    : Text(
-                        rupiah(_saldo),
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-
-                const SizedBox(height: 6),
-
-                const Text(
-                  "Saldo Digiflazz akan digunakan untuk transaksi pelanggan.",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
+                Expanded(child: _buildShortcutChip("50.000", "50000")),
+                const SizedBox(width: 10),
+                Expanded(child: _buildShortcutChip("100.000", "100000")),
+                const SizedBox(width: 10),
+                Expanded(child: _buildShortcutChip("200.000", "200000")),
+                const SizedBox(width: 10),
+                Expanded(child: _buildShortcutChip("500.000", "500000")),
               ],
             ),
-          ),
 
-          const SizedBox(height: 25),
+            const SizedBox(height: 36),
 
-          const Text(
-            "Masukkan Nominal Top Up",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          TextField(
-            controller: _nominalController,
-
-            keyboardType: TextInputType.number,
-
-            decoration: InputDecoration(
-              prefixText: "Rp ",
-
-              hintText: "Contoh 50000",
-
-              filled: true,
-
-              fillColor: Colors.white,
-
-              border: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(15),
-              ),
-
-              focusedBorder: OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(15),
-
-                borderSide: BorderSide(
-                  color: WarnaDesaPay.primary,
-                  width: 2,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Text(
-            "Minimal Top Up Rp10.000",
-            style: TextStyle(
-              color: Colors.grey.shade600,
-            ),
-          ),
-
-          const SizedBox(height: 25),
-          SizedBox(
-            width: double.infinity,
-            height: 55,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.account_balance_wallet),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: WarnaDesaPay.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              label: const Text(
-                "LANJUTKAN PEMBAYARAN",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              onPressed: () {
-                final nominal = int.tryParse(
-                  _nominalController.text.replaceAll(".", ""),
-                );
-
+            // ACTION BUTTON CONTROLLER DENGAN CUSTOM BOUNCE
+            CustomBounce(
+              onTap: () {
+                final nominal = int.tryParse(_nominalController.text.replaceAll(".", "").replaceAll(" ", ""));
                 if (nominal == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Masukkan nominal terlebih dahulu.",
-                      ),
-                    ),
+                    const SnackBar(content: Text("Mohon input nominal pengisian saldo!"), behavior: SnackBarBehavior.floating),
                   );
                   return;
                 }
-
                 if (nominal < 10000) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Minimal Top Up Rp10.000",
-                      ),
-                    ),
+                    const SnackBar(content: Text("Batas pengisian saldo minimal Rp10.000"), behavior: SnackBarBehavior.floating),
                   );
                   return;
                 }
-
-                _prosesMintaTiket(
-                  nominal,
-                );
+                _prosesBottomSheetInvoice(nominal);
               },
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: Colors.amber.shade300,
-              ),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.orange,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      "Informasi",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              child: Container(
+                width: double.infinity,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: WarnaDesaPay.primary,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: WarnaDesaPay.primary.withOpacity(0.2), blurRadius: 12, offset: const Offset(0, 6))
                   ],
                 ),
-
-                SizedBox(height: 10),
-
-                Text(
-                  "• Nominal bebas.\n"
-                  "• Minimal Top Up Rp10.000.\n"
-                  "• Setelah tiket dibuat silakan transfer sesuai nominal.\n"
-                  "• Saldo otomatis masuk setelah pembayaran diterima Digiflazz.",
-                  style: TextStyle(
-                    fontSize: 13,
-                  ),
+                alignment: Alignment.center,
+                child: const Text(
+                  "BUAT TIKET DEPOSIT",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.8),
                 ),
-
-              ],
+              ),
             ),
-          ),
 
-        ],
-      ),
-    );
-  }Future<void> _prosesMintaTiket(int nominal) async {
-    final konfirmasi = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Konfirmasi Top Up"),
-          content: Text(
-            "Buat tiket deposit sebesar ${rupiah(nominal)} ?",
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("Batal"),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("Lanjut"),
+            const SizedBox(height: 32),
+
+            // PETUNJUK DOKUMENTASI STRUKTUR CARD
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Colors.amber.shade800, size: 18),
+                      const SizedBox(width: 8),
+                      Text("Panduan Prosedur Pengisian Saldo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "1. Sistem input nominal bersifat bebas kelipatan terhitung di atas batas minimum.\n"
+                    "2. Setelah kode invoice tiket berhasil diterbitkan, silakan lakukan proses transfer dana sesuai angka nominal presisi.\n"
+                    "3. Saldo akun DesaPay akan otomatis disinkronisasi bertambah secara otomatis setelah jaringan bank Digiflazz mengonfirmasi data pembayaran.",
+                    style: TextStyle(fontSize: 12, color: Colors.amber.shade900, height: 1.5),
+                  ),
+                ],
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutChip(String label, String rawValue) {
+    return CustomBounce(
+      onTap: () => _setNominalPintas(rawValue),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: WarnaDesaPay.primary),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 4. PREMIUM BOTTOM SHEET INVOICE
+  // ==========================================
+  void _prosesBottomSheetInvoice(int nominal) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            top: 24, left: 24, right: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+              const SizedBox(height: 20),
+              const Text("Konfirmasi Tiket Deposit", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              _buildInvoiceRow("Jenis Layanan", "Top Up Saldo Akun"),
+              _buildInvoiceRow("Jalur Gateway", "API Digiflazz Otomatis"),
+              _buildInvoiceRow("Status Permintaan", "PENDING VERIFIKASI"),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Total Pengisian", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text(
+                    rupiah(nominal),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: WarnaDesaPay.primary),
+                  )
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: WarnaDesaPay.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _prosesMintaTiket(nominal);
+                  },
+                  child: const Text("Konfirmasi & Minta Tiket", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
+  }
 
-    if (konfirmasi != true) return;
+  Widget _buildInvoiceRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87), textAlign: TextAlign.end)),
+        ],
+      ),
+    );
+  }
 
-    if (!mounted) return;
-
+  Future<void> _prosesMintaTiket(int nominal) async {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
-    final hasil = await _digiflazzService.mintaTiketDeposit(
-      jumlahNominal: nominal,
-    );
+    final hasil = await _digiflazzService.mintaTiketDeposit(jumlahNominal: nominal);
 
     if (mounted) Navigator.pop(context);
 
     if (hasil.isNotEmpty && hasil["rc"] == "00") {
       final dataPembayaran = {
         "data": {
-          "payment_name":
-              "Transfer Bank ${hasil["bank"] ?? "BCA"}",
+          "payment_name": "Transfer Bank ${hasil["bank"] ?? "BCA"}",
           "amount": hasil["amount"] ?? nominal,
-          "reference":
-              hasil["deposit_id"] ??
-                  "DEP-${DateTime.now().millisecondsSinceEpoch}",
+          "reference": hasil["deposit_id"] ?? "DEP-${DateTime.now().millisecondsSinceEpoch}",
           "status": hasil["status"] ?? "UNPAID",
-          "pay_code": hasil["pay_code"] ??
-              hasil["owner_name"] ??
-              "-",
+          "pay_code": hasil["pay_code"] ?? hasil["owner_name"] ?? "-",
           "qr_url": hasil["qr_url"],
         }
       };
 
       if (!mounted) return;
-
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PaymentScreen(
-            data: dataPembayaran,
-          ),
+          builder: (_) => PaymentScreen(data: dataPembayaran),
         ),
       );
-
       return;
     }
 
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: Colors.red,
-        content: Text(
-          hasil["message"] ??
-              "Gagal membuat tiket deposit.",
-        ),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        content: Text(hasil["message"] ?? "Gagal memproses tiket deposit sistem pusat."),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _nominalController.dispose();
-    super.dispose();
   }
 }
