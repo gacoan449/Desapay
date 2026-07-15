@@ -229,7 +229,6 @@ class _EwalletScreenState extends State<EwalletScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // FORM PENGISIAN NOMOR HP PREMIUM
         Container(
           width: double.infinity,
           color: Colors.white,
@@ -307,7 +306,7 @@ class _EwalletScreenState extends State<EwalletScreen> {
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
                             ),
                             subtitle: Padding(
-                              padding: const EdgeInsets.top(4),
+                              padding: const EdgeInsets.only(top: 4), // DIKOREKSI: Menggunakan .only() bawaan Flutter yang valid
                               child: Text(
                                 "Kode: ${produk['buyer_sku_code']}",
                                 style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
@@ -338,7 +337,6 @@ class _EwalletScreenState extends State<EwalletScreen> {
     );
   }
 
-  // INTEGRASI DIALOG & INVOICE PREMIUM MODAL BOTTOM SHEET
   void _prosesBottomSheetKonfirmasi(dynamic produk) {
     showModalBottomSheet(
       context: context,
@@ -405,7 +403,7 @@ class _EwalletScreenState extends State<EwalletScreen> {
                     elevation: 0,
                   ),
                   onPressed: () {
-                    Navigator.pop(context); // Tutup Bottom Sheet Konfirmasi
+                    Navigator.pop(context);
                     _eksekusiKirimAPI(produk);
                   },
                   child: const Text("Konfirmasi & Bayar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -432,20 +430,18 @@ class _EwalletScreenState extends State<EwalletScreen> {
   }
 
   void _eksekusiKirimAPI(dynamic produk) async {
-    // Tampilkan Loading Animator Fullscreen
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    // Kirim Payload data transaksi ke Service Digiflazz
     Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
       buyerSkuCode: produk['buyer_sku_code'],
       customerNo: _nomorController.text,
     );
 
-    if (mounted) Navigator.pop(context); // Tutup loading animator
+    if (mounted) Navigator.pop(context);
 
     String statusTransaksi = hasil['status'] ?? 'Gagal';
     String pesanServer = hasil['sn'] ?? hasil['message'] ?? 'Tidak ada serial number';
