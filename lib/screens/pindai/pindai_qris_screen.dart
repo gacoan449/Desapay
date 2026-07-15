@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../config/warna.dart';
 
 class PindaiQrisScreen extends StatefulWidget {
@@ -9,6 +11,10 @@ class PindaiQrisScreen extends StatefulWidget {
 }
 
 class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerProviderStateMixin {
+  final MobileScannerController _cameraController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates, // Mencegah scan ganda dalam sekali bidik
+  );
+
   late AnimationController _animationController;
   late Animation<double> _laserPosition;
   bool _isFlashOn = false;
@@ -16,17 +22,15 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    // Animasi putaran laser scanner naik-turun secara kontinu
+
+    // Animasi garis laser naik-turun
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     );
 
     _laserPosition = Tween<double>(begin: 0.0, end: 240.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     )..addStatusListener((status) {
         if (status == AnimationStatus.completed) {
           _animationController.reverse();
@@ -41,10 +45,77 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
   @override
   void dispose() {
     _animationController.dispose();
+    _cameraController.dispose();
     super.dispose();
   }
 
-  // Tampilan Bottom Sheet untuk memamerkan QR Code Toko Agen (Show QR)
+  // ===================================================
+  // FUNGSI UTAMA 1: PROSES HASIL SCANNING QRIS
+  // ===================================================
+  void _handleQrDetected(String code) {
+    // Matikan kamera sementara agar tidak menumpuk dialog/navigasi baru
+    _cameraController.stop();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.green),
+            SizedBox(width: 8),
+            Text("QR Terbaca"),
+          ],
+        ),
+        content: Text("Isi Data QRIS:\n\n$code"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _cameraController.start(); // Hidupkan kamera kembali
+            },
+            child: const Text("Scan Lagi"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: WarnaDesaPay.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context); // Tutup dialog
+              Navigator.pop(context); // Kembali ke Beranda
+              // TODO: Arahkan ke halaman input nominal transfer/bayar menggunakan data 'code'
+            },
+            child: const Text("Proses Bayar"),
+          )
+        ],
+      ),
+    );
+  }
+
+  // ===================================================
+  // FUNGSI UTAMA 2: AMBIL & DECODE QR DARI GALERI HP
+  // ===================================================
+  Future<void> _scanDariGaleri() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      // Menganalisis gambar menggunakan pustaka mobile_scanner
+      final bool success = await _cameraController.analyzeImage(image.path);
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Gambar tidak mengandung kode QR yang valid."),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // Tampilkan QR Code Merchant Toko Sendiri (Show QR)
   void _tampilkanQrSaya() {
     showModalBottomSheet(
       context: context,
@@ -70,11 +141,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
               const SizedBox(height: 24),
               const Text(
                 "QRIS Toko Saya",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: WarnaDesaPay.textMain,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: WarnaDesaPay.textMain),
               ),
               const SizedBox(height: 4),
               const Text(
@@ -83,39 +150,26 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 24),
-              
-              // Frame QR Code Elegan
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: Colors.grey.shade200, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
                 ),
                 child: Column(
                   children: [
-                    // Simulasi QR Code Generator dengan Ikon Sentral DesaPay
                     Stack(
                       alignment: Alignment.center,
                       children: [
-                        Icon(Icons.qr_code_2_rounded, size: 220, color: WarnaDesaPay.textMain),
+                        const Icon(Icons.qr_code_2_rounded, size: 220, color: WarnaDesaPay.textMain),
                         Container(
                           padding: const EdgeInsets.all(6),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: CircleAvatar(
+                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                          child: const CircleAvatar(
                             radius: 18,
                             backgroundColor: WarnaDesaPay.primary,
-                            child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 16),
+                            child: Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 16),
                           ),
                         ),
                       ],
@@ -161,35 +215,28 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
       body: Stack(
         children: [
           // ==========================================
-          // 1. SIMULASI BACKGROUND KAMERA (DARK LUXURY)
+          // 1. ENGINE KAMERA ASLI (MOBILE SCANNER)
           // ==========================================
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.4,
-              child: Image.network(
-                "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", // Tekstur latar belakang cyber-office
-                fit: BoxFit.cover,
-              ),
-            ),
+          MobileScanner(
+            controller: _cameraController,
+            onDetect: (capture) {
+              final List<Barcode> barcodes = capture.barcodes;
+              for (final barcode in barcodes) {
+                if (barcode.rawValue != null) {
+                  _handleQrDetected(barcode.rawValue!);
+                  break;
+                }
+              }
+            },
           ),
 
-          // Layer Gradient Gelap untuk memfokuskan pendaran scanner
+          // Layer Gradient Gelap di sekeliling area kamera agar terlihat elegan
           Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.6),
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.8),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
+            color: Colors.black.withOpacity(0.4),
           ),
 
           // ==========================================
-          // 2. HEADER BAR (CLOSE & TITLE)
+          // 2. HEADER BAR (KONTROL CLOSE & FLASH ASLI)
           // ==========================================
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
@@ -202,21 +249,19 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.black38,
+                    backgroundColor: Colors.black54,
                     padding: const EdgeInsets.all(10),
                   ),
                 ),
                 const Text(
                   "Pindai QRIS",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.3,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.3),
                 ),
+                
+                // FLASH TOGGLE ASLI KE HARDWARE KAMERA HP
                 IconButton(
                   onPressed: () {
+                    _cameraController.toggleTorch(); // Mengaktifkan flashlight fisik HP
                     setState(() {
                       _isFlashOn = !_isFlashOn;
                     });
@@ -227,7 +272,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                     size: 24,
                   ),
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.black38,
+                    backgroundColor: Colors.black54,
                     padding: const EdgeInsets.all(10),
                   ),
                 ),
@@ -236,7 +281,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
           ),
 
           // ==========================================
-          // 3. TARGET BOX & ANIMASI LASER SCANNER
+          // 3. KOTAK SASARAN & ANIMASI LASER SCANNER
           // ==========================================
           Center(
             child: Column(
@@ -245,7 +290,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                 Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Kotak Target Scanner
+                    // Kotak Target Scanner transparan tengahnya
                     Container(
                       width: 250,
                       height: 250,
@@ -257,9 +302,9 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
 
                     // Sudut-sudut Penegas Frame Sempurna (Corner Brackets)
                     _buildCornerBracket(top: 0, left: 0, rotation: 0),
-                    _buildCornerBracket(top: 0, right: 0, rotation: 1.57), // 90 deg
-                    _buildCornerBracket(bottom: 0, left: 0, rotation: 4.71), // 270 deg
-                    _buildCornerBracket(bottom: 0, right: 0, rotation: 3.14), // 180 deg
+                    _buildCornerBracket(top: 0, right: 0, rotation: 1.57),
+                    _buildCornerBracket(bottom: 0, left: 0, rotation: 4.71),
+                    _buildCornerBracket(bottom: 0, right: 0, rotation: 3.14),
 
                     // Animasi Garis Laser Neon yang Bergerak Naik Turun
                     AnimatedBuilder(
@@ -291,11 +336,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                 const SizedBox(height: 28),
                 const Text(
                   "Posisikan kode QR di dalam kotak target",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -311,21 +352,13 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Tombol Ambil dari Galeri Foto
+                // AMBIL DARI GALERI (BERFUNGSI NYATA)
                 _buildCircularControl(
                   icon: Icons.image_rounded,
                   label: "Galeri",
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Membuka galeri foto..."),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                  onTap: _scanDariGaleri,
                 ),
 
-                // Tombol Inti: Tampilkan QR Kode Toko Agen (Show QR)
                 _buildCircularControl(
                   icon: Icons.qr_code_scanner_rounded,
                   label: "QR Toko",
@@ -333,14 +366,13 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                   isPrimary: true,
                 ),
 
-                // Tombol Panduan Pembayaran
                 _buildCircularControl(
                   icon: Icons.help_outline_rounded,
                   label: "Bantuan",
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Buka panduan transaksi QRIS..."),
+                        content: Text("Arahkan kamera ke kertas barcode QRIS resmi."),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -354,7 +386,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
     );
   }
 
-  // Builder untuk sudut-sudut Target Box yang simetris
   Widget _buildCornerBracket({
     double? top,
     double? bottom,
@@ -372,7 +403,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
         child: Container(
           width: 30,
           height: 30,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             border: Border(
               top: BorderSide(color: WarnaDesaPay.secondary, width: 4),
               left: BorderSide(color: WarnaDesaPay.secondary, width: 4),
@@ -383,7 +414,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
     );
   }
 
-  // Helper untuk membuat Tombol Kontrol Bawah yang Simetris
   Widget _buildCircularControl({
     required IconData icon,
     required String label,
@@ -407,11 +437,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
               ),
             ),
             alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: isPrimary ? 30 : 22,
-            ),
+            child: Icon(icon, color: Colors.white, size: isPrimary ? 30 : 22),
           ),
           const SizedBox(height: 8),
           Text(
