@@ -84,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Sistem Autoscroll Pintar untuk Banner Canggih
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (_currentBannerPage < 2) {
         _currentBannerPage++;
@@ -202,7 +201,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Gradasi Biru Mewah Kiblat Aplikasi DANA
     final LinearGradient premiumBlueGradient = LinearGradient(
       colors: [
         WarnaDesaPay.primary,
@@ -239,7 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Column(
                   children: [
-                    // TOP BAR: SALDO UTAMA & TOMBOL SIDE ACTION
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -254,7 +251,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
                             ),
                             const SizedBox(width: 10),
-                            // INTEGRASI TOGGLE SALDO DI TOP BAR
                             GestureDetector(
                               onTap: () => setState(() => _isSaldoHidden = !_isSaldoHidden),
                               child: Row(
@@ -276,7 +272,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                        // RIGHT BADGE PLATFORM
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                           decoration: BoxDecoration(
@@ -291,7 +286,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 32),
-                    // TRANSPARENT WHITE ACTION BUTTONS GRID ROW
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
@@ -348,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // ANIMATED PROMO CAROUSEL (CANGGIH & MANDIRI TANPA BORDER TEXT EXTRA)
+              // ANIMATED PROMO CAROUSEL
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
@@ -391,7 +385,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    // Indikator Titik Banner Carousel
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(3, (index) {
@@ -413,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              // PLATFORM ASSISTANCE CARD
+              // PLATFORM ASSISTANCE CARD (DIJAMIN LOLOS COMPILER SDK)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: CustomBounce(
@@ -422,45 +415,45 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.emerald.shade700, Colors.teal.shade600],
+                        colors: [Colors.green.shade700, Colors.teal.shade600],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.emerald.withOpacity(0.1),
+                          color: Colors.green.withOpacity(0.1),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
                         CircleAvatar(
                           radius: 22,
-                          backgroundColor: Colors.white24,
-                          child: Icon(Icons.headset_mic_rounded, color: Colors.white, size: 24),
+                          backgroundColor: Colors.white.withOpacity(0.2),
+                          child: const Icon(Icons.headset_mic_rounded, color: Colors.white, size: 24),
                         ),
-                        SizedBox(width: 16),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                              const Text(
                                 "Pusat Bantuan Digital",
                                 style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               Text(
                                 "Hubungi tim teknis via WhatsApp jika ada kendala pemrosesan sistem pembayaran Anda.",
-                                style: TextStyle(color: Colors.whiteAA, fontSize: 11, height: 1.3),
+                                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, height: 1.3),
                               ),
                             ],
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
                       ],
                     ),
                   ),
@@ -481,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "© 2026 DesaPay Indonesia • Premium Release Build v2.1.0",
+                      "© 2026 DesaPay Indonesia • Premium Release Build v2.1.1",
                       style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
                     ),
                     const SizedBox(height: 40),
