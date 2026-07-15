@@ -1,18 +1,18 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 
 class DigiflazzService {
-  // Semua Alamat URL Resmi Digiflazz
-  final String _baseUrlPriceList = 'https://digiflazz.com';
-  final String _baseUrlTransaction = 'https://digiflazz.com';
-  final String _baseUrlDeposit = 'https://digiflazz.com';
-  final String _baseUrlCekSaldo = 'https://api.digiflazz.com/v1/cek-saldo';
+  // ===================================================
+  // ENDPOINT RESMI API DIGIFLAZZ (UPDATED & CORRECTED)
+  // ===================================================
+  static const String _baseUrlTransaction = 'https://api.digiflazz.com/v1/transaction';
+  static const String _baseUrlDeposit = 'https://api.digiflazz.com/v1/deposit';
+  static const String _baseUrlCekSaldo = 'https://api.digiflazz.com/v1/cek-saldo';
   
-  // Data akun testing Anda (Ganti ke Production Key jika nanti sudah siap rilis)
+  // Data akun testing/production Anda
   final String _username = 'rukaxigqnvno'; 
-  
-  // PERBAIKAN: API Key sekarang dibungkus tanda petik string dengan benar agar tidak error matematika
   final String _apiKey = "ba2b7ab6-33b0-5a48-b7f7-56a2f1b30d0b";
 
   // ===================================================
@@ -20,33 +20,37 @@ class DigiflazzService {
   // ===================================================
   Future<List<dynamic>> ambilSemuaProduk() async {
     try {
-      String signRaw = _username + _apiKey + 'pricelist';
-      String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String signRaw = _username + _apiKey + 'pricelist';
+      final String sign = md5.convert(utf8.encode(signRaw)).toString();
 
       final response = await http.post(
-        Uri.parse(_baseUrlPriceList),
+        Uri.parse(_baseUrlTransaction), // DIKOREKSI: Menggunakan endpoint transaksi yang benar
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "cmd": "prepaid",
           "username": _username,
           "sign": sign
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        List<dynamic> produkAsli = data['data'] ?? [];
+        final List<dynamic> produkAsli = data['data'] ?? [];
         
-        int keuntunganKita = 1000;
+        const int keuntunganKita = 1000;
 
+        // Type-safe mapping untuk menghindari crash konversi data numerik
         return produkAsli.map((item) {
-          item['price'] = (item['price'] ?? 0) + keuntunganKita;
+          final int hargaAsli = int.tryParse(item['price'].toString()) ?? 0;
+          item['price'] = hargaAsli + keuntunganKita;
           return item;
         }).toList();
       } else {
+        if (kDebugMode) print("Pricelist Error: Status Code ${response.statusCode}");
         return [];
       }
     } catch (e) {
+      if (kDebugMode) print("Pricelist Exception: $e");
       return [];
     }
   }
@@ -59,13 +63,12 @@ class DigiflazzService {
     required String customerNo,   
   }) async {
     try {
-      String refId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
-
-      String signRaw = _username + _apiKey + refId;
-      String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String refId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
+      final String signRaw = _username + _apiKey + refId;
+      final String sign = md5.convert(utf8.encode(signRaw)).toString();
 
       final response = await http.post(
-        Uri.parse(_baseUrlTransaction),
+        Uri.parse(_baseUrlTransaction), // DIKOREKSI: Menggunakan endpoint transaksi yang benar
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": _username,
@@ -74,16 +77,16 @@ class DigiflazzService {
           "ref_id": refId,
           "sign": sign
         }),
-      );
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data'] ?? {'status': 'Gagal', 'message': 'Format response salah'};
+        return data['data'] ?? {'status': 'Gagal', 'message': 'Format respon server tidak sesuai'};
       } else {
         return {'status': 'Gagal', 'message': 'Server merespon dengan status ${response.statusCode}'};
       }
     } catch (e) {
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi: $e'};
+      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi sistem: $e'};
     }
   }
 
@@ -94,11 +97,11 @@ class DigiflazzService {
     required int jumlahNominal, 
   }) async {
     try {
-      String signRaw = _username + _apiKey + 'deposit';
-      String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String signRaw = _username + _apiKey + 'deposit';
+      final String sign = md5.convert(utf8.encode(signRaw)).toString();
 
       final response = await http.post(
-        Uri.parse(_baseUrlDeposit),
+        Uri.parse(_baseUrlDeposit), // DIKOREKSI: Menggunakan endpoint deposit yang benar
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": _username,
@@ -107,11 +110,11 @@ class DigiflazzService {
           "owner_name": "Pemilik DesaPay", 
           "sign": sign
         }),
-      );
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data'] ?? {'status': 'Gagal', 'message': 'Format response salah'};
+        return data['data'] ?? {'status': 'Gagal', 'message': 'Format respon server tidak sesuai'};
       } else {
         return {'status': 'Gagal', 'message': 'Server merespon dengan status ${response.statusCode}'};
       }
@@ -127,11 +130,11 @@ class DigiflazzService {
     required int jumlahNominal,
   }) async {
     try {
-      String signRaw = _username + _apiKey + 'deposit';
-      String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String signRaw = _username + _apiKey + 'deposit';
+      final String sign = md5.convert(utf8.encode(signRaw)).toString();
 
       final response = await http.post(
-        Uri.parse(_baseUrlDeposit),
+        Uri.parse(_baseUrlDeposit), // DIKOREKSI: Menggunakan endpoint deposit yang benar
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": _username,
@@ -140,7 +143,7 @@ class DigiflazzService {
           "owner_name": "Pemilik DesaPay",
           "sign": sign
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -154,12 +157,12 @@ class DigiflazzService {
   }
 
   // ===================================================
-  // 5. FUNGSI CEK SALDO MODAL UTAMA AGEN (BARU UTUH)
+  // 5. FUNGSI CEK SALDO MODAL UTAMA AGEN
   // ===================================================
   Future<int> cekSaldoModal() async {
     try {
-      String signRaw = _username + _apiKey + "depo";
-      String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String signRaw = _username + _apiKey + "depo";
+      final String sign = md5.convert(utf8.encode(signRaw)).toString();
 
       final response = await http.post(
         Uri.parse(_baseUrlCekSaldo),
@@ -169,11 +172,15 @@ class DigiflazzService {
           "username": _username,
           "sign": sign
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data']['deposit'] ?? 0;
+        // Proteksi null safety pada ekstraksi nilai saldo modal agen
+        if (data['data'] != null && data['data']['deposit'] != null) {
+          return int.tryParse(data['data']['deposit'].toString()) ?? 0;
+        }
+        return 0;
       } else {
         return 0;
       }
