@@ -23,9 +23,15 @@ dependencies:
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.6.0
 
-  # Fitur Scanner QRIS Kamera & Galeri (Baru & Fungsional)
+  # Fitur Scanner QRIS Kamera & Galeri
   mobile_scanner: ^6.0.0-beta.4
   image_picker: ^1.1.2
+
+  # Keamanan API Keys (Baru)
+  flutter_dotenv: ^5.2.1
+
+  # Caching Gambar Online (Baru)
+  cached_network_image: ^3.4.1
 
   # Integrasi Browser & WhatsApp External Link
   url_launcher: ^6.3.1
@@ -39,9 +45,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # DAFTAR ASET GAMBAR LOGO DESAPAY
+  # DAFTAR ASET GAMBAR & FILE DOTENV DESAPAY
   assets:
     - assets/logo/logo.png
+    - .env
 
 # ATURAN PEMBUATAN ICON LUAR (LAUNCHER ICON) DESAPAY
 flutter_launcher_icons:
