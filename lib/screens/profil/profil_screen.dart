@@ -6,8 +6,57 @@ import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'edit_profil_screen.dart';
-// REVISI 1: Menambahkan impor halaman admin dashboard agar sistem mengenalinya
 import 'admin_dashboard_screen.dart';
+
+// Pembungkus Animasi Memantul (Micro-interaction) Premium untuk Tombol Menu
+class CustomBounce extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const CustomBounce({super.key, required this.child, required this.onTap});
+
+  @override
+  State<CustomBounce> createState() => _CustomBounceState();
+}
+
+class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: widget.child,
+      ),
+    );
+  }
+}
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -21,16 +70,26 @@ class _ProfilScreenState extends State<ProfilScreen> {
   final user = FirebaseAuth.instance.currentUser;
   final firestore = FirebaseFirestore.instance;
 
+  String rupiah(dynamic angka) {
+    int value = int.tryParse(angka.toString()) ?? 0;
+    return value.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const Color warnaTeksUtama = Color(0xFF1A1A1A); // Hitam pekat elegan
-    const Color warnaTeksSekunder = Color(0xFF555555); // Abu-abu tua tegas
-    const Color warnaIkon = Color(0xFF0D47A1); // Biru tua premium
-
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
+      backgroundColor: const Color(0xffF8FAFC),
       appBar: AppBar(
-        title: const Text("Profil"),
+        elevation: 0,
+        backgroundColor: WarnaDesaPay.primary,
+        foregroundColor: Colors.white,
+        title: const Text(
+          "Akun Saya",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
       ),
       body: FutureBuilder<DocumentSnapshot>(
         future: firestore.collection("users").doc(user?.uid).get(),
@@ -44,184 +103,241 @@ class _ProfilScreenState extends State<ProfilScreen> {
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
+          final String emailUser = (data["email"] ?? "").toString().trim().toLowerCase();
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              const CircleAvatar(
-                radius: 45,
-                child: Icon(
-                  Icons.person,
-                  size: 50,
-                ),
-              ),
-
-              const SizedBox(height: 15),
-
-              Center(
-                child: Text(
-                  data["nama"] ?? "-",
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: warnaTeksUtama,
-                  ),
-                ),
-              ),
-
-              Center(
-                child: Text(
-                  data["member"] ?? "Anggota Biasa",
-                  style: const TextStyle(
-                    color: warnaTeksSekunder,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              ListTile(
-                leading: const Icon(Icons.phone, color: warnaIkon),
-                title: const Text(
-                  "Nomor HP",
-                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  data["phone"] ?? "-",
-                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
-                ),
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.email, color: warnaIkon),
-                title: const Text(
-                  "Email",
-                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  data["email"] ?? "-",
-                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
-                ),
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.account_balance_wallet, color: warnaIkon),
-                title: const Text(
-                  "Saldo",
-                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  "Rp ${data["saldo"] ?? 0}",
-                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
-                ),
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.stars, color: warnaIkon),
-                title: const Text(
-                  "Poin",
-                  style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  "${data["poin"] ?? 0} Poin",
-                  style: const TextStyle(color: warnaTeksSekunder, fontSize: 15),
-                ),
-              ),
-
-              const Divider(color: Colors.grey, thickness: 0.5),
-
-              // REVISI 2: MEMASANG TOMBOL EMAS ADMIN RAHASIA YANG AMAN DARI EROR HURUF BESAR/KECIL
-              if (data["email"].toString().trim().toLowerCase() == "annisaualinayah55@gmail.com")
-                Card(
-                  color: Colors.amber[50],
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: Colors.amber, width: 1),
-                  ),
-                  child: ListTile(
-                    leading: const Icon(Icons.admin_panel_settings, color: Colors.amber, size: 28),
-                    title: const Text(
-                      "Dashboard Admin",
-                      style: TextStyle(color: warnaTeksUtama, fontWeight: FontWeight.bold),
+          return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                // ==========================================
+                // 1. PREMIUM GRADIENT AVATAR HEADER
+                // ==========================================
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [WarnaDesaPay.primary, const Color(0xFF007BE6)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                    subtitle: const Text("Ubah promo, banner info, & kelola menu", style: TextStyle(fontSize: 12)),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.amber),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AdminDashboardScreen(),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(36),
+                      bottomRight: Radius.circular(36),
+                    ),
+                  ),
+                  padding: const EdgeInsets.only(bottom: 32, top: 16),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                        child: CircleAvatar(
+                          radius: 42,
+                          backgroundColor: Colors.white,
+                          child: Icon(Icons.person_rounded, size: 48, color: WarnaDesaPay.primary),
                         ),
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        data["nama"] ?? "-",
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.3),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                        child: Text(
+                          data["member"] ?? "Anggota Biasa",
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
-              ListTile(
-                leading: const Icon(Icons.edit, color: warnaIkon),
-                title: const Text("Edit Profil", style: TextStyle(color: warnaTeksUtama)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EditProfilScreen(),
-                    ),
-                  );
-                },
-              ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ==========================================
+                      // 2. ACCOUNT METRICS CARD (SALDO & POIN GRID)
+                      // ==========================================
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 12, offset: const Offset(0, 4))],
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Saldo Utama", style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 4),
+                                  Text("Rp ${rupiah(data["saldo"])}", style: TextStyle(color: WarnaDesaPay.primary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            Container(width: 1, height: 35, color: Colors.grey.shade200),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 18),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Poin Loyalitas", style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500)),
+                                    const SizedBox(height: 4),
+                                    Text("${data["poin"] ?? 0} Pts", style: const TextStyle(color: Colors.orange, fontSize: 16, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
-              ListTile(
-                leading: const Icon(Icons.lock_reset, color: warnaIkon),
-                title: const Text("Ubah Password", style: TextStyle(color: warnaTeksUtama)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                onTap: () {},
-              ),
+                      const SizedBox(height: 24),
+                      Text("Informasi Kredensial", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                      const SizedBox(height: 12),
 
-              ListTile(
-                leading: const Icon(Icons.help, color: warnaIkon),
-                title: const Text("Pusat Bantuan", style: TextStyle(color: warnaTeksUtama)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                onTap: () {},
-              ),
+                      // FIELD INFO LIST DATA
+                      _buildInfoField(Icons.phone_android_rounded, "Nomor Handphone", data["phone"] ?? "-"),
+                      _buildInfoField(Icons.email_rounded, "Alamat Email", data["email"] ?? "-"),
 
-              ListTile(
-                leading: const Icon(Icons.info, color: warnaIkon),
-                title: const Text("Tentang DesaPay", style: TextStyle(color: warnaTeksUtama)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                onTap: () {},
-              ),
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      Text("Pengaturan Akun", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                      const SizedBox(height: 12),
 
-              const SizedBox(height: 30),
+                      // ==========================================
+                      // 3. ADMIN DASHBOARD LUXURY CARD (IF MATCH)
+                      // ==========================================
+                      if (emailUser == "annisaualinayah55@gmail.com")
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          child: CustomBounce(
+                            onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.amber.shade700, Colors.orange.shade600],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))],
+                              ),
+                              child: const Row(
+                                children: [
+                                  CircleAvatar(backgroundColor: Colors.white24, child: Icon(Icons.admin_panel_settings_rounded, color: Colors.white)),
+                                  SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text("Dashboard Administrasi", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                                        SizedBox(height: 2),
+                                        Text("Kelola penawaran promo, banner info, & menu data", style: TextStyle(color: Colors.white70, fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.white),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
 
-              SizedBox(
-                height: 50,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.logout),
-                  label: const Text("LOGOUT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[700],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                      // MENU BUTTON LIST OPTIONS
+                      _buildMenuOption(Icons.edit_rounded, "Ubah Detail Profil", () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilScreen()));
+                      }),
+                      _buildMenuOption(Icons.lock_reset_rounded, "Ganti Keamanan PIN/Password", () {}),
+                      _buildMenuOption(Icons.help_center_rounded, "Pusat Pelayanan Kendala", () {}),
+                      _buildMenuOption(Icons.info_outline_rounded, "Legalitas & Tentang DesaPay", () {}),
+
+                      const SizedBox(height: 32),
+
+                      // ELEVATED LOGOUT BUTTON PREMIUM LOOK
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.logout_rounded, size: 20),
+                          label: const Text("KELUAR DARI AKUN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade600,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () async {
+                            await auth.logout();
+                            if (!context.mounted) return;
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                              (route) => false,
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                  onPressed: () async {
-                    await auth.logout();
-                    if (!mounted) return;
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
-                    );
-                  },
-                ),
-              ),
-            ],
+                )
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildInfoField(IconData icon, String label, String value) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          Icon(icon, color: WarnaDesaPay.primary, size: 22),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+              const SizedBox(height: 2),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuOption(IconData icon, String title, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.08), shape: BoxShape.circle),
+          child: Icon(icon, color: WarnaDesaPay.primary, size: 20),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+        onTap: onTap,
       ),
     );
   }
