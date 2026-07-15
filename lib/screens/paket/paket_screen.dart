@@ -177,7 +177,6 @@ class _PaketScreenState extends State<PaketScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // CONTAINER HEADER INPUT NOMOR HP PREMIUM
           Container(
             width: double.infinity,
             color: Colors.white,
@@ -244,7 +243,6 @@ class _PaketScreenState extends State<PaketScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey.shade800),
             ),
           ),
-          // DAFTAR PAKET DATA PREMIUM LIST VIEW
           Expanded(
             child: loading
                 ? const Center(child: CircularProgressIndicator())
@@ -413,7 +411,8 @@ class _PaketScreenState extends State<PaketScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87), textAlign: Alignment.centerRight)),
+          // DIKOREKSI: Mengganti Alignment.centerRight menjadi TextAlign.end yang valid untuk widget Text
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87), textAlign: TextAlign.end)),
         ],
       ),
     );
