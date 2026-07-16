@@ -4,16 +4,20 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Import standar internal framework DesaPay
 import '../../config/warna.dart';
-import '../../screens/saldo/topup_saldo_screen.dart';
-import '../../screens/riwayat/riwayat_screen.dart';
-import '../pindai/pindai_qris_screen.dart'; 
-import '../layanan/layanan_screen.dart';
-import '../pulsa/pulsa_screen.dart';
-import '../paket/paket_screen.dart';
-import '../pln/pln_screen.dart';
-import '../ewallet/ewallet_screen.dart';
-import '../pascabayar_screen.dart';
+import '../../services/auth_service.dart';
+import '../../services/saldo_service.dart';
+import '../riwayat/riwayat_screen.dart';
+import '../profil/profil_screen.dart';
+import '../pindai/pindai_qris_screen.dart';
+import '../saldo/topup_saldo_screen.dart';
+
+// Import Custom Widgets asli bawaan project Anda
+import '../../widgets/kotak_saldo.dart';
+import '../../widgets/menu_item.dart';
+import '../../widgets/banner_promo.dart';
+import '../../widgets/promo_card.dart';
 
 class CustomBounce extends StatefulWidget {
   final Widget child;
@@ -32,7 +36,7 @@ class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
-    _scale = Tween<double>(begin: 1.0, end: 0.93).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _scale = Tween<double>(begin: 1.0, end: 0.92).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override
@@ -54,39 +58,34 @@ class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderSt
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _isSaldoHidden = false;
-  num _saldoUserNyata = 0;
   int _bottomNavIndex = 0;
+  num _saldoUserNyata = 0;
   String _namaUser = "Agen DesaPay";
   String _emailUser = "-";
+  bool _isSaldoHidden = false;
   
-  final PageController _bannerController = PageController(initialPage: 0);
-  int _currentBannerPage = 0;
-  Timer? _bannerTimer;
-  StreamSubscription? _userSubscription;
+  final PageController _bannerSliderController = PageController(initialPage: 0);
+  int _currentPromoPage = 0;
+  Timer? _sliderTimer;
+  StreamSubscription? _userFirestoreSubscription;
 
   @override
   void initState() {
     super.initState();
-    _aktifkanListenerUserRealtime();
-    
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_currentBannerPage < 1) { _currentBannerPage++; } else { _currentBannerPage = 0; }
-      if (_bannerController.hasClients) {
-        _bannerController.animateToPage(_currentBannerPage, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
-      }
-    });
+    _aktifkanSinkronisasiAgenRealtime();
+    _inisialisasiAutoSliderPromo();
   }
 
-  void _aktifkanListenerUserRealtime() {
+  void _aktifkanSinkronisasiAgenRealtime() {
     final User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
-      _userSubscription = FirebaseFirestore.instance
+      _userFirestoreSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(currentUser.uid)
           .snapshots()
@@ -105,32 +104,295 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _inisialisasiAutoSliderPromo() {
+    _sliderTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (_currentPromoPage < 2) {
+        _currentPromoPage++;
+      } else {
+        _currentPromoPage = 0;
+      }
+      if (_bannerSliderController.hasClients) {
+        _bannerSliderController.animateToPage(
+          _currentPromoPage,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   @override
   void dispose() {
-    _bannerTimer?.cancel();
-    _bannerController.dispose();
-    _userSubscription?.cancel();
+    _sliderTimer?.cancel();
+    _bannerSliderController.dispose();
+    _userFirestoreSubscription?.cancel();
     super.dispose();
   }
 
-  Future<void> _bukaWhatsApp() async {
-    const nomor = "6285642131263";
-    final Uri url = Uri.https('wa.me', '/$nomor', {'text': 'Halo CS DesaPay, saya mengalami kendala transaksi.'});
-    try { await launchUrl(url, mode: LaunchMode.externalApplication); } catch (e) {
+  Future<void> _bukaLayananBantuanWA() async {
+    const nomorCs = "6285642131263";
+    final Uri url = Uri.https('wa.me', '/$nomorCs', {'text': 'Halo CS DesaPay, saya butuh bantuan teknis operasional agen.'});
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Gagal membuka WhatsApp.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal membuka WhatsApp. Silakan cek aplikasi WA Anda.")),
+      );
     }
   }
 
-  void _pindaiQrisAction() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen()));
-  }
-
-  String _formatRupiah(num nominal) {
+  String _formatMataUangRupiah(num nominal) {
     return nominal.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
 
-  Widget _buildProfilPage() {
+  // RENDERING UTAN: HALAMAN HOME MEWAH KELAS UTAMA
+  Widget _buildContentDashboardMewah() {
+    return RefreshIndicator(
+      onRefresh: () async => _aktifkanSinkronisasiAgenRealtime(),
+      color: WarnaDesaPay.primary,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ==========================================
+            // HEADER BACKGROUND GRADIENT & KOTAK SALDO
+            // ==========================================
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [WarnaDesaPay.primary, Color(0xFF0C1938)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(40),
+                  bottomRight: Radius.circular(40),
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  bottom: 32,
+                  left: 20,
+                  right: 20,
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), shape: BoxShape.circle),
+                              child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text("Saldo DesaPay", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () => setState(() => _isSaldoHidden = !_isSaldoHidden),
+                                      child: Icon(_isSaldoHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 16, color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _isSaldoHidden ? "Rp ••••••••" : "Rp ${_formatMataUangRupiah(_saldoUserNyata)}",
+                                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), shape: BoxShape.circle),
+                          child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    
+                    // Memanggil Komponen Aset Kotak Saldo Kustom Asli Perusahaan Anda
+                    KotakSaldo(
+                      saldo: _saldoUserNyata,
+                      onTopUp: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen())),
+                      onPindai: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen())),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ==========================================
+            // CAROUSEL BANNER PROMO DANA/GOPAY STYLE
+            // ==========================================
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text("Promo Spesial Menarik", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                height: 140,
+                child: PageView(
+                  controller: _bannerSliderController,
+                  onPageChanged: (index) => setState(() => _currentPromoPage = index),
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF0F2027), Color(0xFF2C5364)]),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text("Serbuan Poin Agen", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(height: 6), Text("Dapatkan komisi ganda tiap kelipatan transaksi PPOB di atas Rp100.000.", style: TextStyle(color: Colors.white70, fontSize: 11))])),
+                          Icon(Icons.auto_awesome_rounded, size: 48, color: Colors.white24)
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF4A00E0), Color(0xFF8E2DE2)]),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text("Bebas Biaya Admin Token", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(height: 6), Text("Grosir token listrik prabayar termurah senusantara khusus mitra premium.", style: TextStyle(color: Colors.white70, fontSize: 11))])),
+                          Icon(Icons.bolt_rounded, size: 48, color: Colors.white24)
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(2, (index) {
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: _currentPromoPage == index ? 18 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _currentPromoPage == index ? WarnaDesaPay.primary : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                );
+              }),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ==========================================
+            // GRID LAYANAN UTAMA PPOB MITRA
+            // ==========================================
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text("Layanan Finansial Desa", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 16, spreadRadius: 2)],
+                ),
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 20,
+                  crossAxisSpacing: 4,
+                  childAspectRatio: 0.85,
+                  children: const [
+                    MenuItem(icon: Icons.phone_android_rounded, label: "Pulsa & Data", warna: Color(0xFFFF9F43)),
+                    MenuItem(icon: Icons.flash_on_rounded, label: "Listrik PLN", warna: Color(0xfff1c40f)),
+                    MenuItem(icon: Icons.account_balance_wallet_rounded, label: "E-Wallet", warna: Color(0xff6c5ce7)),
+                    MenuItem(icon: Icons.water_drop_rounded, label: "PDAM Air", warna: Color(0xff00cec9)),
+                    MenuItem(icon: Icons.health_and_safety_rounded, label: "BPJS", warna: Color(0xff00b894)),
+                    MenuItem(icon: Icons.mosque_rounded, label: "Zakat Mall", warna: Color(0xffe17055)),
+                    MenuItem(icon: Icons.stars_rounded, label: "Desa Rewards", warna: Color(0xff0984e3)),
+                    MenuItem(icon: Icons.grid_view_rounded, label: "Lihat Semua", warna: Color(0xff636e72)),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ==========================================
+            // BANNER STATIS / PROMO CARD BAWAH
+            // ==========================================
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: PromoCard(),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ==========================================
+            // PUSAT BANTUAN LAYANAN DIGITAL
+            // ==========================================
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomBounce(
+                onTap: _bukaLayananBantuanWA,
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [Colors.green.shade700, Colors.teal.shade600]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    children: [
+                      CircleAvatar(radius: 20, backgroundColor: Colors.white24, child: Icon(Icons.headset_mic_rounded, color: Colors.white, size: 22)),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Pusat Bantuan Digital via WhatsApp", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            SizedBox(height: 2),
+                            Text("Hubungi Customer Service jika ada kendala sistem", style: TextStyle(color: Colors.white70, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // RENDERING PROFIL AGEN ASLI DARI FIREBASE
+  Widget _buildContentProfilMewah() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -138,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 20),
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            elevation: 2,
+            elevation: 3,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
@@ -149,7 +411,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_namaUser, style: const TextStyle(fontSize: 18, fontStyle: FontStyle.normal, fontWeight: FontWeight.bold)),
+                        Text(_namaUser, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
                         Text(_emailUser, style: const TextStyle(color: Colors.grey, fontSize: 13)),
                       ],
                     ),
@@ -160,12 +423,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 24),
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: Column(
               children: [
                 ListTile(
                   leading: const Icon(Icons.security, color: Colors.blue),
-                  title: const Text("Keamanan Akun"),
+                  title: const Text("Keamanan Akun & PIN"),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                   onTap: () {},
                 ),
@@ -187,113 +450,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget buildBodyContent() {
-      if (_bottomNavIndex == 1) return const RiwayatScreen();
-      if (_bottomNavIndex == 2) return _buildProfilPage();
-
-      return RefreshIndicator(
-        onRefresh: () async => _aktifkanListenerUserRealtime(),
-        color: WarnaDesaPay.primary,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(gradient: LinearGradient(colors: [WarnaDesaPay.primary, const Color(0xFF0F172A)], begin: Alignment.topCenter, end: Alignment.bottomCenter), borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(36), bottomRight: Radius.circular(36))),
-                child: Padding(
-                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 16, bottom: 28, left: 20, right: 20),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20)),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Text("Saldo DesaPay", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
-                                      const SizedBox(width: 6),
-                                      GestureDetector(onTap: () => setState(() => _isSaldoHidden = !_isSaldoHidden), child: Icon(_isSaldoHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 16, color: Colors.white70)),
-                                    ],
-                                  ),
-                                  Text(_isSaldoHidden ? "Rp ••••••••" : "Rp ${_formatRupiah(_saldoUserNyata)}", style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                                ],
-                              )
-                            ],
-                          ),
-                          const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24)
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _topActionItem(icon: Icons.add_rounded, label: "Isi Saldo", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen()))),
-                          _topActionItem(icon: Icons.arrow_upward_rounded, label: "Kirim", onTap: () {}),
-                          _topActionItem(icon: Icons.qr_code_scanner_rounded, label: "Pindai", onTap: _pindaiQrisAction),
-                          _topActionItem(icon: Icons.history_rounded, label: "Riwayat", onTap: () => setState(() => _bottomNavIndex = 1)),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 10),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-                  child: GridView.count(
-                    shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisCount: 4, mainAxisSpacing: 22, crossAxisSpacing: 4, childAspectRatio: 0.88,
-                    children: [
-                      _buildAnimatedMenu(Icons.phone_android_rounded, "Pulsa & Data", const Color(0xFFFF9F43), const PulsaScreen()),
-                      _buildAnimatedMenu(Icons.flash_on_rounded, "Listrik PLN", const Color(0xfff1c40f), const PlnScreen()),
-                      _buildAnimatedMenu(Icons.account_balance_wallet_rounded, "E-Wallet", const Color(0xff6c5ce7), const EwalletScreen()),
-                      _buildAnimatedMenu(Icons.water_drop_rounded, "PDAM Air", const Color(0xff00cec9), const PascabayarScreen(jenisLayanan: "PDAM")),
-                      _buildAnimatedMenu(Icons.health_and_safety_rounded, "BPJS Kesehatan", const Color(0xff00b894), const PascabayarScreen(jenisLayanan: "BPJS")),
-                      _buildAnimatedMenu(Icons.mosque_rounded, "Zakat Mall", const Color(0xffe17055), const LayananScreen()),
-                      _buildAnimatedMenu(Icons.stars_rounded, "Desa Rewards", const Color(0xff0984e3), const LayananScreen()),
-                      _buildAnimatedMenu(Icons.grid_view_rounded, "Lihat Semua", const Color(0xff636e72), const LayananScreen()),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: CustomBounce(
-                  onTap: _bukaWhatsApp,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade700, Colors.teal.shade600]), borderRadius: BorderRadius.circular(24)),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.headset_mic_rounded, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text("Pusat Bantuan Digital via WhatsApp", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-      );
+    Widget aktifkanHalamanMenu() {
+      switch (_bottomNavIndex) {
+        case 1:
+          return const RiwayatScreen();
+        case 2:
+          return _buildContentProfilMewah();
+        default:
+          return _buildContentDashboardMewah();
+      }
     }
 
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
-      body: buildBodyContent(),
+      body: aktifkanHalamanMenu(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _bottomNavIndex,
         onTap: (index) => setState(() => _bottomNavIndex = index),
@@ -305,32 +475,6 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Beranda"),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: "Riwayat"),
           BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: "Profil"),
-        ],
-      ),
-    );
-  }
-
-  Widget _topActionItem({required IconData icon, required String label, required VoidCallback onTap}) {
-    return CustomBounce(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(width: 52, height: 52, decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: Colors.white, size: 28)),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnimatedMenu(IconData icon, String label, Color warna, Widget tujuan) {
-    return CustomBounce(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => tujuan)),
-      child: Column(
-        children: [
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: warna.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: warna)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 1),
         ],
       ),
     );
