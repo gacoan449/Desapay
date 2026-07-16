@@ -4,15 +4,13 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class TriPayService {
-  // Menggunakan Base URL Production Resmi TriPay
+  // Menggunakan URL Production Resmi TriPay
   final String _baseUrl = 'https://tripay.co.id/api/transaction/create';
 
-  // Generator Signature HMAC-SHA256 Presisi Sesuai Dokumentasi TriPay
   String _generateSignature(String merchantRef, int amount) {
-    final String merchantCode = dotenv.get('TRIPAY_MERCHANT_CODE', fallback: '');
-    final String privateKey = dotenv.get('TRIPAY_PRIVATE_KEY', fallback: '');
+    final String merchantCode = dotenv.get('TRIPAY_MERCHANT_CODE', fallback: '').trim();
+    final String privateKey = dotenv.get('TRIPAY_PRIVATE_KEY', fallback: '').trim();
 
-    // Pola formula signature Closed Payment TriPay: merchantCode + merchantRef + amount
     final String payload = '$merchantCode$merchantRef$amount';
     
     final List<int> keyBytes = utf8.encode(privateKey);
@@ -24,33 +22,31 @@ class TriPayService {
     return digest.toString();
   }
 
-  // Fungsi Inti Request Pembuatan Tagihan (Closed Payment)
   Future<Map<String, dynamic>?> buatTagihanClosedPayment({
-    required String method, // Contoh: 'QRIS', 'BRIVA', 'ALFAMART'
+    required String method, 
     required int amount,
     required String namaPelanggan,
     required String emailPelanggan,
     required String nomorHpPelanggan,
     required String namaProduk,
   }) async {
-    final String apiKey = dotenv.get('TRIPAY_API_KEY', fallback: '');
-    final String merchantCode = dotenv.get('TRIPAY_MERCHANT_CODE', fallback: '');
+    final String apiKey = dotenv.get('TRIPAY_API_KEY', fallback: '').trim();
     
-    // Generate referensi transaksi unik DesaPay secara otomatis berdasarkan timestamp
     final String merchantRef = 'DP-${DateTime.now().millisecondsSinceEpoch}';
     final String signature = _generateSignature(merchantRef, amount);
 
+    // DIKOREKSI: Penyelarasan format array map agar valid 100% tanpa memicu Error 400
     final Map<String, dynamic> bodyPayload = {
-      'method': method,
+      'method': method.trim(),
       'merchant_ref': merchantRef,
       'amount': amount,
-      'customer_name': namaPelanggan,
-      'customer_email': emailPelanggan,
-      'customer_phone': nomorHpPelanggan,
+      'customer_name': namaPelanggan.trim(),
+      'customer_email': emailPelanggan.trim(),
+      'customer_phone': nomorHpPelanggan.trim(),
       'order_items': [
         {
-          'sku': 'TOPUP-SALDO',
-          'name': namaProduk,
+          'sku': 'TOPUP',
+          'name': namaProduk.trim(),
           'price': amount,
           'quantity': 1,
         }
@@ -64,6 +60,7 @@ class TriPayService {
         headers: {
           'Authorization': 'Bearer $apiKey',
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: jsonEncode(bodyPayload),
       );
