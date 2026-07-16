@@ -11,9 +11,6 @@ import '../pulsa/pulsa_screen.dart';
 import '../pln/pln_screen.dart';
 import '../saldo/topup_saldo_screen.dart';
 import '../pindai/pindai_qris_screen.dart';
-// Jika Anda ingin memakai widget bawaan Anda, silakan buka komen di bawah:
-// import '../../widgets/kotak_saldo.dart';
-// import '../../widgets/banner_promo.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -134,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                                   child: const CircleAvatar(
                                     radius: 18,
                                     backgroundColor: Colors.grey,
@@ -283,12 +280,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.grey.shade200)
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
-                          const Icon(Icons.campaign_rounded, color: Color(0xFF0054A6), size: 20),
-                          const SizedBox(width: 10),
+                          Icon(Icons.campaign_rounded, color: Color(0xFF0054A6), size: 20),
+                          SizedBox(width: 10),
                           Expanded(
-                            child: const Text(
+                            child: Text(
                               "Feed: Transaksi PLN Token a/n Budi berhasil (Baru saja)",
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -329,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ),
       
-      // Bottom Navigation Bar Premium
+      // Bottom Navigation Bar Premium (TIDAK ADA ERROR CONST)
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
@@ -338,16 +335,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         selectedFontSize: 12,
         unselectedFontSize: 12,
         onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Beranda"),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: "Riwayat"),
-          BottomNavigationBarItem(icon: Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Color(0xFF0054A6), shape: BoxShape.circle),
-            child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
-          ), label: "Pay"),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: "Dompet"),
-          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: "Profil"),
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Beranda"),
+          const BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: "Riwayat"),
+          BottomNavigationBarItem(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(color: Color(0xFF0054A6), shape: BoxShape.circle),
+              child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
+            ), 
+            label: "Pay"
+          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: "Dompet"),
+          const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: "Profil"),
         ],
       ),
     );
