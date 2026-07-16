@@ -1,27 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-// DIKOREKSI: Memastikan standardisasi warna UI terimport dengan benar di main
+// Memastikan semua import terarah ke repositori rill Anda sesuai dump data
 import 'config/warna.dart';
 import 'firebase_options.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/welcome_screen.dart';
 
 Future<void> main() async {
-  // 1. Memastikan seluruh engine UI native tersambung sempurna sebelum load data
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    // 2. Memuat berkas kredensial rahasia secara aman
+    // Memuat berkas konfigurasi env secara aman sebelum arsitektur Firebase aktif
     await dotenv.load(fileName: ".env");
     
-    // 3. Inisialisasi Firebase Core menggunakan opsi environment terenkripsi
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    // Fallback log jika terjadi kesalahan konfigurasi pada hardware local
-    debugPrint("Inisialisasi Sistem DesaPay Terhambat: $e");
+    debugPrint("Inisialisasi Dasar Sistem DesaPay Terhambat: $e");
   }
 
   runApp(const MyApp());
@@ -46,7 +45,28 @@ class MyApp extends StatelessWidget {
           titleTextStyle: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
-      home: const HomeScreen(),
+      // MENGEMBALIKAN GERBANG OTENTIKASI: Tidak langsung masuk ke Home secara ilegal
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // Jika koneksi sedang memeriksa status session di device
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(color: WarnaDesaPay.primary),
+              ),
+            );
+          }
+          
+          // Jika token user rill terdeteksi aktif, langsung arahkan ke Dashboard
+          if (snapshot.hasData && snapshot.data != null) {
+            return const HomeScreen();
+          }
+          
+          // Jika tidak ada user yang login, wajib lempar ke Welcome Screen asli bawaan Anda
+          return const WelcomeScreen();
+        },
+      ),
     );
   }
 }
