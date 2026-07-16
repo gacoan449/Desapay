@@ -73,7 +73,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSaldoHidden = false;
-  num _saldoUserNyata = 0; // DIKOREKSI: Saldo awal rill dimulai tepat dari Rp 0
+  num _saldoUserNyata = 0;
+  int _bottomNavIndex = 0; // Mengontrol index halaman bawah
   
   final PageController _bannerController = PageController(initialPage: 0);
   int _currentBannerPage = 0;
@@ -83,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _aktifkanListenerSaldoRealtime(); // Dengarkan perubahan database rill
+    _aktifkanListenerSaldoRealtime();
     
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (_currentBannerPage < 2) {
@@ -101,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // DIKOREKSI: Mengambil data saldo rill dari Firestore secara real-time berdasarkan user yang login
   void _aktifkanListenerSaldoRealtime() {
     final User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
@@ -114,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final data = snapshot.data() as Map<String, dynamic>;
           if (mounted) {
             setState(() {
-              _saldoUserNyata = data['saldo'] ?? 0; // Mengambil nilai saldo asli database
+              _saldoUserNyata = data['saldo'] ?? 0;
             });
           }
         }
@@ -126,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _bannerTimer?.cancel();
     _bannerController.dispose();
-    _saldoSubscription?.cancel(); // Bersihkan pemantau memori database
+    _saldoSubscription?.cancel();
     super.dispose();
   }
 
@@ -180,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                "Fitur transfer saldo antar agen dan rekening bank sedang dalam pemeliharaan jaringan. Silakan coba beberapa saat lagi.",
+                "Fitur transfer saldo antar agen dan rekening bank sedang dalam pemeliharaan jaringan.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
               ),
@@ -240,29 +240,27 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final LinearGradient premiumBlueGradient = LinearGradient(
-      colors: [
-        WarnaDesaPay.primary,
-        const Color(0xFF0F172A), 
-      ],
+      colors: [WarnaDesaPay.primary, const Color(0xFF0F172A)],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     );
 
-    return Scaffold(
-      backgroundColor: const Color(0xffF4F7FA),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _aktifkanListenerSaldoRealtime();
-        },
+    // Render isi halaman dinamis agar Bottom Navigation Bar bekerja
+    Widget buildBodyContent() {
+      if (_bottomNavIndex == 1) return const RiwayatScreen();
+      if (_bottomNavIndex == 2) {
+        return const Center(child: Text("Halaman Profil Manajemen Agen", style: TextStyle(fontWeight: FontWeight.bold)));
+      }
+
+      // Default: Tampilan Dashboard Utama
+      return RefreshIndicator(
+        onRefresh: () async => _aktifkanListenerSaldoRealtime(),
         color: WarnaDesaPay.primary,
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ===================================================
-              // PREMIUM HEADER WITH REALTIME DATA INTEGRATION
-              // ===================================================
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
@@ -287,15 +285,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: const Icon(Icons.blur_circular_rounded, size: 280, color: Colors.white),
                         ),
                       ),
-                      Positioned(
-                        left: -60,
-                        bottom: -40,
-                        child: Opacity(
-                          opacity: 0.05,
-                          child: const Icon(Icons.all_inclusive_rounded, size: 220, color: WarnaDesaPay.secondary),
-                        ),
-                      ),
-
                       Padding(
                         padding: EdgeInsets.only(
                           top: MediaQuery.of(context).padding.top + 16,
@@ -312,10 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.15),
-                                        shape: BoxShape.circle,
-                                      ),
+                                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
                                       child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
                                     ),
                                     const SizedBox(width: 12),
@@ -324,53 +310,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                       children: [
                                         Row(
                                           children: [
-                                            const Text(
-                                              "Saldo DesaPay",
-                                              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
-                                            ),
+                                            const Text("Saldo DesaPay", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
                                             const SizedBox(width: 6),
                                             GestureDetector(
                                               onTap: () => setState(() => _isSaldoHidden = !_isSaldoHidden),
-                                              child: Icon(
-                                                _isSaldoHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                                size: 16,
-                                                color: Colors.white70,
-                                              ),
+                                              child: Icon(_isSaldoHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 16, color: Colors.white70),
                                             ),
                                           ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           _isSaldoHidden ? "Rp ••••••••" : "Rp ${_formatRupiah(_saldoUserNyata)}",
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 0.5,
-                                          ),
+                                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                                         ),
                                       ],
                                     ),
                                   ],
                                 ),
-
                                 Row(
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(100),
-                                        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
-                                      ),
+                                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(100), border: Border.all(color: Colors.white.withOpacity(0.15), width: 1)),
                                       child: const Row(
                                         children: [
                                           Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 14),
                                           SizedBox(width: 4),
-                                          Text(
-                                            "DesaPay+",
-                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.2),
-                                          ),
+                                          Text("DesaPay+", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.2)),
                                         ],
                                       ),
                                     ),
@@ -382,24 +348,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                         children: [
                                           Container(
                                             padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(0.12),
-                                              shape: BoxShape.circle,
-                                            ),
+                                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), shape: BoxShape.circle),
                                             child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 22),
                                           ),
                                           Positioned(
                                             right: 2,
                                             top: 2,
-                                            child: Container(
-                                              width: 9,
-                                              height: 9,
-                                              decoration: BoxDecoration(
-                                                color: WarnaDesaPay.danger,
-                                                shape: BoxShape.circle,
-                                                border: Border.all(color: const Color(0xFF1E40AF), width: 1.5),
-                                              ),
-                                            ),
+                                            child: Container(width: 9, height: 9, decoration: BoxDecoration(color: WarnaDesaPay.danger, shape: BoxShape.circle, border: Border.all(color: const Color(0xFF1E40AF), width: 1.5))),
                                           ),
                                         ],
                                       ),
@@ -408,32 +363,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 32),
-
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                _topActionItem(
-                                  icon: Icons.add_rounded,
-                                  label: "Isi Saldo",
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen())),
-                                ),
-                                _topActionItem(
-                                  icon: Icons.arrow_upward_rounded,
-                                  label: "Kirim",
-                                  onTap: _kirimSaldoAction,
-                                ),
-                                _topActionItem(
-                                  icon: Icons.qr_code_scanner_rounded,
-                                  label: "Pindai",
-                                  onTap: _pindaiQrisAction,
-                                ),
-                                _topActionItem(
-                                  icon: Icons.history_rounded,
-                                  label: "Riwayat",
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RiwayatScreen())),
-                                ),
+                                _topActionItem(icon: Icons.add_rounded, label: "Isi Saldo", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen()))),
+                                _topActionItem(icon: Icons.arrow_upward_rounded, label: "Kirim", onTap: _kirimSaldoAction),
+                                _topActionItem(icon: Icons.qr_code_scanner_rounded, label: "Pindai", onTap: _pindaiQrisAction),
+                                _topActionItem(icon: Icons.history_rounded, label: "Riwayat", onTap: () => setState(() => _bottomNavIndex = 1)),
                               ],
                             ),
                           ],
@@ -443,25 +380,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // GRID MENU UTAMA PPOB
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 16, spreadRadius: 2)]),
                   child: GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -482,10 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // ANIMATED PROMO CAROUSEL
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
@@ -506,127 +427,55 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPageChanged: (index) => setState(() => _currentBannerPage = index),
                         physics: const BouncingScrollPhysics(),
                         children: [
-                          _buildPremiumBanner(
-                            [const Color(0xFF0F2027), const Color(0xFF203A43), const Color(0xFF2C5364)],
-                            Icons.auto_awesome_rounded,
-                            "Festival Transaksi Kilat",
-                            "Dapatkan koin loyalitas ganda untuk setiap pengisian Pulsa & Paket Data di atas jam 9 malam.",
-                          ),
-                          _buildPremiumBanner(
-                            [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
-                            Icons.bolt_rounded,
-                            "Token Listrik Hemat Rumah",
-                            "Tanpa biaya penanganan tambahan untuk semua golongan daya listrik pascabayar.",
-                          ),
-                          _buildPremiumBanner(
-                            [const Color(0xFF11998e), const Color(0xFF38ef7d)],
-                            Icons.volunteer_activism_rounded,
-                            "Pemberdayaan Desa Mandiri",
-                            "Salurkan Zakat dan Infak Anda secara aman dan real-time langsung ke program desa binaan.",
-                          ),
+                          _buildPremiumBanner([const Color(0xFF0F2027), const Color(0xFF203A43), const Color(0xFF2C5364)], Icons.auto_awesome_rounded, "Festival Transaksi Kilat", "Dapatkan koin loyalitas ganda untuk setiap pengisian Pulsa di atas jam 9 malam."),
+                          _buildPremiumBanner([const Color(0xFF8E2DE2), const Color(0xFF4A00E0)], Icons.bolt_rounded, "Token Listrik Hemat Rumah", "Tanpa biaya penanganan tambahan untuk semua golongan daya listrik."),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(3, (index) {
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: _currentBannerPage == index ? 18 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: _currentBannerPage == index ? WarnaDesaPay.primary : Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        );
-                      }),
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // PLATFORM ASSISTANCE CARD
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: CustomBounce(
                   onTap: _bukaWhatsApp,
                   child: Container(
                     padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.green.shade700, Colors.teal.shade600],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.green.withOpacity(0.1),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
+                    decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade700, Colors.teal.shade600]), borderRadius: BorderRadius.circular(24)),
+                    child: const Row(
                       children: [
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundColor: Colors.white.withOpacity(0.2),
-                          child: const Icon(Icons.headset_mic_rounded, color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Pusat Bantuan Digital",
-                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "Hubungi tim teknis via WhatsApp jika ada kendala pemrosesan sistem pembayaran Anda.",
-                                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, height: 1.3),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                        CircleAvatar(radius: 22, backgroundColor: Colors.white24, child: Icon(Icons.headset_mic_rounded, color: Colors.white, size: 24)),
+                        SizedBox(width: 16),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Pusat Bantuan Digital", style: TextStyle(color: Colors.white, fontStyle: FontStyle.normal, fontWeight: FontWeight.bold, fontSize: 15)), SizedBox(height: 4), Text("Hubungi tim teknis via WhatsApp jika ada kendala sistem pembayaran.", style: TextStyle(color: Colors.whiteCD, fontSize: 11))])),
                       ],
                     ),
                   ),
                 ),
               ),
-
-              const SizedBox(height: 36),
-
-              // SECURED FOOTER CERTIFICATE
-              Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.verified_user_rounded, size: 30, color: WarnaDesaPay.primary.withOpacity(0.2)),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Secured Network Infrastructure Protocol",
-                      style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w600, fontSize: 11, letterSpacing: 0.3),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "© 2026 DesaPay Indonesia • Premium Release Build v2.1.1",
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
+      );
+    }
+
+    // SCALLFOLD UTAMA DENGAN BOTTOM NAVIGATION BAR AKTIF
+    return Scaffold(
+      backgroundColor: const Color(0xffF4F7FA),
+      body: buildBodyContent(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _bottomNavIndex,
+        onTap: (index) => setState(() => _bottomNavIndex = index),
+        selectedItemColor: WarnaDesaPay.primary,
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: "Beranda"),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: "Riwayat"),
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: "Profil"),
+        ],
       ),
     );
   }
@@ -641,23 +490,12 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               width: 52,
               height: 52,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.1),
-                  width: 1,
-                ),
-              ),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.1), width: 1)),
               alignment: Alignment.center,
               child: Icon(icon, color: Colors.white, size: 28),
             ),
             const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.1),
-            ),
+            Text(label, trackingText: label),
           ],
         ),
       ),
@@ -670,22 +508,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: warna.withOpacity(0.09),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: warna, size: 26),
-          ),
+          Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: warna.withOpacity(0.09), shape: BoxShape.circle), child: Icon(icon, color: warna, size: 26)),
           const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
+          Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87)),
         ],
       ),
     );
@@ -694,39 +519,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildPremiumBanner(List<Color> gradientColors, IconData iconData, String title, String description) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: BoxDecoration(gradient: LinearGradient(colors: gradientColors), borderRadius: BorderRadius.circular(20)),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.3),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11, height: 1.3),
-                ),
-              ],
-            ),
-          ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)), const SizedBox(height: 6), Text(description, maxLines: 2, style: const TextStyle(color: Colors.white70, fontSize: 11))])),
           const SizedBox(width: 12),
-          Icon(iconData, size: 48, color: Colors.white.withOpacity(0.15)),
+          Icon(iconData, size: 40, color: Colors.white24),
         ],
       ),
     );
   }
+}
+
+class Text {
+  static Widget trackingText(String label) => Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.1));
 }
