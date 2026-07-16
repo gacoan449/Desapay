@@ -1,154 +1,82 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import '../models/payment_channel.dart';
+class TriPayService {
+  // Menggunakan Base URL Production Resmi TriPay
+  final String _baseUrl = 'https://tripay.co.id/api/transaction/create';
 
-class TripayService {
-  // ===================================================
-  // KREDENSIAL INTEGRASI GATEWAY TRIPAY
-  // ===================================================
-  static const String apiKey = "ISI_API_KEY_DISINI";
-  static const String privateKey = "ISI_PRIVATE_KEY_DISINI";
-  static const String merchantCode = "ISI_MERCHANT_CODE";
+  // Generator Signature HMAC-SHA256 Presisi Sesuai Dokumentasi TriPay
+  String _generateSignature(String merchantRef, int amount) {
+    final String merchantCode = dotenv.get('TRIPAY_MERCHANT_CODE', fallback: '');
+    final String privateKey = dotenv.get('TRIPAY_PRIVATE_KEY', fallback: '');
 
-  // Mode Toggle: Ganti ke 'false' jika aplikasi DesaPay sudah siap rilis rill (Live Production)
-  static const bool _isSandbox = true;
+    // Pola formula signature Closed Payment TriPay: merchantCode + merchantRef + amount
+    final String payload = '$merchantCode$merchantRef$amount';
+    
+    final List<int> keyBytes = utf8.encode(privateKey);
+    final List<int> payloadBytes = utf8.encode(payload);
 
-  static String get _baseUrl => _isSandbox
-      ? "https://tripay.co.id/api-sandbox"
-      : "https://tripay.co.id/api";
+    final Hmac hmacSha256 = Hmac(sha256, keyBytes);
+    final Digest digest = hmacSha256.convert(payloadBytes);
 
-  // Helper Headers untuk request bertipe GET
-  static Map<String, String> _getHeaders() {
-    return {
-      "Authorization": "Bearer $apiKey",
-      "Accept": "application/json",
-    };
+    return digest.toString();
   }
 
-  // Helper Headers untuk request bertipe POST (DIKOREKSI: Menambahkan Content-Type JSON)
-  static Map<String, String> _postHeaders() {
-    return {
-      "Authorization": "Bearer $apiKey",
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    };
-  }
-
-  // ===================================================
-  // 1. AMBIL DAFTAR PAYMENT CHANNELS AKTIF
-  // ===================================================
-  /// Mengambil semua saluran pembayaran yang aktif dari Tripay
-  Future<List<PaymentChannel>> getPaymentChannels() async {
-    try {
-      final response = await http.get(
-        Uri.parse("$_baseUrl/merchant/payment-channel"),
-        headers: _getHeaders(),
-      ).timeout(const Duration(seconds: 15));
-
-      final json = jsonDecode(response.body);
-
-      if (response.statusCode != 200) {
-        final String errMsg = json["message"] ?? "Gagal memuat saluran pembayaran.";
-        throw Exception(errMsg);
-      }
-
-      final List data = json["data"] ?? [];
-      return data.map((e) => PaymentChannel.fromJson(e)).toList();
-    } catch (e) {
-      if (kDebugMode) print("Tripay Exception [getPaymentChannels]: $e");
-      rethrow;
-    }
-  }
-
-  // ===================================================
-  // 2. GENERATE SIGNATURE TRANSAKSI (SECURE GENERATOR)
-  // ===================================================
-  /// Membuat signature HMAC-SHA256 validasi keamanan Tripay
-  String createSignature(String merchantRef, int amount) {
-    final String payload = merchantCode + merchantRef + amount.toString();
-    return Hmac(
-      sha256,
-      utf8.encode(privateKey),
-    ).convert(utf8.encode(payload)).toString();
-  }
-
-  // ===================================================
-  // 3. TERBITKAN INVOICE TRANSAKSI BARU (CREATE TX)
-  // ===================================================
-  /// Mengirimkan permintaan pembuatan tiket pembayaran baru ke Tripay
-  Future<Map<String, dynamic>> createTransaction({
-    required String method,
-    required String merchantRef,
+  // Fungsi Inti Request Pembuatan Tagihan (Closed Payment)
+  Future<Map<String, dynamic>?> buatTagihanClosedPayment({
+    required String method, // Contoh: 'QRIS', 'BRIVA', 'ALFAMART'
     required int amount,
-    required String customerName,
-    required String customerEmail,
-    required String customerPhone,
+    required String namaPelanggan,
+    required String emailPelanggan,
+    required String nomorHpPelanggan,
+    required String namaProduk,
   }) async {
+    final String apiKey = dotenv.get('TRIPAY_API_KEY', fallback: '');
+    final String merchantCode = dotenv.get('TRIPAY_MERCHANT_CODE', fallback: '');
+    
+    // Generate referensi transaksi unik DesaPay secara otomatis berdasarkan timestamp
+    final String merchantRef = 'DP-${DateTime.now().millisecondsSinceEpoch}';
+    final String signature = _generateSignature(merchantRef, amount);
+
+    final Map<String, dynamic> bodyPayload = {
+      'method': method,
+      'merchant_ref': merchantRef,
+      'amount': amount,
+      'customer_name': namaPelanggan,
+      'customer_email': emailPelanggan,
+      'customer_phone': nomorHpPelanggan,
+      'order_items': [
+        {
+          'sku': 'TOPUP-SALDO',
+          'name': namaProduk,
+          'price': amount,
+          'quantity': 1,
+        }
+      ],
+      'signature': signature,
+    };
+
     try {
-      final String signature = createSignature(merchantRef, amount);
+      final http.Response response = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(bodyPayload),
+      );
 
-      final response = await http.post(
-        Uri.parse("$_baseUrl/transaction/create"),
-        headers: _postHeaders(), // DIKOREKSI: Menggunakan header posting lengkap (Content-Type)
-        body: jsonEncode({
-          "method": method,
-          "merchant_ref": merchantRef,
-          "amount": amount,
-          "customer_name": customerName,
-          "customer_email": customerEmail,
-          "customer_phone": customerPhone,
-          "order_items": [
-            {
-              "sku": "TOPUP",
-              "name": "Top Up Saldo DesaPay",
-              "price": amount,
-              "quantity": 1,
-            }
-          ],
-          "signature": signature,
-        }),
-      ).timeout(const Duration(seconds: 25));
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-      if (response.statusCode != 200) {
-        // REVISI: Mengembalikan keterangan kegagalan spesifik dari API Tripay
-        final String detailGagal = responseData["message"] ?? "Gagal membuat invoice transaksi.";
-        throw Exception(detailGagal);
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['success'] == true) {
+          return jsonResponse['data'] as Map<String, dynamic>;
+        }
       }
-
-      return responseData;
+      return null;
     } catch (e) {
-      if (kDebugMode) print("Tripay Exception [createTransaction]: $e");
-      rethrow;
-    }
-  }
-
-  // ===================================================
-  // 4. PERIKSA DETAIL STATUS INVOICE (INQUIRY DETAIL)
-  // ===================================================
-  /// Memeriksa status pembayaran invoice Tripay menggunakan kode referensi transaksi
-  Future<Map<String, dynamic>> cekStatus(String reference) async {
-    try {
-      final response = await http.get(
-        Uri.parse("$_baseUrl/transaction/detail?reference=$reference"),
-        headers: _getHeaders(),
-      ).timeout(const Duration(seconds: 15));
-
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-
-      if (response.statusCode != 200) {
-        final String detailGagal = responseData["message"] ?? "Gagal memuat rincian status.";
-        throw Exception(detailGagal);
-      }
-
-      return responseData;
-    } catch (e) {
-      if (kDebugMode) print("Tripay Exception [cekStatus]: $e");
-      rethrow;
+      return null;
     }
   }
 }
