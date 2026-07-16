@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../config/warna.dart';
 import '../../screens/saldo/topup_saldo_screen.dart';
@@ -71,15 +73,18 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSaldoHidden = false;
-  num _saldoUserNyata = 0; // Mulai dari 0 rupiah sebagai inisialisasi aman
+  num _saldoUserNyata = 0; // DIKOREKSI: Saldo awal rill dimulai tepat dari Rp 0
+  
   final PageController _bannerController = PageController(initialPage: 0);
   int _currentBannerPage = 0;
   Timer? _bannerTimer;
+  StreamSubscription? _saldoSubscription;
 
   @override
   void initState() {
     super.initState();
-    _muatDataSaldoAsli(); // Ambil data saldo secara dinamis saat start
+    _aktifkanListenerSaldoRealtime(); // Dengarkan perubahan database rill
+    
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (_currentBannerPage < 2) {
         _currentBannerPage++;
@@ -96,15 +101,23 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Integrasi data saldo rill.
-  Future<void> _muatDataSaldoAsli() async {
-    // Simulasi penundaan request jaringan (network latency)
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (mounted) {
-      setState(() {
-        // DI SINI: Gantilah angka di bawah dengan logika database Anda, contoh:
-        // _saldoUserNyata = userModel.saldo;
-        _saldoUserNyata = 50000; 
+  // DIKOREKSI: Mengambil data saldo rill dari Firestore secara real-time berdasarkan user yang login
+  void _aktifkanListenerSaldoRealtime() {
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      _saldoSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .snapshots()
+          .listen((DocumentSnapshot snapshot) {
+        if (snapshot.exists && snapshot.data() != null) {
+          final data = snapshot.data() as Map<String, dynamic>;
+          if (mounted) {
+            setState(() {
+              _saldoUserNyata = data['saldo'] ?? 0; // Mengambil nilai saldo asli database
+            });
+          }
+        }
       });
     }
   }
@@ -113,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _bannerTimer?.cancel();
     _bannerController.dispose();
+    _saldoSubscription?.cancel(); // Bersihkan pemantau memori database
     super.dispose();
   }
 
@@ -195,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PindaiQrisScreen()),
-    ).then((_) => _muatDataSaldoAsli()); // Muat ulang saldo otomatis begitu pulang dari halaman scan
+    );
   }
 
   void _notifikasi() {
@@ -238,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xffF4F7FA),
       body: RefreshIndicator(
         onRefresh: () async {
-          await _muatDataSaldoAsli();
+          _aktifkanListenerSaldoRealtime();
         },
         color: WarnaDesaPay.primary,
         child: SingleChildScrollView(
