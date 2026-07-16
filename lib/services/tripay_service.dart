@@ -4,22 +4,18 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class TriPayService {
-  // Menggunakan URL Production Resmi TriPay
   final String _baseUrl = 'https://tripay.co.id/api/transaction/create';
 
   String _generateSignature(String merchantRef, int amount) {
     final String merchantCode = dotenv.get('TRIPAY_MERCHANT_CODE', fallback: '').trim();
     final String privateKey = dotenv.get('TRIPAY_PRIVATE_KEY', fallback: '').trim();
-
     final String payload = '$merchantCode$merchantRef$amount';
     
     final List<int> keyBytes = utf8.encode(privateKey);
     final List<int> payloadBytes = utf8.encode(payload);
 
     final Hmac hmacSha256 = Hmac(sha256, keyBytes);
-    final Digest digest = hmacSha256.convert(payloadBytes);
-
-    return digest.toString();
+    return hmacSha256.convert(payloadBytes).toString();
   }
 
   Future<Map<String, dynamic>?> buatTagihanClosedPayment({
@@ -31,11 +27,9 @@ class TriPayService {
     required String namaProduk,
   }) async {
     final String apiKey = dotenv.get('TRIPAY_API_KEY', fallback: '').trim();
-    
     final String merchantRef = 'DP-${DateTime.now().millisecondsSinceEpoch}';
     final String signature = _generateSignature(merchantRef, amount);
 
-    // DIKOREKSI: Penyelarasan format array map agar valid 100% tanpa memicu Error 400
     final Map<String, dynamic> bodyPayload = {
       'method': method.trim(),
       'merchant_ref': merchantRef,
