@@ -10,35 +10,27 @@ class PindaiQrisScreen extends StatefulWidget {
   State<PindaiQrisScreen> createState() => _PindaiQrisScreenState();
 }
 
-class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerProviderStateMixin {
-  late MobileScannerController _cameraController;
-  late AnimationController _animationController;
-  late Animation<double> _laserPosition;
-  bool _isFlashOn = false;
-  bool _hasPermission = true;
+class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
+  // Gunakan inisialisasi tunggal defensif untuk memblokir error OS native layer
+  final MobileScannerController _cameraController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    facing: CameraFacing.back,
+  );
 
   @override
   void initState() {
     super.initState();
-    _cameraController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      facing: CameraFacing.back,
-      autoStart: true,
-    );
+    _startKameraAman();
+  }
 
-    _animationController = AnimationController(vsync: this, duration: const Duration(seconds: 2));
-    _laserPosition = Tween<double>(begin: 0.0, end: 240.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) _animationController.reverse();
-        if (status == AnimationStatus.dismissed) _animationController.forward();
-      });
-    _animationController.forward();
+  void _startKameraAman() async {
+    try {
+      await _cameraController.start();
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
     _cameraController.dispose();
     super.dispose();
   }
@@ -104,34 +96,8 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
                 }
               }
             },
-            errorBuilder: (context, error, child) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 64),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Gagal Mengakses Kamera: ${error.errorCode}",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Pastikan izin kamera telah diberikan di pengaturan perangkat Anda.",
-                        style: TextStyle(color: Colors.white60, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
           ),
           Container(color: Colors.black.withOpacity(0.2)),
-          
           Center(
             child: Container(
               width: 250,
@@ -142,33 +108,26 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
               ),
             ),
           ),
-
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             left: 16, right: 16,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // DIKOREKSI: Memperbaiki implementasi warna latar belakang menggunakan styleFrom yang valid
                 IconButton(
                   style: IconButton.styleFrom(backgroundColor: Colors.black45),
                   onPressed: () => Navigator.pop(context), 
                   icon: const Icon(Icons.close_rounded, color: Colors.white),
                 ),
                 const Text("Pindai QRIS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                // DIKOREKSI: Memperbaiki penulisan parameter background sesuai SDK Flutter terbaru
                 IconButton(
                   style: IconButton.styleFrom(backgroundColor: Colors.black45),
-                  onPressed: () { 
-                    _cameraController.toggleTorch(); 
-                    setState(() { _isFlashOn = !_isFlashOn; }); 
-                  },
-                  icon: Icon(Icons.flash_on_rounded, color: _isFlashOn ? Colors.yellow : Colors.white),
+                  onPressed: () { _cameraController.toggleTorch(); },
+                  icon: const Icon(Icons.flash_on_rounded, color: Colors.white),
                 )
               ],
             ),
           ),
-          
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 40,
             left: 24, right: 24,
