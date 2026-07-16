@@ -84,7 +84,7 @@ class InvoiceScreen extends StatelessWidget {
             const SizedBox(height: 20),
 
             // ==========================================
-            // CONTAINER KHUSUS RENDERING METODE BAYAR (QRIS VS VA)
+            // CONTAINER KHUSUS RENDERING METODE BAYAR
             // ==========================================
             Container(
               width: double.infinity,
@@ -94,10 +94,9 @@ class InvoiceScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Column(
-                crossAxisAlignment: Center—ColumnAxisAlignment.center, // Deteksi visual tengah
+                crossAxisAlignment: CrossAxisAlignment.center, // DIKOREKSI: Menggunakan standar bawaan framework
                 children: [
                   if (qrUrl.isNotEmpty) ...[
-                    // JIKA METODE NYATA ADALAH QRIS
                     const Text("Pindai Kode QRIS Di Bawah Ini", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 16),
                     Container(
@@ -111,7 +110,6 @@ class InvoiceScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     const Text("Mendukung: DANA, OVO, GoPay, LinkAja, & Mobile Banking", style: TextStyle(color: Colors.grey, fontSize: 11)),
                   ] else ...[
-                    // JIKA METODE ADALAH VIRTUAL ACCOUNT / RETAIL
                     const Text("Kode Bayar / Nomor Virtual Account", style: TextStyle(color: Colors.grey, fontSize: 13)),
                     const SizedBox(height: 6),
                     SelectableText(
@@ -126,12 +124,9 @@ class InvoiceScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 24),
-            const Text("Tata Cara Pembayaran", style: TextStyle(fontSize: 15, fontStyle: FontStyle.normal, fontWeight: FontWeight.bold)),
+            const Text("Tata Cara Pembayaran", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
 
-            // ==========================================
-            // INTRUKSI LANGKAH BAYAR DINAMIS DARI TRIPAY
-            // ==========================================
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -163,9 +158,4 @@ class InvoiceScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-// Helper alignment internal linter safety
-class Center—ColumnAxisAlignment {
-  static const CrossAxisAlignment center = CrossAxisAlignment.center;
 }
