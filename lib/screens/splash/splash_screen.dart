@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
-import '../login/login_screen.dart';
+import '../home/home_screen.dart';
+import '../welcome_screen.dart'; 
+// Hapus import login_screen yang salah path sebelumnya
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,33 +15,42 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  Timer? _timer; // REVISI SAFETY: Penjaga pointer untuk mencegah memory leak
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
 
-    // Mengunci alur transisi aman terkendali
     _timer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return; // Mencegah perpindahan halaman jika widget sudah dilepas
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
-      );
+      if (!mounted) return;
+      
+      // LOGIKA PENJAGA KELAS BERAT: Cek status login setelah animasi selesai
+      final User? user = FirebaseAuth.instance.currentUser;
+      
+      if (user != null) {
+        // Jika sudah login, lempar ke Home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        // Jika belum login, lempar ke Welcome Screen (sesuai alur UI Anda)
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        );
+      }
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Mematikan background timer saat splash screen ditutup
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Gradasi Biru Mewah Selaras dengan Dashboard Luxury DesaPay
     final LinearGradient premiumSplashGradient = LinearGradient(
       colors: [
         WarnaDesaPay.primary,
@@ -53,85 +65,43 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: premiumSplashGradient,
-        ),
+        decoration: BoxDecoration(gradient: premiumSplashGradient),
         child: Stack(
           children: [
-            // KONTEN UTAMA SPLASH CENTERED LOGO
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo Aksen Berpendar Mewah
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.account_balance_wallet_rounded,
-                      size: 80,
-                      color: Colors.white,
-                    ),
+                    child: const Icon(Icons.account_balance_wallet_rounded, size: 80, color: Colors.white),
                   ),
                   const SizedBox(height: 24),
                   const Text(
                     "DesaPay",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.0,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: 1.0),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     "Premium Digital Payment Platform",
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.2,
-                    ),
+                    style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 48),
-                  // Loading Indicator Lembut
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2.5,
-                    ),
-                  ),
+                  const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
                 ],
               ),
             ),
-            
-            // ORNAMEN FOOTER UNTUK VISUAL MEWAH
             Positioned(
-              bottom: 30,
-              left: 0,
-              right: 0,
+              bottom: 30, left: 0, right: 0,
               child: Column(
                 children: [
-                  Icon(
-                    Icons.shield_rounded, 
-                    size: 18, 
-                    color: Colors.white.withOpacity(0.3),
-                  ),
+                  Icon(Icons.shield_rounded, size: 18, color: Colors.white.withOpacity(0.3)),
                   const SizedBox(height: 6),
-                  Text(
-                    "Secured Network Infrastructure",
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.4),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  Text("Secured Network Infrastructure", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
