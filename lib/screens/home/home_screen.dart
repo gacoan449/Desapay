@@ -122,6 +122,68 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // DIKOREKSI: Mengembalikan fungsi aksi Pindai QRIS yang hilang
+  void _pindaiQrisAction() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PindaiQrisScreen()),
+    );
+  }
+
+  void _kirimSaldoAction() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Icon(Icons.send_to_mobile_rounded, size: 72, color: WarnaDesaPay.primary),
+              const SizedBox(height: 16),
+              const Text(
+                "Kirim Saldo DesaPay",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "Fitur transfer saldo antar agen dan rekening bank sedang dalam pemeliharaan jaringan.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: WarnaDesaPay.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Baik, Dimengerti", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   String _formatRupiah(num nominal) {
     return nominal.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
@@ -223,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _topActionItem(icon: Icons.add_rounded, label: "Isi Saldo", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen()))),
-                          _topActionItem(icon: Icons.arrow_upward_rounded, label: "Kirim", onTap: () {}),
+                          _topActionItem(icon: Icons.arrow_upward_rounded, label: "Kirim", onTap: _kirimSaldoAction),
                           _topActionItem(icon: Icons.qr_code_scanner_rounded, label: "Pindai", onTap: _pindaiQrisAction),
                           _topActionItem(icon: Icons.history_rounded, label: "Riwayat", onTap: () => setState(() => _bottomNavIndex = 1)),
                         ],
@@ -233,7 +295,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              // Menu Grid PPOB
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
