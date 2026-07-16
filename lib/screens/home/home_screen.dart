@@ -222,7 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 28),
                     
-                    // KOREKSI 1: Menggunakan konstruktor tanpa parameter sesuai berkas lib/widgets/kotak_saldo.dart
                     const KotakSaldo(),
                   ],
                 ),
@@ -232,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 24),
 
             // ==========================================
-            // CAROUSEL BANNER PROMO DANA/GOPAY STYLE
+            // CAROUSEL BANNER PROMO
             // ==========================================
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
@@ -321,16 +320,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSpacing: 20,
                   crossAxisSpacing: 4,
                   childAspectRatio: 0.85,
-                  // KOREKSI 2: Menggunakan MenuItem kosong sesuai kecocokan konstruktor asli lib/widgets/menu_item.dart
+                  // KOREKSI UTAMA: Menyediakan parameter 'icon' yang wajib ada sesuai instruksi compiler
                   children: const [
-                    MenuItem(),
-                    MenuItem(),
-                    MenuItem(),
-                    MenuItem(),
-                    MenuItem(),
-                    MenuItem(),
-                    MenuItem(),
-                    MenuItem(),
+                    MenuItem(icon: Icons.phone_android_rounded),
+                    MenuItem(icon: Icons.flash_on_rounded),
+                    MenuItem(icon: Icons.account_balance_wallet_rounded),
+                    MenuItem(icon: Icons.water_drop_rounded),
+                    MenuItem(icon: Icons.health_and_safety_rounded),
+                    MenuItem(icon: Icons.mosque_rounded),
+                    MenuItem(icon: Icons.stars_rounded),
+                    MenuItem(icon: Icons.grid_view_rounded),
                   ],
                 ),
               ),
@@ -343,7 +342,11 @@ class _HomeScreenState extends State<HomeScreen> {
             // ==========================================
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: PromoCard(title: "Info Promo Terkini"), 
+              // KOREKSI KEDUA: Menyediakan parameter 'title' dan 'subtitle' secara lengkap
+              child: PromoCard(
+                title: "Info Promo Terkini",
+                subtitle: "Nikmati kemudahan transaksi harian bersama DesaPay",
+              ), 
             ),
 
             const SizedBox(height: 24),
