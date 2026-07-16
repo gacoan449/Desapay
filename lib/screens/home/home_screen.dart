@@ -109,7 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _pageController = PageController(initialPage: 0);
     
-    // Auto-looping slider banner promosi
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (_currentIndexBanner < _promoBanners.length - 1) {
         _currentIndexBanner++;
@@ -125,7 +124,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // Menampilkan Interstitial Ad Popup Mega Banner secara otomatis saat masuk aplikasi
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showMegaPromoPopup();
     });
@@ -146,9 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // =========================================================================
-  // INTERSTITIAL EXPANDED AD VERTICAL MODAL POPUP
-  // =========================================================================
   void _showMegaPromoPopup() {
     showDialog(
       context: context,
@@ -162,7 +157,6 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Container(
                 width: double.infinity,
-                // PERBAIKAN: Menggunakan BoxConstraints untuk batasan tinggi maksimum kontainer
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.75,
                 ),
@@ -222,7 +216,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       alignment: Alignment.center,
-                                      // PERBAIKAN: Mengganti Colors.blackDE yang tidak valid menjadi Colors.black87
                                       child: const Text(
                                         "KUMPULIN SEKARANG",
                                         style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
@@ -389,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     // =========================================================================
-                    // 3. CORE SERVICE PPOB GRID LAYOUT
+                    // 3. CORE SERVICE PPOB GRID LAYOUT (PERBAIKAN: PEMBERSIHAN KATA KUNCI CONST KELOMPOK)
                     // =========================================================================
                     Container(
                       margin: const EdgeInsets.all(16),
@@ -408,18 +401,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildGridMenuItem(Icons.phone_android_rounded, "Pulsa & Data", const Color(0xFF0054A6), () {
                             Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()));
                           }),
-                          // PERBAIKAN: Hapus kata kunci 'const' pada inisialisasi runtime PascabayarScreen
                           _buildGridMenuItem(Icons.bolt_rounded, "Listrik PLN", const Color(0xFFFFB300), () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "PLN")));
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "PLN")));
                           }),
                           _buildGridMenuItem(Icons.water_drop_rounded, "PDAM Air", const Color(0xFF00C4FF), () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "PDAM")));
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "PDAM")));
                           }),
                           _buildGridMenuItem(Icons.health_and_safety_rounded, "BPJS", const Color(0xFF22C55E), () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "BPJS")));
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "BPJS")));
                           }),
                           _buildGridMenuItem(Icons.tv_rounded, "TV Kabel", const Color(0xFFFF6600), () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "TV KABEL")));
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => PascabayarScreen(jenisLayanan: "TV KABEL")));
                           }),
                           _buildGridMenuItem(Icons.star_rounded, "A+ Rewards", const Color(0xFFFF1493), () {}),
                           _buildGridMenuItem(Icons.flight_rounded, "Travel Tiket", const Color(0xFF8338EC), () {}),
