@@ -74,7 +74,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSaldoHidden = false;
   num _saldoUserNyata = 0;
-  int _bottomNavIndex = 0; // Mengontrol index halaman bawah
+  int _bottomNavIndex = 0;
   
   final PageController _bannerController = PageController(initialPage: 0);
   int _currentBannerPage = 0;
@@ -179,10 +179,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              Text(
+              const Text(
                 "Fitur transfer saldo antar agen dan rekening bank sedang dalam pemeliharaan jaringan.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
+                style: TextStyle(color: Colors.slateGrey, fontSize: 14, height: 1.4),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -245,14 +245,12 @@ class _HomeScreenState extends State<HomeScreen> {
       end: Alignment.bottomCenter,
     );
 
-    // Render isi halaman dinamis agar Bottom Navigation Bar bekerja
     Widget buildBodyContent() {
       if (_bottomNavIndex == 1) return const RiwayatScreen();
       if (_bottomNavIndex == 2) {
         return const Center(child: Text("Halaman Profil Manajemen Agen", style: TextStyle(fontWeight: FontWeight.bold)));
       }
 
-      // Default: Tampilan Dashboard Utama
       return RefreshIndicator(
         onRefresh: () async => _aktifkanListenerSaldoRealtime(),
         color: WarnaDesaPay.primary,
@@ -416,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text("Promo Spesial Menarik", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                        TextButton(onPressed: () {}, child: Text("Lihat Semua", style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold)))
+                        TextButton(onPressed: () {}, child: const Text("Lihat Semua", style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold)))
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -447,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         CircleAvatar(radius: 22, backgroundColor: Colors.white24, child: Icon(Icons.headset_mic_rounded, color: Colors.white, size: 24)),
                         SizedBox(width: 16),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Pusat Bantuan Digital", style: TextStyle(color: Colors.white, fontStyle: FontStyle.normal, fontWeight: FontWeight.bold, fontSize: 15)), SizedBox(height: 4), Text("Hubungi tim teknis via WhatsApp jika ada kendala sistem pembayaran.", style: TextStyle(color: Colors.whiteCD, fontSize: 11))])),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("Pusat Bantuan Digital", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)), SizedBox(height: 4), Text("Hubungi tim teknis via WhatsApp jika ada kendala sistem pembayaran.", style: TextStyle(color: Colors.white, fontSize: 11))])),
                       ],
                     ),
                   ),
@@ -460,7 +458,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // SCALLFOLD UTAMA DENGAN BOTTOM NAVIGATION BAR AKTIF
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
       body: buildBodyContent(),
@@ -495,7 +492,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(icon, color: Colors.white, size: 28),
             ),
             const SizedBox(height: 8),
-            Text(label, trackingText: label),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.1)),
           ],
         ),
       ),
@@ -529,8 +526,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
-
-class Text {
-  static Widget trackingText(String label) => Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.1));
 }
