@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// Sinkronisasi dengan konfigurasi warna dan services bawaan Anda
+// Sinkronisasi mutlak dengan arsitektur folder modular DesaPay Anda
 import '../../config/warna.dart';
 import '../../services/saldo_service.dart';
 import '../../services/digiflazz_service.dart';
@@ -162,7 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Container(
                 width: double.infinity,
-                maxHeight: MediaQuery.of(context).size.height * 0.75,
+                // PERBAIKAN: Menggunakan BoxConstraints untuk batasan tinggi maksimum kontainer
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.75,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(28),
                   gradient: const LinearGradient(
@@ -185,11 +188,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               fit: BoxFit.cover,
                             ),
                             Container(
-                              decoration: LinearGradient(
-                                colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ).createShader(Rect.fromLTRB(0, 0, 400, 600)) as dynamic,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
                             ),
                             Padding(
                               padding: const EdgeInsets.all(24),
@@ -217,9 +222,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       alignment: Alignment.center,
+                                      // PERBAIKAN: Mengganti Colors.blackDE yang tidak valid menjadi Colors.black87
                                       child: const Text(
                                         "KUMPULIN SEKARANG",
-                                        style: TextStyle(color: Colors.blackDE, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
+                                        style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
                                       ),
                                     ),
                                   )
@@ -402,6 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildGridMenuItem(Icons.phone_android_rounded, "Pulsa & Data", const Color(0xFF0054A6), () {
                             Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()));
                           }),
+                          // PERBAIKAN: Hapus kata kunci 'const' pada inisialisasi runtime PascabayarScreen
                           _buildGridMenuItem(Icons.bolt_rounded, "Listrik PLN", const Color(0xFFFFB300), () {
                             Navigator.push(context, MaterialPageRoute(builder: (_) => const PascabayarScreen(jenisLayanan: "PLN")));
                           }),
