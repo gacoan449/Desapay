@@ -320,16 +320,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSpacing: 20,
                   crossAxisSpacing: 4,
                   childAspectRatio: 0.85,
-                  // KOREKSI UTAMA: Menyediakan parameter 'icon' yang wajib ada sesuai instruksi compiler
+                  // KOREKSI 1: Menggunakan parameter 'icon' dan 'title' yang wajib ada sesuai instruksi compiler
                   children: const [
-                    MenuItem(icon: Icons.phone_android_rounded),
-                    MenuItem(icon: Icons.flash_on_rounded),
-                    MenuItem(icon: Icons.account_balance_wallet_rounded),
-                    MenuItem(icon: Icons.water_drop_rounded),
-                    MenuItem(icon: Icons.health_and_safety_rounded),
-                    MenuItem(icon: Icons.mosque_rounded),
-                    MenuItem(icon: Icons.stars_rounded),
-                    MenuItem(icon: Icons.grid_view_rounded),
+                    MenuItem(icon: Icons.phone_android_rounded, title: "Pulsa & Data"),
+                    MenuItem(icon: Icons.flash_on_rounded, title: "Listrik PLN"),
+                    MenuItem(icon: Icons.account_balance_wallet_rounded, title: "E-Wallet"),
+                    MenuItem(icon: Icons.water_drop_rounded, title: "PDAM Air"),
+                    MenuItem(icon: Icons.health_and_safety_rounded, title: "BPJS"),
+                    MenuItem(icon: Icons.mosque_rounded, title: "Zakat Mall"),
+                    MenuItem(icon: Icons.stars_rounded, title: "Desa Rewards"),
+                    MenuItem(icon: Icons.grid_view_rounded, title: "Lihat Semua"),
                   ],
                 ),
               ),
@@ -342,10 +342,11 @@ class _HomeScreenState extends State<HomeScreen> {
             // ==========================================
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              // KOREKSI KEDUA: Menyediakan parameter 'title' dan 'subtitle' secara lengkap
+              // KOREKSI 2: Menambahkan parameter wajib 'icon' bersama dengan 'title' dan 'subtitle'
               child: PromoCard(
                 title: "Info Promo Terkini",
                 subtitle: "Nikmati kemudahan transaksi harian bersama DesaPay",
+                icon: Icons.campaign_rounded,
               ), 
             ),
 
