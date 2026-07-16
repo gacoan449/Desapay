@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+// DIKOREKSI: Memastikan standardisasi warna UI terimport dengan benar di main
+import 'config/warna.dart';
 import 'firebase_options.dart';
 import 'screens/home/home_screen.dart';
 
