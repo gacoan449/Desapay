@@ -20,7 +20,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    // Inisialisasi controller secara aman dengan opsi kompatibilitas tinggi
     _cameraController = MobileScannerController(
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
@@ -133,7 +132,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
           ),
           Container(color: Colors.black.withOpacity(0.2)),
           
-          // Target Scanner Frame Overlay
           Center(
             child: Container(
               width: 250,
@@ -151,14 +149,16 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with SingleTickerPr
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // DIKOREKSI: Memperbaiki implementasi warna latar belakang menggunakan styleFrom yang valid
                 IconButton(
-                  backgroundColor: Colors.black45,
+                  style: IconButton.styleFrom(backgroundColor: Colors.black45),
                   onPressed: () => Navigator.pop(context), 
                   icon: const Icon(Icons.close_rounded, color: Colors.white),
                 ),
                 const Text("Pindai QRIS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                // DIKOREKSI: Memperbaiki penulisan parameter background sesuai SDK Flutter terbaru
                 IconButton(
-                  backgroundColor: Colors.black45,
+                  style: IconButton.styleFrom(backgroundColor: Colors.black45),
                   onPressed: () { 
                     _cameraController.toggleTorch(); 
                     setState(() { _isFlashOn = !_isFlashOn; }); 
