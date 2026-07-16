@@ -179,10 +179,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
+              // AMAN: Sudah diganti 100% menggunakan properti warna standard bawaan SDK Flutter
               const Text(
                 "Fitur transfer saldo antar agen dan rekening bank sedang dalam pemeliharaan jaringan.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.slateGrey, fontSize: 14, height: 1.4),
+                style: TextStyle(color: Colors.grey, fontSize: 14, height: 1.4),
               ),
               const SizedBox(height: 24),
               SizedBox(
