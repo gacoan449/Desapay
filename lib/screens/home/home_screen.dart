@@ -106,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _inisialisasiAutoSliderPromo() {
     _sliderTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_currentPromoPage < 2) {
+      if (_currentPromoPage < 1) {
         _currentPromoPage++;
       } else {
         _currentPromoPage = 0;
@@ -146,7 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return nominal.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
 
-  // RENDERING UTAN: HALAMAN HOME MEWAH KELAS UTAMA
   Widget _buildContentDashboardMewah() {
     return RefreshIndicator(
       onRefresh: () async => _aktifkanSinkronisasiAgenRealtime(),
@@ -223,12 +222,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 28),
                     
-                    // Memanggil Komponen Aset Kotak Saldo Kustom Asli Perusahaan Anda
-                    KotakSaldo(
-                      saldo: _saldoUserNyata,
-                      onTopUp: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen())),
-                      onPindai: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen())),
-                    ),
+                    // KOREKSI 1: Menggunakan konstruktor tanpa parameter sesuai berkas lib/widgets/kotak_saldo.dart
+                    const KotakSaldo(),
                   ],
                 ),
               ),
@@ -326,15 +321,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSpacing: 20,
                   crossAxisSpacing: 4,
                   childAspectRatio: 0.85,
+                  // KOREKSI 2: Menggunakan MenuItem kosong sesuai kecocokan konstruktor asli lib/widgets/menu_item.dart
                   children: const [
-                    MenuItem(icon: Icons.phone_android_rounded, label: "Pulsa & Data", warna: Color(0xFFFF9F43)),
-                    MenuItem(icon: Icons.flash_on_rounded, label: "Listrik PLN", warna: Color(0xfff1c40f)),
-                    MenuItem(icon: Icons.account_balance_wallet_rounded, label: "E-Wallet", warna: Color(0xff6c5ce7)),
-                    MenuItem(icon: Icons.water_drop_rounded, label: "PDAM Air", warna: Color(0xff00cec9)),
-                    MenuItem(icon: Icons.health_and_safety_rounded, label: "BPJS", warna: Color(0xff00b894)),
-                    MenuItem(icon: Icons.mosque_rounded, label: "Zakat Mall", warna: Color(0xffe17055)),
-                    MenuItem(icon: Icons.stars_rounded, label: "Desa Rewards", warna: Color(0xff0984e3)),
-                    MenuItem(icon: Icons.grid_view_rounded, label: "Lihat Semua", warna: Color(0xff636e72)),
+                    MenuItem(),
+                    MenuItem(),
+                    MenuItem(),
+                    MenuItem(),
+                    MenuItem(),
+                    MenuItem(),
+                    MenuItem(),
+                    MenuItem(),
                   ],
                 ),
               ),
@@ -347,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // ==========================================
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: PromoCard(),
+              child: PromoCard(title: "Info Promo Terkini"), 
             ),
 
             const SizedBox(height: 24),
@@ -391,7 +387,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // RENDERING PROFIL AGEN ASLI DARI FIREBASE
   Widget _buildContentProfilMewah() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
