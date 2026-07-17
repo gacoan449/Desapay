@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
-import '../../widgets/bottom_nav.dart';
-import 'forgot_password_screen.dart';
-import 'register_screen.dart';
+
+// --- PERBAIKAN JALUR IMPORT (Menyesuaikan Struktur Folder Anda) ---
+import '../home/home_screen.dart';
+import '../auth/forgot_password_screen.dart';
+import '../auth/register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,10 +62,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (hasil == null) {
 
+      // --- PERBAIKAN NAVIGASI: Arahkan ke HomeScreen setelah login sukses ---
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const BottomNav(),
+          builder: (_) => const HomeScreen(),
         ),
       );
 
