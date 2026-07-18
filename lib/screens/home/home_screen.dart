@@ -129,9 +129,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             backgroundColor: WarnaDesaPay.primary,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                decoration: const BoxDecoration(
+                // PERBAIKAN: Kata kunci 'const' dihapus dari BoxDecoration ini
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [WarnaDesaPay.primary, Color(0xFF1E40AF), WarnaDesaPay.secondary],
+                    colors: [WarnaDesaPay.primary, const Color(0xFF1E40AF), WarnaDesaPay.secondary],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -245,9 +246,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // ---------------------------------------------------------
           SliverToBoxAdapter(
             child: Container(
-              decoration: const BoxDecoration(
+              // PERBAIKAN: Kata kunci 'const' dihapus dari BoxDecoration ini
+              decoration: BoxDecoration(
                 color: WarnaDesaPay.lightBg,
-                borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,7 +474,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 margin: const EdgeInsets.only(bottom: 4),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  // PERBAIKAN: Kata kunci 'const' dihapus dari LinearGradient ini
+                  gradient: LinearGradient(
                     colors: [WarnaDesaPay.primary, WarnaDesaPay.secondary],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
