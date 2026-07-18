@@ -9,16 +9,16 @@ import '../../config/warna.dart';
 import '../../services/saldo_service.dart';
 
 // Import Layar Moduler Bottom Navigation & Fitur
-// PERBAIKAN: Menambahkan 'hide CustomBounce' untuk mencegah tabrakan namespace impor
+// PERBAIKAN: Menambahkan 'hide CustomBounce' di semua rute layar yang berpotensi bocor
 import '../pulsa/pulsa_screen.dart' hide CustomBounce;
 import '../pln/pln_screen.dart' hide CustomBounce;
-import '../saldo/topup_saldo_screen.dart';
-import '../pindai/pindai_qris_screen.dart';
-import '../riwayat/riwayat_screen.dart';
-import '../ewallet/ewallet_screen.dart';
-import '../profil/profil_screen.dart';
+import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
+import '../pindai/pindai_qris_screen.dart' hide CustomBounce;
+import '../riwayat/riwayat_screen.dart' hide CustomBounce;
+import '../ewallet/ewallet_screen.dart' hide CustomBounce; 
+import '../profil/profil_screen.dart' hide CustomBounce;
 
-// Import Re-usable Premium Widgets (Secara Eksklusif sebagai Induk CustomBounce)
+// Import Re-usable Premium Widgets (Secara Eksklusif sebagai Induk Tunggal CustomBounce)
 import '../../widgets/menu_item.dart';
 import '../../widgets/promo_card.dart';
 
