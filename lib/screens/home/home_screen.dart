@@ -9,8 +9,9 @@ import '../../config/warna.dart';
 import '../../services/saldo_service.dart';
 
 // Import Layar Moduler Bottom Navigation & Fitur
-import '../pulsa/pulsa_screen.dart';
-import '../pln/pln_screen.dart';
+// PERBAIKAN: Menambahkan 'hide CustomBounce' untuk mencegah tabrakan namespace impor
+import '../pulsa/pulsa_screen.dart' hide CustomBounce;
+import '../pln/pln_screen.dart' hide CustomBounce;
 import '../saldo/topup_saldo_screen.dart';
 import '../pindai/pindai_qris_screen.dart';
 import '../riwayat/riwayat_screen.dart';
@@ -417,7 +418,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           unselectedItemColor: WarnaDesaPay.textSub,
           selectedFontSize: 11,
           unselectedFontSize: 11,
-          // PERBAIKAN: Menghapus properti ilegal 'marginTop' dari TextStyle
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
           elevation: 0,
