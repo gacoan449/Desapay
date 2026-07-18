@@ -1,57 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../../config/warna.dart';
-import '../../models/transaksi.dart';
-import '../../services/transaksi_service.dart';
-
-// Pembungkus Animasi Memantul (Micro-interaction) Premium saat Kartu Riwayat Ditekan
-class CustomBounce extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-
-  const CustomBounce({super.key, required this.child, required this.onTap});
-
-  @override
-  State<CustomBounce> createState() => _CustomBounceState();
-}
-
-class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 100),
-    );
-    _scale = Tween<double>(begin: 1.0, end: 0.98).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: widget.child,
-      ),
-    );
-  }
-}
+import '../../services/riwayat_service.dart'; // Menggunakan RiwayatService Core yang sudah kita bangun
+import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce demi konsistensi sentuhan premium
 
 class RiwayatScreen extends StatefulWidget {
   const RiwayatScreen({super.key});
@@ -62,13 +14,14 @@ class RiwayatScreen extends StatefulWidget {
 
 class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<Transaksi> _semuaData = [];
+  final RiwayatService _riwayatService = RiwayatService();
+  final String _uid = FirebaseAuth.instance.currentUser?.uid ?? "demo_uid";
 
   @override
   void initState() {
     super.initState();
+    // Mengontrol 3 tab utama: Semua, Berhasil, Pending/Gagal
     _tabController = TabController(length: 3, vsync: this);
-    _semuaData = TransaksiService.semua();
   }
 
   @override
@@ -77,54 +30,58 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  String rupiah(dynamic angka) {
-    int value = int.tryParse(angka.toString()) ?? 0;
-    return value.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]}.',
-    );
+  /// Helper format mata uang Rupiah
+  String _formatRupiah(int nominal) {
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    ).format(nominal);
   }
 
-  List<Transaksi> _filterData(String statusFilter) {
-    if (statusFilter == "SEMUA") return _semuaData;
-    return _semuaData.where((item) {
-      final status = (item.status).toString().toUpperCase();
-      if (statusFilter == "SUKSES") return status == "SUKSES" || status == "BERHASIL";
-      return status != "SUKSES" && status != "BERHASIL";
-    }).toList();
-  }
-
+  /// Helper untuk mengambil warna visual status transaksi secara dinamis
   Color _getStatusColor(String status) {
-    final s = status.toUpperCase();
-    if (s == "SUKSES" || s == "BERHASIL") return Colors.green.shade600;
-    if (s == "GAGAL") return Colors.red.shade600;
-    return Colors.orange.shade600;
+    switch (status.toLowerCase()) {
+      case 'sukses':
+      case 'berhasil':
+        return WarnaDesaPay.success;
+      case 'pending':
+      case 'menunggu':
+        return WarnaDesaPay.warning;
+      case 'gagal':
+      default:
+        return WarnaDesaPay.danger;
+    }
   }
 
+  /// Helper untuk mengambil ikon visual status transaksi secara dinamis
   IconData _getStatusIcon(String status) {
-    final s = status.toUpperCase();
-    if (s == "SUKSES" || s == "BERHASIL") return Icons.check_circle_rounded;
-    if (s == "GAGAL") return Icons.cancel_rounded;
-    return Icons.access_time_rounded;
+    switch (status.toLowerCase()) {
+      case 'sukses':
+      case 'berhasil':
+        return Icons.check_circle_rounded;
+      case 'pending':
+      case 'menunggu':
+        return Icons.watch_later_rounded;
+      case 'gagal':
+      default:
+        return Icons.cancel_rounded;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffF8FAFC),
+      backgroundColor: WarnaDesaPay.lightBg,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: false, // Menghapus tombol back karena ini menu utama Tab Utama
         title: const Text(
           "Riwayat Transaksi",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        // SEGMENTED FILTER TABS ALA E-WALLET PREMIUM
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
@@ -133,9 +90,11 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
             child: TabBar(
               controller: _tabController,
               indicatorColor: WarnaDesaPay.primary,
+              indicatorWeight: 3,
               labelColor: WarnaDesaPay.primary,
-              unselectedLabelColor: Colors.grey.shade500,
+              unselectedLabelColor: WarnaDesaPay.textSub,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               tabs: const [
                 Tab(text: "Semua"),
                 Tab(text: "Berhasil"),
@@ -147,208 +106,183 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
       ),
       body: TabBarView(
         controller: _tabController,
-        physics: const BouncingScrollPhysics(),
         children: [
-          _buildDaftarRiwayat(_filterData("SEMUA")),
-          _buildDaftarRiwayat(_filterData("SUKSES")),
-          _buildDaftarRiwayat(_filterData("PENDING")),
+          _buildDaftarRiwayat(filter: 'semua'),
+          _buildDaftarRiwayat(filter: 'berhasil'),
+          _buildDaftarRiwayat(filter: 'pending_gagal'),
         ],
       ),
     );
   }
 
-  Widget _buildDaftarRiwayat(List<Transaksi> daftar) {
-    if (daftar.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long_rounded, size: 72, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            const Text(
-              "Belum Ada Transaksi",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "Riwayat transaksi kategori ini masih kosong.",
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
-            ),
-          ],
-        ),
-      );
-    }
+  // =========================================================================
+  // PIPI DATA REAL-TIME STREAM BUILDER (ANTI HARDCODED DATA)
+  // =========================================================================
+  Widget _buildDaftarRiwayat({required String filter}) {
+    // Menghubungkan Stream secara reaktif ke Firestore data log transaksi DesaPay
+    return StreamBuilder<List<dynamic>>(
+      stream: _riwayatService.streamRiwayatTransaksi(uid: _uid, filter: filter),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: WarnaDesaPay.primary),
+          );
+        }
 
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      itemCount: daftar.length,
-      itemBuilder: (context, index) {
-        final item = daftar[index];
-        final Color statusColor = _getStatusColor(item.status);
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.receipt_long_rounded, size: 64, color: WarnaDesaPay.textSub.withOpacity(0.3)),
+                const SizedBox(height: 16),
+                Text(
+                  "Belum ada riwayat transaksi",
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: WarnaDesaPay.textSub),
+                ),
+              ],
+            ),
+          );
+        }
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          child: CustomBounce(
-            onTap: () => _tampilkanDetailResiBottomSheet(item),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  // BORDER INDIKATOR STATUS DI SISI KIRI LAYAKNYA CARD DIGITAL PREMIUM
-                  decoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(color: statusColor, width: 5),
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(16),
+        final listTransaksi = snapshot.data!;
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          physics: const BouncingScrollPhysics(),
+          itemCount: listTransaksi.length,
+          itemBuilder: (context, index) {
+            final tx = listTransaksi[index];
+            final String status = tx['status'] ?? 'gagal';
+            final Color statusColor = _getStatusColor(status);
+
+            return CustomBounce(
+              onTap: () {
+                // Arahkan ke halaman detail resi/struk cetak di fase berikutnya
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: WarnaDesaPay.shadow.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
                   child: Row(
                     children: [
+                      // Indikator Warna Garis Vertikal Sisi Kiri (Premium Highlight)
                       Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.08),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(_getStatusIcon(item.status), color: statusColor, size: 22),
+                        width: 5,
+                        height: 84,
+                        color: statusColor,
                       ),
-                      const SizedBox(width: 14),
+                      
+                      // Isi Konten Struk Transaksi Moduler
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.produk,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Tujuan: ${item.tujuan}",
-                              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                            ),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // 1. INFO LAYANAN & TUJUAN
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    // Bulatan Ikon Status (Mencerminkan desain di screenshot)
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.08),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        _getStatusIcon(status),
+                                        color: statusColor,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    
+                                    // Deskripsi Teks Nama Produk & Nomor
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            tx['nama_produk'] ?? "Layanan PPOB",
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                              color: WarnaDesaPay.textMain,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            "Tujuan: ${tx['nomor_tujuan'] ?? '-'}",
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: WarnaDesaPay.textSub,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              const SizedBox(width: 8),
+
+                              // 2. NOMINAL HARGA & TAG STATUS TEXT
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _formatRupiah(tx['harga'] ?? 0),
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w900,
+                                      color: WarnaDesaPay.textMain,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    status.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: statusColor,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            "Rp ${rupiah(item.harga)}",
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.black87),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item.status.toUpperCase(),
-                            style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.3),
-                          ),
-                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
-    );
-  }
-
-  // PREMIUM DIGITAL INVOICE RECEIPT SLIP SHEET
-  void _tampilkanDetailResiBottomSheet(Transaksi item) {
-    final Color statusColor = _getStatusColor(item.status);
-    final String statusText = item.status.toUpperCase();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            top: 24, left: 24, right: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 20),
-              Icon(_getStatusIcon(item.status), size: 64, color: statusColor),
-              const SizedBox(height: 12),
-              Text(
-                statusText == "SUKSES" || statusText == "BERHASIL" ? "Transaksi Berhasil" : statusText == "GAGAL" ? "Transaksi Gagal" : "Transaksi Diproses",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              const Divider(),
-              const SizedBox(height: 8),
-              _buildInvoiceRow("Nama Layanan / Produk", item.produk),
-              _buildInvoiceRow("Nomor Identitas Tujuan", item.tujuan),
-              _buildInvoiceRow("Metode Pembayaran", "Saldo Utama DesaPay"),
-              _buildInvoiceRow("Status Transaksi", statusText),
-              const SizedBox(height: 8),
-              const Divider(),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Total Transaksi", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                  Text(
-                    "Rp ${rupiah(item.harga)}",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: WarnaDesaPay.primary),
-                  )
-                ],
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: statusColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Tutup Salinan Resi", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildInvoiceRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-          const SizedBox(width: 12),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87), textAlign: TextAlign.end)),
-        ],
-      ),
     );
   }
 }
