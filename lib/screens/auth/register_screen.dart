@@ -124,9 +124,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
+      backgroundColor: WarnaDesaPay.lightBg, // PERBAIKAN: Menggunakan lightBg
       appBar: AppBar(
         title: const Text("Daftar Akun"),
+        backgroundColor: WarnaDesaPay.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -230,12 +233,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WarnaDesaPay.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
                 onPressed: loading ? null : register,
                 child: loading
                     ? const CircularProgressIndicator(
                         color: Colors.white,
                       )
-                    : const Text("DAFTAR"),
+                    : const Text(
+                        "DAFTAR",
+                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                      ),
               ),
             ),
 
@@ -245,7 +258,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               onPressed: () {
                 Navigator.pop(context);
               },
-              child: const Text("Sudah punya akun? Login"),
+              child: const Text("Sudah punya akun? Login", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
 
           ],
