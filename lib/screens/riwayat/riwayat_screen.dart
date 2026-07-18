@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../config/warna.dart';
+import '../../models/transaksi.dart'; // Tambahan Import Model Agar Type-Safe
 import '../../services/riwayat_service.dart'; // Menggunakan RiwayatService Core yang sudah kita bangun
 import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce demi konsistensi sentuhan premium
 
@@ -120,7 +121,8 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
   // =========================================================================
   Widget _buildDaftarRiwayat({required String filter}) {
     // Menghubungkan Stream secara reaktif ke Firestore data log transaksi DesaPay
-    return StreamBuilder<List<dynamic>>(
+    // Type-Safety: StreamBuilder kini diekspektasikan menerima List<Transaksi>
+    return StreamBuilder<List<Transaksi>>(
       stream: _riwayatService.streamRiwayatTransaksi(uid: _uid, filter: filter),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -138,22 +140,22 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                 const SizedBox(height: 16),
                 Text(
                   "Belum ada riwayat transaksi",
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: WarnaDesaPay.textSub),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: WarnaDesaPay.textSub),
                 ),
               ],
             ),
           );
         }
 
-        final listTransaksi = snapshot.data!;
+        final List<Transaksi> listTransaksi = snapshot.data!;
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           physics: const BouncingScrollPhysics(),
           itemCount: listTransaksi.length,
           itemBuilder: (context, index) {
-            final tx = listTransaksi[index];
-            final String status = tx['status'] ?? 'gagal';
+            final Transaksi tx = listTransaksi[index];
+            final String status = tx.status; // Menggunakan properti objek type-safe
             final Color statusColor = _getStatusColor(status);
 
             return CustomBounce(
@@ -217,7 +219,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
-                                            tx['nama_produk'] ?? "Layanan PPOB",
+                                            tx.namaProduk,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
@@ -228,7 +230,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            "Tujuan: ${tx['nomor_tujuan'] ?? '-'}",
+                                            "Tujuan: ${tx.nomorTujuan}",
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
@@ -252,7 +254,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    _formatRupiah(tx['harga'] ?? 0),
+                                    _formatRupiah(tx.hargaNominal),
                                     style: const TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w900,
