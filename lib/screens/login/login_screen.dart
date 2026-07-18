@@ -85,7 +85,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
+      // ✅ PERBAIKAN: Ganti WarnaDesaPay.background jadi Colors.white
+      backgroundColor: Colors.white,
 
       body: SafeArea(
         child: SingleChildScrollView(
