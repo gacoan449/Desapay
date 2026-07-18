@@ -1,74 +1,105 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-class DigiflazzService {
-  // ===================================================
-  // ENDPOINT RESMI API DIGIFLAZZ (UPDATED & CORRECTED)
-  // ===================================================
+/// Kontrak Layanan Digiflazz Service untuk DesaPay (Domain Layer)
+abstract class IDigiflazzService {
+  Future<List<dynamic>> ambilSemuaProduk();
+  Future<Map<String, dynamic>> kirimTransaksi({
+    required String buyerSkuCode,
+    required String customerNo,
+  });
+  Future<Map<String, dynamic>> mintaTiketDeposit({
+    required int jumlahNominal,
+    required String bank,
+    required String namaPemilik,
+  });
+  Future<Map<String, dynamic>> cekStatusDeposit({
+    required int jumlahNominal,
+    required String bank,
+    required String namaPemilik,
+  });
+  Future<int> cekSaldoModal();
+}
+
+/// Implementasi Layanan Integrasi API Digiflazz (Data Layer)
+class DigiflazzService implements IDigiflazzService {
+  static const String _baseUrlPriceList = 'https://api.digiflazz.com/v1/price-list';
   static const String _baseUrlTransaction = 'https://api.digiflazz.com/v1/transaction';
   static const String _baseUrlDeposit = 'https://api.digiflazz.com/v1/deposit';
   static const String _baseUrlCekSaldo = 'https://api.digiflazz.com/v1/cek-saldo';
-  
-  // Data akun testing/production Anda
-  final String _username = 'rukaxigqnvno'; 
-  final String _apiKey = "ba2b7ab6-33b0-5a48-b7f7-56a2f1b30d0b";
+
+  /// Mengambil data kredensial secara aman dari environment variables (.env)
+  String get _username => dotenv.env['DIGIFLAZZ_USERNAME'] ?? '';
+  String get _apiKey => dotenv.env['DIGIFLAZZ_API_KEY'] ?? '';
+
+  /// Helper internal untuk melakukan enkripsi MD5 sesuai regulasi Digiflazz
+  String _generateSign(String suffix) {
+    final String rawString = _username + _apiKey + suffix;
+    return md5.convert(utf8.encode(rawString)).toString();
+  }
 
   // ===================================================
   // 1. FUNGSI AMBIL DAFTAR HARGA + MARKUP UNTUNG Rp 1.000
   // ===================================================
+  @override
   Future<List<dynamic>> ambilSemuaProduk() async {
     try {
-      final String signRaw = _username + _apiKey + 'pricelist';
-      final String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String sign = _generateSign('pricelist');
 
       final response = await http.post(
-        Uri.parse(_baseUrlTransaction), // DIKOREKSI: Menggunakan endpoint transaksi yang benar
+        Uri.parse(_baseUrlPriceList),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "cmd": "prepaid",
           "username": _username,
           "sign": sign
         }),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> produkAsli = data['data'] ?? [];
+        final Map<String, dynamic> data = jsonDecode(response.body);
         
-        const int keuntunganKita = 1000;
+        // Memeriksa struktur objek data dari respon Digiflazz
+        if (data['data'] != null && data['data'] is List) {
+          final List<dynamic> produkAsli = data['data'];
+          const int keuntunganKita = 1000;
 
-        // Type-safe mapping untuk menghindari crash konversi data numerik
-        return produkAsli.map((item) {
-          final int hargaAsli = int.tryParse(item['price'].toString()) ?? 0;
-          item['price'] = hargaAsli + keuntunganKita;
-          return item;
-        }).toList();
-      } else {
-        if (kDebugMode) print("Pricelist Error: Status Code ${response.statusCode}");
+          return produkAsli.map((item) {
+            final Map<String, dynamic> itemMap = Map<String, dynamic>.from(item);
+            final int hargaAsli = int.tryParse(itemMap['price'].toString()) ?? 0;
+            itemMap['price'] = hargaAsli + keuntunganKita;
+            return itemMap;
+          }).toList();
+        }
+        
+        if (data['data'] != null && data['data']['message'] != null) {
+          throw Exception(data['data']['message']);
+        }
         return [];
+      } else {
+        throw Exception("Server merespon dengan kode status: ${response.statusCode}");
       }
     } catch (e) {
-      if (kDebugMode) print("Pricelist Exception: $e");
-      return [];
+      throw Exception("Gagal memuat daftar produk Digiflazz: ${e.toString()}");
     }
   }
 
   // ===================================================
   // 2. FUNGSI TEMBAK TRANSAKSI PULSA/TOKEN/E-WALLET/PPOB
   // ===================================================
+  @override
   Future<Map<String, dynamic>> kirimTransaksi({
-    required String buyerSkuCode, 
-    required String customerNo,   
+    required String buyerSkuCode,
+    required String customerNo,
   }) async {
     try {
       final String refId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
-      final String signRaw = _username + _apiKey + refId;
-      final String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String sign = _generateSign(refId);
 
       final response = await http.post(
-        Uri.parse(_baseUrlTransaction), // DIKOREKSI: Menggunakan endpoint transaksi yang benar
+        Uri.parse(_baseUrlTransaction),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": _username,
@@ -77,77 +108,90 @@ class DigiflazzService {
           "ref_id": refId,
           "sign": sign
         }),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['data'] ?? {'status': 'Gagal', 'message': 'Format respon server tidak sesuai'};
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+        return {'status': 'Gagal', 'message': 'Format respon data transaksi tidak valid'};
       } else {
-        return {'status': 'Gagal', 'message': 'Server merespon dengan status ${response.statusCode}'};
+        return {'status': 'Gagal', 'message': 'Server transaksi merespon dengan kode: ${response.statusCode}'};
       }
     } catch (e) {
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi sistem: $e'};
+      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi transaksi: ${e.toString()}'};
     }
   }
 
   // ===================================================
   // 3. FUNGSI MINTA TIKET DEPOSIT / ISI SALDO AGEN
   // ===================================================
+  @override
   Future<Map<String, dynamic>> mintaTiketDeposit({
-    required int jumlahNominal, 
+    required int jumlahNominal,
+    required String bank,
+    required String namaPemilik,
   }) async {
     try {
-      final String signRaw = _username + _apiKey + 'deposit';
-      final String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String sign = _generateSign('deposit');
 
       final response = await http.post(
-        Uri.parse(_baseUrlDeposit), // DIKOREKSI: Menggunakan endpoint deposit yang benar
+        Uri.parse(_baseUrlDeposit),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": _username,
           "amount": jumlahNominal,
-          "Bank": "BCA", 
-          "owner_name": "Pemilik DesaPay", 
+          "Bank": bank.toUpperCase(),
+          "owner_name": namaPemilik.trim(),
           "sign": sign
         }),
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['data'] ?? {'status': 'Gagal', 'message': 'Format respon server tidak sesuai'};
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+        return {'status': 'Gagal', 'message': 'Format data tiket deposit tidak sesuai'};
       } else {
-        return {'status': 'Gagal', 'message': 'Server merespon dengan status ${response.statusCode}'};
+        return {'status': 'Gagal', 'message': 'Server deposit merespon dengan kode: ${response.statusCode}'};
       }
     } catch (e) {
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi: $e'};
+      return {'status': 'Gagal', 'message': 'Terjadi masalah jaringan deposit: ${e.toString()}'};
     }
   }
 
   // ===================================================
   // 4. FUNGSI CEK STATUS TRANSFER DEPOSIT AGEN
   // ===================================================
+  @override
   Future<Map<String, dynamic>> cekStatusDeposit({
     required int jumlahNominal,
+    required String bank,
+    required String namaPemilik,
   }) async {
     try {
-      final String signRaw = _username + _apiKey + 'deposit';
-      final String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String sign = _generateSign('deposit');
 
       final response = await http.post(
-        Uri.parse(_baseUrlDeposit), // DIKOREKSI: Menggunakan endpoint deposit yang benar
+        Uri.parse(_baseUrlDeposit),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           "username": _username,
           "amount": jumlahNominal,
-          "Bank": "BCA",
-          "owner_name": "Pemilik DesaPay",
+          "Bank": bank.toUpperCase(),
+          "owner_name": namaPemilik.trim(),
           "sign": sign
         }),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 25));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['data'] ?? {};
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        if (data['data'] != null) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+        return {};
       } else {
         return {};
       }
@@ -159,10 +203,10 @@ class DigiflazzService {
   // ===================================================
   // 5. FUNGSI CEK SALDO MODAL UTAMA AGEN
   // ===================================================
+  @override
   Future<int> cekSaldoModal() async {
     try {
-      final String signRaw = _username + _apiKey + "depo";
-      final String sign = md5.convert(utf8.encode(signRaw)).toString();
+      final String sign = _generateSign('depo');
 
       final response = await http.post(
         Uri.parse(_baseUrlCekSaldo),
@@ -172,11 +216,10 @@ class DigiflazzService {
           "username": _username,
           "sign": sign
         }),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // Proteksi null safety pada ekstraksi nilai saldo modal agen
+        final Map<String, dynamic> data = jsonDecode(response.body);
         if (data['data'] != null && data['data']['deposit'] != null) {
           return int.tryParse(data['data']['deposit'].toString()) ?? 0;
         }
