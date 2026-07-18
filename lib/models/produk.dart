@@ -1,62 +1,82 @@
+import 'package:intl/intl.dart';
+
+/// Representasi kategori produk di ekosistem Fintech DesaPay
+enum KategoriProduk { pulsa, paketData, tokenPln, eWallet, ppobLainnya }
+
+/// Model Data Objek Produk PPOB DesaPay (Domain & Data Layer)
 class Produk {
   final String kode;
   final String nama;
   final int harga;
+  final String provider;
+  final KategoriProduk kategori;
+  final bool tersedia;
+  final String deskripsi;
 
   const Produk({
     required this.kode,
     required this.nama,
     required this.harga,
+    this.provider = 'TELKOMSEL',
+    this.kategori = KategoriProduk.pulsa,
+    this.tersedia = true,
+    this.deskripsi = 'Proses instan 24 jam non-stop',
   });
 
-  // ===================================================
-  // 1. FACTORY FROM JSON (SAFE TYPE-CASTING COMPLIANT)
-  // ===================================================
-  /// Membuat objek [Produk] secara aman dari respons mentah Map/JSON API
-  factory Produk.fromJson(Map<String, dynamic> json) {
+  /// Factory untuk memparsing data JSON ter-markup dari DigiflazzService secara aman
+  factory Produk.fromDigiflazz(Map<String, dynamic> json) {
+    final String skuCode = json['buyer_sku_code']?.toString() ?? '';
+    final String productName = json['product_name']?.toString() ?? 'Produk Tanpa Nama';
+    final int mappedPrice = int.tryParse(json['price'].toString()) ?? 0;
+    final String brand = (json['brand']?.toString() ?? 'LAINNYA').toUpperCase();
+    final bool isAvailable = json['buyer_product_status'] == true && json['seller_product_status'] == true;
+    final String desc = json['desc']?.toString() ?? 'Proses instan 24 jam non-stop';
+
+    // Deteksi Kategori Secara Otomatis Berdasarkan Aturan Bisnis Fintech DesaPay
+    KategoriProduk detectedCategory = KategoriProduk.pulsa;
+    final String lowerSku = skuCode.toLowerCase();
+    final String lowerName = productName.toLowerCase();
+
+    if (lowerSku.contains('pln') || lowerName.contains('token') || lowerName.contains('listrik')) {
+      detectedCategory = KategoriProduk.tokenPln;
+    } else if (lowerSku.contains('data') || lowerSku.contains('paket') || lowerName.contains('kuota')) {
+      detectedCategory = KategoriProduk.paketData;
+    } else if (lowerSku.contains('gopay') || lowerSku.contains('ovo') || lowerSku.contains('dana') || lowerSku.contains('shopee')) {
+      detectedCategory = KategoriProduk.eWallet;
+    } else if (lowerSku.contains('pdam') || lowerSku.contains('bpjs') || lowerSku.contains('pasca')) {
+      detectedCategory = KategoriProduk.ppobLainnya;
+    }
+
     return Produk(
-      // Mengubah key 'buyer_sku_code' dari Digiflazz, fallback ke 'kode' jika lokal
-      kode: (json["buyer_sku_code"] ?? json["kode"] ?? "").toString(),
-      // Mengubah key 'product_name' dari Digiflazz, fallback ke 'nama' jika lokal
-      nama: (json["product_name"] ?? json["nama"] ?? "-").toString(),
-      // DIKOREKSI: Proteksi mutlak tipe data int untuk mencegah error type-casting double/string
-      harga: int.tryParse((json["price"] ?? json["harga"] ?? 0).toString()) ?? 0,
+      kode: skuCode,
+      nama: productName,
+      harga: mappedPrice,
+      provider: brand,
+      kategori: detectedCategory,
+      tersedia: isAvailable,
+      deskripsi: desc,
     );
   }
 
-  // ===================================================
-  // 2. TO JSON (UNTUK LOCAL CACHING OFFLINE)
-  // ===================================================
-  /// Mengonversi objek [Produk] menjadi format Map/JSON untuk local storage
+  /// Menghasilkan representasi teks nominal Rupiah yang rapi dan premium untuk UI
+  String get hargaFormatRupiah {
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    ).format(harga);
+  }
+
+  /// Konversi objek model ke Map/JSON untuk penyimpanan lokal / caching
   Map<String, dynamic> toJson() {
     return {
-      "kode": kode,
-      "nama": nama,
-      "harga": harga,
+      'kode': kode,
+      'nama': nama,
+      'harga': harga,
+      'provider': provider,
+      'kategori': kategori.index,
+      'tersedia': tersedia,
+      'deskripsi': deskripsi,
     };
-  }
-
-  // ===================================================
-  // 3. COPY WITH HELPER (STATE-MANAGEMENT FRIENDLY)
-  // ===================================================
-  /// Memudahkan modifikasi parameter objek secara independen dan aman
-  Produk copyWith({
-    String? kode,
-    String? nama,
-    int? harga,
-  }) {
-    return Produk(
-      kode: kode ?? this.kode,
-      nama: nama ?? this.nama,
-      harga: harga ?? this.harga,
-    );
-  }
-
-  // ===================================================
-  // 4. TO STRING OVERRIDE (FOR LUXURY DEBUGGING)
-  // ===================================================
-  @override
-  String toString() {
-    return 'Produk(kode: $kode, nama: $nama, harga: $harga)';
   }
 }
