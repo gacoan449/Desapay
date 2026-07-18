@@ -2,64 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Import Konfigurasi & Widget Modular Utama (CTO Standard)
 import '../../config/warna.dart';
+import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce pusat terstandardisasi
 
-// Pembungkus Animasi Memantul (Micro-interaction) Premium untuk Tombol Aksi
-class CustomBounce extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-  final bool isDisabled;
-
-  const CustomBounce({
-    super.key, 
-    required this.child, 
-    required this.onTap,
-    this.isDisabled = false,
-  });
-
-  @override
-  State<CustomBounce> createState() => _CustomBounceState();
-}
-
-class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 100),
-    );
-    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => widget.isDisabled ? null : _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        if (!widget.isDisabled) widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: widget.child,
-      ),
-    );
-  }
-}
-
+/// Halaman Ubah Data Profil Fintek Premium DesaPay (Presentation Layer)
 class EditProfilScreen extends StatefulWidget {
   const EditProfilScreen({super.key});
 
@@ -68,122 +15,113 @@ class EditProfilScreen extends StatefulWidget {
 }
 
 class _EditProfilScreenState extends State<EditProfilScreen> {
-  final nama = TextEditingController();
-  final email = TextEditingController();
-  final phone = TextEditingController();
+  final TextEditingController _namaController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
-  final auth = FirebaseAuth.instance;
-  final firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  bool loading = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    loadData();
-  }
-
-  Future<void> loadData() async {
-    final user = auth.currentUser;
-    if (user == null) return;
-    
-    final uid = user.uid;
-    final doc = await firestore.collection("users").doc(uid).get();
-
-    if (!doc.exists) return;
-
-    final data = doc.data()!;
-
-    nama.text = data["nama"] ?? "";
-    email.text = data["email"] ?? "";
-    phone.text = data["phone"] ?? "";
+    _loadDataPengguna();
   }
 
   @override
   void dispose() {
-    nama.dispose();
-    email.dispose();
-    phone.dispose();
+    _namaController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
-  Future<void> simpan() async {
-    if (nama.text.trim().isEmpty ||
-        email.text.trim().isEmpty ||
-        phone.text.trim().isEmpty) {
+  /// Memuat data terkini pengguna dari repositori Firestore
+  Future<void> _loadDataPengguna() async {
+    final User? user = _auth.currentUser;
+    if (user == null) return;
+    
+    try {
+      final doc = await _firestore.collection("users").doc(user.uid).get();
+      if (!doc.exists || !mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Semua data wajib diisi secara lengkap"),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
+      final data = doc.data()!;
+      setState(() {
+        _namaController.text = data["nama"] ?? "";
+        _emailController.text = data["email"] ?? "";
+        _phoneController.text = data["phone"] ?? "";
+      });
+    } catch (e) {
+      debugPrint("Error loading user data: $e");
+    }
+  }
+
+  /// Mengirim pembaruan entitas profil ke Firestore dengan validasi ketat
+  Future<void> _simpanPerubahan() async {
+    final String namaTrim = _namaController.text.trim();
+    final String emailTrim = _emailController.text.trim();
+    final String phoneTrim = _phoneController.text.trim();
+
+    if (namaTrim.isEmpty || emailTrim.isEmpty || phoneTrim.isEmpty) {
+      _tampilkanSnackBar("Semua data wajib diisi secara lengkap", isError: true);
       return;
     }
 
-    setState(() {
-      loading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final user = auth.currentUser;
+      final User? user = _auth.currentUser;
       if (user != null) {
-        final uid = user.uid;
-
-        await firestore.collection("users").doc(uid).update({
-          "nama": nama.text.trim(),
-          "email": email.text.trim(),
-          "phone": phone.text.trim(),
-        });
-
-        setState(() {
-          loading = false;
+        await _firestore.collection("users").doc(user.uid).update({
+          "nama": namaTrim,
+          "email": emailTrim,
+          "phone": phoneTrim,
         });
 
         if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Profil berhasil diperbarui"),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            backgroundColor: Colors.green.shade600,
-          ),
-        );
-
+        setState(() => _isLoading = false);
+        _tampilkanSnackBar("Profil Anda berhasil diperbarui", isError: false);
         Navigator.pop(context);
       }
     } catch (e) {
-      setState(() {
-        loading = false;
-      });
-
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
+      setState(() => _isLoading = false);
+      _tampilkanSnackBar(e.toString(), isError: true);
     }
+  }
+
+  /// Helper penampil notifikasi SnackBar premium
+  void _tampilkanSnackBar(String pesan, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          pesan, 
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: isError ? WarnaDesaPay.danger : WarnaDesaPay.success,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xffF8FAFC),
+      backgroundColor: isDark ? WarnaDesaPay.darkBg : WarnaDesaPay.lightBg,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
+        centerTitle: true,
         title: const Text(
           "Ubah Data Profil",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
@@ -195,39 +133,46 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           children: [
-            // AVATAR DECORATION TOP BANNER LOOK
+            // =========================================================================
+            // 1. DEKORASI FOTO PROFIL & CIRCLING CAMERA ICON PANEL
+            // =========================================================================
             Center(
               child: Stack(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isDark ? WarnaDesaPay.darkCard : Colors.white,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                          color: WarnaDesaPay.shadow.withOpacity(0.06),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
                     child: CircleAvatar(
                       radius: 46,
                       backgroundColor: WarnaDesaPay.primary.withOpacity(0.08),
-                      child: Icon(Icons.person_rounded, size: 54, color: WarnaDesaPay.primary),
+                      child: const Icon(Icons.person_rounded, size: 54, color: WarnaDesaPay.primary),
                     ),
                   ),
                   Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Colors.orange,
-                        shape: BoxShape.circle,
+                    bottom: 2,
+                    right: 2,
+                    child: CustomBounce(
+                      onTap: () {
+                        // Implementasi pemilihan media gambar kustom di masa depan
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: const BoxDecoration(
+                          color: WarnaDesaPay.warning,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                       ),
-                      child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                     ),
                   )
                 ],
@@ -236,17 +181,19 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
             
             const SizedBox(height: 32),
 
-            // FORM INPUT PREMIUM CARD PANEL
+            // =========================================================================
+            // 2. FORM INPUT PREMIUM DENGAN DUKUNGAN THEMED COMPATIBILITY
+            // =========================================================================
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? WarnaDesaPay.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: WarnaDesaPay.shadow.withOpacity(0.04),
                     blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
@@ -254,14 +201,16 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildModernTextField(
-                    controller: nama,
+                    context: context,
+                    controller: _namaController,
                     label: "Nama Lengkap Sesuai KTP",
                     hint: "Masukkan nama lengkap",
                     icon: Icons.person_outline_rounded,
                   ),
                   const SizedBox(height: 20),
                   _buildModernTextField(
-                    controller: email,
+                    context: context,
+                    controller: _emailController,
                     label: "Alamat Email Aktif",
                     hint: "contoh@domain.com",
                     icon: Icons.email_outlined,
@@ -269,7 +218,8 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   ),
                   const SizedBox(height: 20),
                   _buildModernTextField(
-                    controller: phone,
+                    context: context,
+                    controller: _phoneController,
                     label: "Nomor Handphone Terdaftar",
                     hint: "Contoh: 08xxxxxxxxxx",
                     icon: Icons.phone_android_rounded,
@@ -281,28 +231,32 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
             const SizedBox(height: 36),
 
-            // ELEVATED BUTTON WITH BOUNCE MICRO-INTERACTION
+            // =========================================================================
+            // 3. E-WALLET ACTION BUTTON DENGAN UKURAN KONSISTEN & MIKRO INTERAKSI
+            // =========================================================================
             CustomBounce(
-              onTap: simpan,
-              isDisabled: loading,
+              onTap: _simpanPerubahan,
+              isDisabled: _isLoading,
               child: Container(
                 width: double.infinity,
                 height: 54,
                 decoration: BoxDecoration(
-                  color: loading ? Colors.grey.shade400 : WarnaDesaPay.primary,
+                  color: _isLoading 
+                      ? (isDark ? Colors.grey.shade700 : Colors.grey.shade400) 
+                      : WarnaDesaPay.primary,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: loading 
+                  boxShadow: _isLoading 
                     ? [] 
                     : [
                         BoxShadow(
-                          color: WarnaDesaPay.primary.withOpacity(0.2),
-                          blurRadius: 12,
+                          color: WarnaDesaPay.primary.withOpacity(0.24),
+                          blurRadius: 14,
                           offset: const Offset(0, 6),
                         ),
                       ],
                 ),
                 alignment: Alignment.center,
-                child: loading
+                child: _isLoading
                     ? const SizedBox(
                         width: 24,
                         height: 24,
@@ -315,9 +269,9 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                         "SIMPAN PERUBAHAN",
                         style: TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                           fontSize: 14,
-                          letterSpacing: 0.8,
+                          letterSpacing: 0.6,
                         ),
                       ),
               ),
@@ -328,36 +282,42 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     );
   }
 
+  /// Builder modular Input Field terintegrasi dengan Dekorasi Global Aplikasi
   Widget _buildModernTextField({
+    required BuildContext context,
     required TextEditingController controller,
     required String label,
     required String hint,
     required IconData icon,
     TextInputType type = TextInputType.text,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+          style: TextStyle(
+            fontSize: 12, 
+            fontWeight: FontWeight.w800, 
+            color: isDark ? WarnaDesaPay.textDarkSub : WarnaDesaPay.textSub,
+            letterSpacing: 0.2,
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           keyboardType: type,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFFF1F5F9),
+          style: TextStyle(
+            fontSize: 15, 
+            fontWeight: FontWeight.w700, 
+            color: isDark ? WarnaDesaPay.textDarkMain : WarnaDesaPay.textMain
+          ),
+          decoration: theme.inputDecorationTheme.copyWith(
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.normal),
             prefixIcon: Icon(icon, color: WarnaDesaPay.primary, size: 20),
-            contentPadding: const EdgeInsets.symmetric(vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
           ),
         ),
       ],
