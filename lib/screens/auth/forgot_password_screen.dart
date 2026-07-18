@@ -77,10 +77,13 @@ class _ForgotPasswordScreenState
   Widget build(BuildContext context) {
 
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
+      backgroundColor: WarnaDesaPay.lightBg, // PERBAIKAN: Menggunakan lightBg
 
       appBar: AppBar(
         title: const Text("Lupa Password"),
+        backgroundColor: WarnaDesaPay.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
 
       body: Padding(
@@ -95,7 +98,7 @@ class _ForgotPasswordScreenState
             const Icon(
               Icons.lock_reset,
               size: 80,
-              color: Colors.blue,
+              color: WarnaDesaPay.primary, // Penyesuaian estetik ke warna utama aplikasi
             ),
 
             const SizedBox(height: 20),
@@ -105,6 +108,7 @@ class _ForgotPasswordScreenState
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
+                color: WarnaDesaPay.textMain,
               ),
             ),
 
@@ -113,6 +117,7 @@ class _ForgotPasswordScreenState
             const Text(
               "Masukkan email yang terdaftar untuk menerima link reset password.",
               textAlign: TextAlign.center,
+              style: TextStyle(color: WarnaDesaPay.textSub),
             ),
 
             const SizedBox(height: 30),
@@ -135,12 +140,22 @@ class _ForgotPasswordScreenState
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WarnaDesaPay.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
                 onPressed: loading ? null : resetPassword,
                 child: loading
                     ? const CircularProgressIndicator(
                         color: Colors.white,
                       )
-                    : const Text("KIRIM LINK RESET"),
+                    : const Text(
+                        "KIRIM LINK RESET",
+                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                      ),
               ),
             ),
 
