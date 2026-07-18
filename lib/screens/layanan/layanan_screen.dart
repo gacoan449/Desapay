@@ -1,68 +1,38 @@
 import 'package:flutter/material.dart';
-import '../../config/warna.dart';
 
-// JALUR IMPORT GLOBAL KE SCREENS LAIN
+// PENGATURAN TEMA & WIDGET MODULAR (CTO STANDARD)
+import '../../config/warna.dart';
+import '../../widgets/menu_item.dart'; // Memuat MenuItem dan CustomBounce yang sudah distandarisasi
+
+// JALUR IMPORT GLOBAL KE SCREENS LAYANAN PPOB
 import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../pulsa/pulsa_screen.dart';
 import '../pascabayar_screen.dart';
 
-// ==========================================
-// CUSTOM BOUNCE ANIMATION WIDGET
-// ==========================================
-class CustomBounce extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
+// =========================================================================
+// DATA CLASS: STRONG-TYPED MODEL UNTUK ITEM LAYANAN (ANTI RUNTIME ERROR)
+// =========================================================================
+class DataLayanan {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final Widget? target;
+  final String? pesan;
 
-  const CustomBounce({super.key, required this.child, required this.onTap});
-
-  @override
-  State<CustomBounce> createState() => _CustomBounceState();
+  const DataLayanan({
+    required this.icon,
+    required this.title,
+    required this.color,
+    this.target,
+    this.pesan,
+  });
 }
 
-class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 100),
-    );
-    _scale = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: widget.child,
-      ),
-    );
-  }
-}
-
-// ==========================================
-// MAIN SCREEN WINDOWS
-// ==========================================
+// =========================================================================
+// MAIN SCREEN WINDOWS: HALAMAN SEMUA LAYANAN DESAPAY
+// =========================================================================
 class LayananScreen extends StatefulWidget {
   const LayananScreen({super.key});
 
@@ -74,7 +44,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
 
-  // Global Keys untuk auto-scroll ketika tab ditekan
+  // Global Keys untuk auto-scroll ketika tab ditekan (Sticky Tabs)
   final GlobalKey _keyKategori1 = GlobalKey();
   final GlobalKey _keyKategori2 = GlobalKey();
   final GlobalKey _keyKategori3 = GlobalKey();
@@ -92,6 +62,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  /// Menangani pergerakan scroll reaktif berdasarkan tab yang dipilih
   void _scrollToSection(GlobalKey key) {
     final context = key.currentContext;
     if (context != null) {
@@ -99,6 +70,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
         context,
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
+        alignment: 0.05, // Memberikan sedikit jarak (offset) dari ujung atas layar
       );
     }
   }
@@ -106,7 +78,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffF8FAFC),
+      backgroundColor: WarnaDesaPay.lightBg,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
@@ -119,7 +91,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        // STICKY TABS PLATFORM (STYLE DANA LENGKAP)
+        // STICKY TABS PLATFORM (STYLE FINTECH PREMIUM)
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
@@ -128,9 +100,11 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
             child: TabBar(
               controller: _tabController,
               indicatorColor: WarnaDesaPay.primary,
+              indicatorWeight: 3, // Indikator lebih tebal & tegas
               labelColor: WarnaDesaPay.primary,
-              unselectedLabelColor: Colors.grey.shade500,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              unselectedLabelColor: WarnaDesaPay.textSub,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               onTap: (index) {
                 if (index == 0) _scrollToSection(_keyKategori1);
                 if (index == 1) _scrollToSection(_keyKategori2);
@@ -139,7 +113,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
               tabs: const [
                 Tab(text: "Pulsa & Data"),
                 Tab(text: "E-Wallet"),
-                Tab(text: "Tagihan Bulanan"),
+                Tab(text: "Biller PPOB"),
               ],
             ),
           ),
@@ -152,93 +126,63 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ==========================================
             // KATEGORI 1: PULSA & DATA
-            Container(
+            // ==========================================
+            _buildSectionKategori(
               key: _keyKategori1,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-              ),
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildJudulHeader(Icons.phone_iphone_rounded, "Pulsa & Paket Data"),
-                  const SizedBox(height: 16),
-                  _buildGridMenu(context, [
-                    _item(Icons.phone_android_rounded, "Pulsa", const Color(0xFFFF9F43), const PulsaScreen()),
-                    _item(Icons.swap_horizontal_circle_rounded, "Transfer Pulsa", const Color(0xFFFF6B6B), const PulsaScreen()),
-                    _item(Icons.flash_on_rounded, "Token PLN", const Color(0xFFFFD200), const PlnScreen()),
-                    _item(Icons.star_rounded, "Tsel Spesial", const Color(0xFFE52229), const PaketScreen()),
-                    _item(Icons.bolt_rounded, "Aktivasi Tsel", const Color(0xFFFA5252), const PaketScreen()),
-                    _item(Icons.phone_in_talk_rounded, "Paket Nelpon", const Color(0xFF108EE9), null, pesan: "Paket Nelpon"),
-                    _item(Icons.signal_cellular_alt_rounded, "Kuota Tri", const Color(0xFF9B5DE5), const PaketScreen()),
-                    _item(Icons.signal_cellular_alt_rounded, "Kuota Indosat", const Color(0xFFF15BB5), const PaketScreen()),
-                    _item(Icons.signal_cellular_alt_rounded, "Kuota Smart", const Color(0xFFF15BB5), const PaketScreen()),
-                    _item(Icons.signal_cellular_alt_rounded, "Kuota by.U", const Color(0xFF00F5D4), const PaketScreen()),
-                    _item(Icons.signal_cellular_alt_rounded, "Kuota XL", const Color(0xFF00BBF9), const PaketScreen()),
-                    _item(Icons.signal_cellular_alt_rounded, "Kuota AXIS", const Color(0xFF8338EC), const PaketScreen()),
-                  ]),
-                ],
-              ),
+              icon: Icons.phone_iphone_rounded,
+              judul: "Pulsa & Paket Data",
+              items: [
+                const DataLayanan(icon: Icons.phone_android_rounded, title: "Pulsa", color: Color(0xFFFF9F43), target: PulsaScreen()),
+                const DataLayanan(icon: Icons.swap_horizontal_circle_rounded, title: "Transfer Pulsa", color: Color(0xFFFF6B6B), target: PulsaScreen()),
+                const DataLayanan(icon: Icons.flash_on_rounded, title: "Token PLN", color: Color(0xFFD97706), target: PlnScreen()),
+                const DataLayanan(icon: Icons.star_rounded, title: "Tsel Spesial", color: Color(0xFFE52229), target: PaketScreen()),
+                const DataLayanan(icon: Icons.bolt_rounded, title: "Aktivasi Tsel", color: Color(0xFFFA5252), target: PaketScreen()),
+                const DataLayanan(icon: Icons.phone_in_talk_rounded, title: "Paket Nelpon", color: Color(0xFF0284C7), pesan: "Paket Nelpon"),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Tri", color: Color(0xFF9333EA), target: PaketScreen()),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Indosat", color: Color(0xFFDB2777), target: PaketScreen()),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Smart", color: Color(0xFFDB2777), target: PaketScreen()),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota by.U", color: Color(0xFF0D9488), target: PaketScreen()),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota XL", color: Color(0xFF0284C7), target: PaketScreen()),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota AXIS", color: Color(0xFF7E22CE), target: PaketScreen()),
+              ],
             ),
 
+            // ==========================================
             // KATEGORI 2: E-WALLET
-            Container(
+            // ==========================================
+            _buildSectionKategori(
               key: _keyKategori2,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-              ),
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildJudulHeader(Icons.account_balance_wallet_rounded, "E-Wallet & E-Money"),
-                  const SizedBox(height: 16),
-                  _buildGridMenu(context, [
-                    _item(Icons.directions_car_filled_rounded, "MAXIM", const Color(0xFFFBC531), const EwalletScreen(jenisEwallet: "MAXIM")),
-                    _item(Icons.electric_moped_rounded, "GRAB Driver", const Color(0xFF4CD137), const EwalletScreen(jenisEwallet: "GRAB")),
-                    _item(Icons.two_wheeler_rounded, "inDrive", const Color(0xFF44BD32), const EwalletScreen(jenisEwallet: "INDRIVE")),
-                    _item(Icons.motorcycle_rounded, "Gojek Driver", const Color(0xFF009432), const EwalletScreen(jenisEwallet: "Gojek Driver")),
-                    _item(Icons.shopping_bag_rounded, "ShopeePay", const Color(0xFFFF7675), const EwalletScreen(jenisEwallet: "ShopeePay")),
-                    _item(Icons.account_balance_wallet_rounded, "DANA", const Color(0xFF00a8ff), const EwalletScreen(jenisEwallet: "DANA")),
-                    _item(Icons.payment_rounded, "LinkAja", const Color(0xFFEA2027), const EwalletScreen(jenisEwallet: "LinkAja")),
-                    _item(Icons.credit_card_rounded, "OVO", const Color(0xFF9C88FF), const EwalletScreen(jenisEwallet: "OVO")),
-                    _item(Icons.wallet_rounded, "GOPAY", const Color(0xFF00C2FF), const EwalletScreen(jenisEwallet: "GoPay")),
-                  ]),
-                ],
-              ),
+              icon: Icons.account_balance_wallet_rounded,
+              judul: "E-Wallet & E-Money",
+              items: [
+                const DataLayanan(icon: Icons.directions_car_filled_rounded, title: "MAXIM", color: Color(0xFFF59E0B), target: EwalletScreen(jenisEwallet: "MAXIM")),
+                const DataLayanan(icon: Icons.electric_moped_rounded, title: "GRAB Driver", color: Color(0xFF16A34A), target: EwalletScreen(jenisEwallet: "GRAB")),
+                const DataLayanan(icon: Icons.two_wheeler_rounded, title: "inDrive", color: Color(0xFF22C55E), target: EwalletScreen(jenisEwallet: "INDRIVE")),
+                const DataLayanan(icon: Icons.motorcycle_rounded, title: "Gojek Driver", color: Color(0xFF15803D), target: EwalletScreen(jenisEwallet: "Gojek Driver")),
+                const DataLayanan(icon: Icons.shopping_bag_rounded, title: "ShopeePay", color: Color(0xFFF43F5E), target: EwalletScreen(jenisEwallet: "ShopeePay")),
+                const DataLayanan(icon: Icons.account_balance_wallet_rounded, title: "DANA", color: Color(0xFF0284C7), target: EwalletScreen(jenisEwallet: "DANA")),
+                const DataLayanan(icon: Icons.payment_rounded, title: "LinkAja", color: Color(0xFFDC2626), target: EwalletScreen(jenisEwallet: "LinkAja")),
+                const DataLayanan(icon: Icons.credit_card_rounded, title: "OVO", color: Color(0xFF7C3AED), target: EwalletScreen(jenisEwallet: "OVO")),
+                const DataLayanan(icon: Icons.wallet_rounded, title: "GOPAY", color: Color(0xFF0EA5E9), target: EwalletScreen(jenisEwallet: "GoPay")),
+              ],
             ),
 
+            // ==========================================
             // KATEGORI 3: BILLER PPOB
-            Container(
+            // ==========================================
+            _buildSectionKategori(
               key: _keyKategori3,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-              ),
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildJudulHeader(Icons.receipt_long_rounded, "Tagihan Bulanan & PPOB"),
-                  const SizedBox(height: 16),
-                  _buildGridMenu(context, [
-                    _item(Icons.receipt_long_rounded, "Pascabayar", const Color(0xFF487EB0), const PascabayarScreen(jenisLayanan: "PASCABAYAR")),
-                    _item(Icons.electric_meter_rounded, "Tagihan PLN", const Color(0xFF2F3640), const PascabayarScreen(jenisLayanan: "LISTRIK")),
-                    _item(Icons.water_drop_rounded, "Air PDAM", const Color(0xFF00A8FF), const PascabayarScreen(jenisLayanan: "PDAM")),
-                    _item(Icons.health_and_safety_rounded, "BPJS Kesh", const Color(0xFF4CD137), const PascabayarScreen(jenisLayanan: "BPJS")),
-                    _item(Icons.tv_rounded, "TV Kabel", const Color(0xFFE84118), const PascabayarScreen(jenisLayanan: "TV KABEL")),
-                  ]),
-                ],
-              ),
+              icon: Icons.receipt_long_rounded,
+              judul: "Tagihan Bulanan & PPOB",
+              items: [
+                const DataLayanan(icon: Icons.receipt_long_rounded, title: "Pascabayar", color: Color(0xFF334155), target: PascabayarScreen(jenisLayanan: "PASCABAYAR")),
+                const DataLayanan(icon: Icons.electric_meter_rounded, title: "Tagihan PLN", color: Color(0xFFD97706), target: PascabayarScreen(jenisLayanan: "LISTRIK")),
+                const DataLayanan(icon: Icons.water_drop_rounded, title: "Air PDAM", color: Color(0xFF0284C7), target: PascabayarScreen(jenisLayanan: "PDAM")),
+                const DataLayanan(icon: Icons.health_and_safety_rounded, title: "BPJS Kesh", color: Color(0xFF16A34A), target: PascabayarScreen(jenisLayanan: "BPJS")),
+                const DataLayanan(icon: Icons.tv_rounded, title: "TV Kabel", color: Color(0xFFEA580C), target: PascabayarScreen(jenisLayanan: "TV KABEL")),
+              ],
             ),
           ],
         ),
@@ -246,80 +190,84 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildJudulHeader(IconData icon, String judul) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: WarnaDesaPay.primary),
-        const SizedBox(width: 8),
-        Text(
-          judul,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGridMenu(BuildContext context, List<Map<String, dynamic>> items) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 18,
-        childAspectRatio: 0.85,
+  /// Helper untuk membangun blok kontainer masing-masing kategori
+  Widget _buildSectionKategori({
+    required GlobalKey key,
+    required IconData icon,
+    required String judul,
+    required List<DataLayanan> items,
+  }) {
+    return Container(
+      key: key,
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: WarnaDesaPay.lightCard,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: WarnaDesaPay.shadow.withOpacity(0.06), 
+            blurRadius: 14, 
+            spreadRadius: 0, 
+            offset: const Offset(0, 6),
+          )
+        ],
       ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final data = items[index];
-        final Color itemColor = data['color'] as Color;
-
-        return CustomBounce(
-          onTap: () {
-            if (data['target'] != null) {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => data['target']));
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("Layanan ${data['pesan']} otomatis terkoneksi ke sistem pusat."),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: WarnaDesaPay.primary,
-                ),
-              );
-            }
-          },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // JUDUL KATEGORI
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: itemColor.withOpacity(0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(data['icon'] as IconData, size: 24, color: itemColor),
-              ),
-              const SizedBox(height: 8),
+              Icon(icon, size: 22, color: WarnaDesaPay.primary),
+              const SizedBox(width: 10),
               Text(
-                data['title'] as String,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                  height: 1.2,
-                ),
+                judul,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain, letterSpacing: 0.2),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
+          const SizedBox(height: 20),
+          
+          // GRID MENU LAYANAN MODULAR
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.75, // Disesuaikan agar teks 2 baris tidak terpotong
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final data = items[index];
 
-  Map<String, dynamic> _item(IconData icon, String title, Color color, Widget? target, {String? pesan}) {
-    return {'icon': icon, 'title': title, 'color': color, 'target': target, 'pesan': pesan};
+              // MENGGUNAKAN KOMPONEN `MenuItem` YANG SUDAH KITA STANDARISASI
+              return MenuItem(
+                icon: data.icon,
+                title: data.title,
+                iconColor: data.color,
+                badgeColor: data.color.withOpacity(0.12),
+                onTap: () {
+                  if (data.target != null) {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => data.target!));
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Layanan ${data.pesan} segera hadir!"),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: WarnaDesaPay.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
