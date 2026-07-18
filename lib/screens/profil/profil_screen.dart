@@ -1,44 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// Sesuaikan import dengan struktur folder Anda
+// Import Konfigurasi, Widget Reusable, dan Halaman Login (CTO Standard)
 import '../../config/warna.dart';
+import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce dari standarisasi sebelumnya
 import '../login/login_screen.dart'; 
 
+/// Widget Tampilan Profil & Pengaturan Akun Premium Pengguna DesaPay (Presentation Layer)
 class ProfilScreen extends StatelessWidget {
   const ProfilScreen({super.key});
 
+  /// Menampilkan Pop-up Dialog Konfirmasi Keluar dengan Gaya Fintek Modern
   Future<void> _logout(BuildContext context) async {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text("Keluar Akun", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text("Apakah Anda yakin ingin keluar dari DesaPay?"),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: WarnaDesaPay.danger, size: 26),
+            SizedBox(width: 10),
+            Text(
+              "Keluar Akun", 
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: WarnaDesaPay.textMain)
+            ),
+          ],
+        ),
+        content: const Text(
+          "Apakah Anda yakin ingin keluar dari sesi aktif aplikasi DesaPay?",
+          style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 14, height: 1.4),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            child: const Text("Batal", style: TextStyle(color: WarnaDesaPay.textSub, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              backgroundColor: WarnaDesaPay.danger,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () async {
-              Navigator.pop(context); // Tutup dialog
-              await FirebaseAuth.instance.signOut(); // Proses hapus sesi Firebase
+              Navigator.pop(context); // Tutup dialog konfirmasi
+              await FirebaseAuth.instance.signOut(); // Pemutusan token sesi Firebase Auth
               
-              // Lempar user kembali ke halaman Login dengan aman
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
+                  (route) => false, // Membersihkan total seluruh tumpukan navigasi di memori
                 );
               }
             },
-            child: const Text("Keluar", style: TextStyle(color: Colors.white)),
+            child: const Text("Keluar", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -47,60 +66,94 @@ class ProfilScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mengambil data user yang sedang login saat ini (jika ada)
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xffF4F7FA),
+      backgroundColor: WarnaDesaPay.lightBg,
       appBar: AppBar(
-        title: const Text("Profil Premium"),
-        backgroundColor: const Color(0xFF0054A6),
-        foregroundColor: Colors.white,
         elevation: 0,
+        backgroundColor: WarnaDesaPay.primary,
+        foregroundColor: Colors.white,
         centerTitle: true,
-        automaticallyImplyLeading: false, // Menghilangkan tombol back default jika ada
+        automaticallyImplyLeading: false, // Menghilangkan tombol back default pada tab menu utama
+        title: const Text(
+          "Profil Premium",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         physics: const BouncingScrollPhysics(),
         children: [
-          // KARTU IDENTITAS USER (Tampil meskipun data di database kosong)
+          // =========================================================================
+          // 1. KARTU IDENTITAS USER (FINTECH GOLD SHINE STYLE)
+          // =========================================================================
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+              color: WarnaDesaPay.lightCard,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: WarnaDesaPay.shadow.withOpacity(0.05),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                )
+              ],
             ),
             child: Row(
               children: [
-                const CircleAvatar(
-                  radius: 35,
-                  backgroundColor: Colors.grey,
-                  backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: WarnaDesaPay.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.grey,
+                    backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+                  ),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         user?.displayName ?? "Agen DesaPay",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       Text(
-                        user?.phoneNumber ?? user?.email ?? "Belum ada kontak terdaftar",
-                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                        user?.phoneNumber ?? user?.email ?? "Kontak belum terverifikasi",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 13, fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
+                      
+                      // Badge Premium Member dengan Aksen Amber Halus
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFD200),
-                          borderRadius: BorderRadius.circular(10),
+                          color: WarnaDesaPay.warning.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: WarnaDesaPay.warning.withOpacity(0.3), width: 1),
                         ),
-                        child: const Text("Premium Member", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.workspace_premium_rounded, color: WarnaDesaPay.warning, size: 12),
+                            SizedBox(width: 4),
+                            Text(
+                              "Premium Member", 
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: WarnaDesaPay.warning, letterSpacing: 0.3)
+                            ),
+                          ],
+                        ),
                       )
                     ],
                   ),
@@ -108,53 +161,90 @@ class ProfilScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 28),
 
-          // MENU SETTINGS
-          const Text("Pengaturan Keamanan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black54)),
-          const SizedBox(height: 10),
-          _buildMenu(Icons.lock_outline_rounded, "Ubah PIN", () {}),
-          _buildMenu(Icons.fingerprint_rounded, "Biometrik", () {}),
-          _buildMenu(Icons.verified_user_outlined, "Verifikasi KTP (KYC)", () {}),
+          // =========================================================================
+          // 2. KELOMPOK MENU: KEAMANAN LENGKAP
+          // =========================================================================
+          const Text("Pengaturan Keamanan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textSub, letterSpacing: 0.3)),
+          const SizedBox(height: 12),
+          _buildMenuRow(Icons.lock_outline_rounded, "Ubah PIN Transaksi", () {}),
+          _buildMenuRow(Icons.fingerprint_rounded, "Keamanan Biometrik", () {}),
+          _buildMenuRow(Icons.verified_user_outlined, "Verifikasi KTP (KYC)", () {}),
           
-          const SizedBox(height: 20),
-          const Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black54)),
-          const SizedBox(height: 10),
-          _buildMenu(Icons.help_outline_rounded, "Syarat & Ketentuan", () {}),
-          _buildMenu(Icons.headset_mic_rounded, "Hubungi CS (WhatsApp)", () {}),
+          const SizedBox(height: 24),
+          
+          // =========================================================================
+          // 3. KELOMPOK MENU: BANTUAN OPERASIONAL
+          // =========================================================================
+          const Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textSub, letterSpacing: 0.3)),
+          const SizedBox(height: 12),
+          _buildMenuRow(Icons.help_outline_rounded, "Syarat & Ketentuan Layanan", () {}),
+          _buildMenuRow(Icons.headset_mic_rounded, "Hubungi CS (WhatsApp Aktif)", () {}),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 36),
           
-          // TOMBOL LOGOUT UNTUK MEMANGGIL LOGIN SCREEN
-          ElevatedButton.icon(
-            icon: const Icon(Icons.logout_rounded, color: Colors.red),
-            label: const Text("Keluar Aplikasi", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.withOpacity(0.1),
-              elevation: 0,
+          // =========================================================================
+          // 4. TOMBOL KELUAR APLIKASI (TACTILE CRASH-FREE METHOD)
+          // =========================================================================
+          CustomBounce(
+            onTap: () => _logout(context),
+            child: Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              decoration: BoxDecoration(
+                color: WarnaDesaPay.danger.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: WarnaDesaPay.danger.withOpacity(0.15), width: 1),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.logout_rounded, color: WarnaDesaPay.danger, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    "Keluar Aplikasi", 
+                    style: TextStyle(color: WarnaDesaPay.danger, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.2)
+                  ),
+                ],
+              ),
             ),
-            onPressed: () => _logout(context),
           ),
-          const SizedBox(height: 80), // Buffer agar tidak tertutup bottom nav
+          const SizedBox(height: 100), // Buffer aman agar ujung bawah tidak terpotong oleh sistem navigasi
         ],
       ),
     );
   }
 
-  Widget _buildMenu(IconData icon, String title, VoidCallback onTap) {
+  /// Pembangun baris menu individual yang terintegrasi penuh dengan CustomBounce
+  Widget _buildMenuRow(IconData icon, String title, VoidCallback onTap) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF0054A6)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+      child: CustomBounce(
         onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: WarnaDesaPay.lightCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: WarnaDesaPay.lightField, width: 1),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: WarnaDesaPay.primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: WarnaDesaPay.primary, size: 20),
+            ),
+            title: Text(
+              title, 
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: WarnaDesaPay.textMain)
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: WarnaDesaPay.textSub),
+          ),
+        ),
       ),
     );
   }
