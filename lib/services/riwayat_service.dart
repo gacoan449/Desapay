@@ -5,7 +5,7 @@ import '../models/transaksi.dart';
 /// Kontrak Abstraksi Layanan Riwayat Transaksi DesaPay (Domain Layer)
 abstract class IRiwayatService {
   Future<bool> simpan(Transaksi transaksi);
-  Stream<List<Transaksi>> dapatkanRiwayatUser();
+  Stream<List<Transaksi>> streamRiwayatTransaksi({required String uid, required String filter});
 }
 
 /// Implementasi Layanan Manajemen Riwayat & Log Mutasi (Data Layer)
@@ -49,22 +49,33 @@ class RiwayatService implements IRiwayatService {
   // 2. STREAM BACA RIWAYAT REAL-TIME & TYPE-SAFE
   // ===================================================
   @override
-  Stream<List<Transaksi>> dapatkanRiwayatUser() {
-    final User? currentUser = _auth.currentUser;
-    if (currentUser == null) {
-      return const Stream.empty();
-    }
-
+  Stream<List<Transaksi>> streamRiwayatTransaksi({required String uid, required String filter}) {
     // Mengembalikan aliran data list objek model yang siap pakai langsung oleh StreamBuilder di UI
     return _firestore
         .collection("transaksi")
-        .where("uid", isEqualTo: currentUser.uid)
+        .where("uid", isEqualTo: uid)
         .orderBy("waktu", descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
+          // Parsing seluruh dokumen ke dalam Model Objek
+          final List<Transaksi> semuaTransaksi = snapshot.docs.map((doc) {
             return Transaksi.fromFirestore(doc);
           }).toList();
+
+          // Client-Side Filtering: Mencegah error index Firestore sekaligus menghemat kuota operasi baca
+          if (filter == 'berhasil') {
+            return semuaTransaksi.where((tx) => 
+              tx.status.toLowerCase() == 'sukses' || 
+              tx.status.toLowerCase() == 'berhasil'
+            ).toList();
+          } else if (filter == 'pending_gagal') {
+            return semuaTransaksi.where((tx) => 
+              tx.status.toLowerCase() != 'sukses' && 
+              tx.status.toLowerCase() != 'berhasil'
+            ).toList();
+          }
+          
+          return semuaTransaksi; // Default kembalikan 'semua'
         });
   }
 }
