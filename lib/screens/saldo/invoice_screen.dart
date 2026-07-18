@@ -1,20 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../config/warna.dart';
+import '../../services/tripay_service.dart';
 
 class InvoiceScreen extends StatelessWidget {
-  final Map<String, dynamic> tripayData;
+  final TriPayInvoiceResult tripayData;
 
   const InvoiceScreen({super.key, required this.tripayData});
 
   @override
   Widget build(BuildContext context) {
-    final String reference = tripayData['reference'] ?? '-';
-    final String paymentName = tripayData['payment_name'] ?? 'Payment Gateway';
-    final int amount = tripayData['amount'] ?? 0;
-    final String payCode = tripayData['pay_code'] ?? '';
-    final String qrUrl = tripayData['qr_url'] ?? '';
-    final String status = tripayData['status'] ?? 'UNPAID';
-    final List<dynamic> instructions = tripayData['instructions'] ?? [];
+    // Memetakan data dari objek tipe-aman (Type-Safe Object)
+    final String reference = tripayData.reference ?? '-';
+    final String paymentName = tripayData.paymentMethod ?? 'Payment Gateway';
+    final int amount = tripayData.totalAmount ?? 0;
+    final String payCode = tripayData.paymentCode ?? '';
+    final String qrUrl = tripayData.qrUrl ?? '';
+    final String status = 'UNPAID'; // Secara default invoice baru pasti belum terbayar
+    
+    // Instruksi universal sebagai pengganti payload dinamis yang tidak di-mapping di service
+    final List<String> defaultInstructions = [
+      "Salin Nomor Virtual Account/Kode Bayar atau unduh kode QRIS di atas.",
+      "Buka aplikasi Mobile Banking atau E-Wallet pilihan Anda.",
+      "Pilih menu Transfer ke Virtual Account atau Pindai QR.",
+      "Tempel nomor yang disalin atau arahkan kamera ke kode QR.",
+      "Pastikan nominal tagihan sesuai, lalu masukkan PIN untuk konfirmasi.",
+      "Simpan bukti pembayaran. Saldo DesaPay akan otomatis masuk dalam hitungan detik."
+    ];
 
     return Scaffold(
       backgroundColor: const Color(0xffF4F7FA),
@@ -54,13 +66,13 @@ class InvoiceScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: status == 'UNPAID' ? WarnaDesaPay.warning.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                          color: WarnaDesaPay.warning.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
                           status,
-                          style: TextStyle(
-                            color: status == 'UNPAID' ? WarnaDesaPay.warning : Colors.green,
+                          style: const TextStyle(
+                            color: WarnaDesaPay.warning,
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -73,7 +85,7 @@ class InvoiceScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     "Rp ${amount.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}",
-                    style: TextStyle(color: WarnaDesaPay.primary, fontSize: 26, fontWeight: FontWeight.w900),
+                    style: const TextStyle(color: WarnaDesaPay.primary, fontSize: 26, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 6),
                   Text("Ref: $reference", style: const TextStyle(color: Colors.grey, fontSize: 11)),
@@ -94,7 +106,7 @@ class InvoiceScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center, // DIKOREKSI: Menggunakan standar bawaan framework
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (qrUrl.isNotEmpty) ...[
                     const Text("Pindai Kode QRIS Di Bawah Ini", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -116,8 +128,28 @@ class InvoiceScreen extends StatelessWidget {
                       payCode,
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.0, color: Colors.black87),
                     ),
-                    const SizedBox(height: 8),
-                    const Text("Ketuk nomor di atas untuk menyalin", style: TextStyle(color: Colors.grey, fontSize: 11)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: WarnaDesaPay.lightField,
+                        foregroundColor: WarnaDesaPay.primary,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: payCode));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text("Kode berhasil disalin!"),
+                            backgroundColor: WarnaDesaPay.primary,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text("Salin Kode", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
                   ],
                 ],
               ),
@@ -127,32 +159,49 @@ class InvoiceScreen extends StatelessWidget {
             const Text("Tata Cara Pembayaran", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
 
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: instructions.length,
-              itemBuilder: (context, index) {
-                final item = instructions[index];
-                final String titleStep = item['title'] ?? 'Langkah';
-                final List<dynamic> steps = item['steps'] ?? [];
-
-                return ExpansionTile(
-                  title: Text(titleStep, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  children: steps.map((step) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("${steps.indexOf(step) + 1}. ", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          Expanded(child: Text(step.toString().replaceAll(RegExp(r'<[^>]*>'), ''), style: const TextStyle(fontSize: 12, height: 1.4))),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
+            // Merender instruksi pembayaran statis universal
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: defaultInstructions.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(right: 12, top: 2),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: WarnaDesaPay.primary.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            "${index + 1}",
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: WarnaDesaPay.primary),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            defaultInstructions[index], 
+                            style: const TextStyle(fontSize: 13, height: 1.5, color: Colors.black87),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
