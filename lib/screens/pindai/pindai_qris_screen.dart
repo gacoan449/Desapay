@@ -17,10 +17,11 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
   final MobileScannerController _cameraController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
-    formats: [BarcodeFormat.qrCode], // Optimasi: Hanya fokus mencari QR Code
+    formats: const [BarcodeFormat.qrCode], // Optimasi: Hanya fokus mencari QR Code
   );
 
   bool _isProcessing = false;
+  bool _isFlashOn = false; // State lokal aman untuk menggantikan torchState yang dihapus dari package
 
   @override
   void initState() {
@@ -48,6 +49,8 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
         return;
       case AppLifecycleState.resumed:
         _cameraController.start();
+        // Reset status senter ke mati saat aplikasi dibuka kembali
+        if (mounted) setState(() => _isFlashOn = false); 
         break;
       case AppLifecycleState.inactive:
         _cameraController.stop();
@@ -88,7 +91,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
           isValidQris 
               ? "Lanjutkan pembayaran menggunakan QRIS ini?\n\nKode: $code" 
               : "Kode yang dipindai bukan QRIS berstandar Nasional.\n\nKode: $code",
-          style: TextStyle(color: WarnaDesaPay.textMain, fontSize: 14, height: 1.4),
+          style: const TextStyle(color: WarnaDesaPay.textMain, fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -97,7 +100,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
               setState(() => _isProcessing = false);
               _cameraController.start(); // Nyalakan kembali kamera
             }, 
-            child: Text("Pindai Lagi", style: TextStyle(color: WarnaDesaPay.textSub, fontWeight: FontWeight.bold)),
+            child: const Text("Pindai Lagi", style: TextStyle(color: WarnaDesaPay.textSub, fontWeight: FontWeight.bold)),
           ),
           if (isValidQris) 
             ElevatedButton(
@@ -132,14 +135,28 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
         // Penanganan jika gambar dari galeri tidak mengandung QR
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text("Tidak ditemukan kode QR pada gambar tersebut."),
+            const SnackBar(
+              content: Text("Tidak ditemukan kode QR pada gambar tersebut."),
               backgroundColor: WarnaDesaPay.danger,
               behavior: SnackBarBehavior.floating,
             )
           );
         }
       }
+    }
+  }
+
+  /// Fungsi aman pengganti ValueListenable untuk mengelola senter
+  Future<void> _toggleFlash() async {
+    try {
+      await _cameraController.toggleTorch();
+      if (mounted) {
+        setState(() {
+          _isFlashOn = !_isFlashOn;
+        });
+      }
+    } catch (e) {
+      debugPrint("Perangkat ini tidak mendukung fitur senter: $e");
     }
   }
 
@@ -155,7 +172,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
           MobileScanner(
             controller: _cameraController,
             errorBuilder: (context, error, child) {
-              // Menggantikan layar error bawaan yang ada di gambar 1784346921716.jpeg
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -192,8 +208,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(color: WarnaDesaPay.secondary, width: 2.5),
-                // Trick bayangan masif untuk menciptakan overlay gelap di sekeliling,
-                // namun membiarkan bagian tengah bolong sempurna tanpa merusak widget tree
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.65),
@@ -201,7 +215,6 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
                   ),
                 ],
               ),
-              // Ornamen fokus di tengah (Opsional)
               child: Center(
                 child: Container(
                   width: 2,
@@ -232,15 +245,11 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
                   "Pindai QRIS", 
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 0.5)
                 ),
-                ValueListenableBuilder<TorchState>(
-                  valueListenable: _cameraController.torchState,
-                  builder: (context, state, child) {
-                    return _buildCircularButton(
-                      icon: state == TorchState.on ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
-                      color: state == TorchState.on ? WarnaDesaPay.warning : Colors.white,
-                      onTap: () => _cameraController.toggleTorch(),
-                    );
-                  },
+                // Toggle senter menggunakan custom lokal state yang dijamin tahan banting
+                _buildCircularButton(
+                  icon: _isFlashOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                  color: _isFlashOn ? WarnaDesaPay.warning : Colors.white,
+                  onTap: _toggleFlash,
                 ),
               ],
             ),
@@ -260,7 +269,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> with WidgetsBinding
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(100), // Pil shape ala DANA
+                    borderRadius: BorderRadius.circular(100), 
                     side: BorderSide(color: Colors.white.withOpacity(0.2), width: 1),
                   ),
                 ),
