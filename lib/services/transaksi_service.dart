@@ -1,78 +1,148 @@
 import '../models/transaksi.dart';
+import '../models/produk.dart';
+import 'digiflazz_service.dart';
+import 'saldo_service.dart';
+import 'riwayat_service.dart';
 
-class TransaksiService {
-  // ===================================================
-  // 1. MEMORI STATE LOKAL & PREMIUM PRESET DATA
-  // ===================================================
-  // Menyediakan daftar transaksi bawaan agar UI Riwayat terlihat premium saat mode demo
-  static final List<Transaksi> _daftarTransaksi = [
-    Transaksi(
-      produk: "Telkomsel Pulsa Rp10.000",
-      tujuan: "081234567890",
-      harga: 11500,
-      status: "SUKSES",
-      tanggal: "15/07 14:20",
-    ),
-    Transaksi(
-      produk: "Token Listrik PLN Rp50.000",
-      tujuan: "53123456789",
-      harga: 51500,
-      status: "PENDING",
-      tanggal: "15/07 10:15",
-    ),
-    Transaksi(
-      produk: "Indosat Pulsa Rp5.000",
-      tujuan: "085642131263",
-      harga: 6500,
-      status: "GAGAL",
-      tanggal: "14/07 18:45",
-    ),
-  ];
+/// Objek pembungkus status keluaran dari eksekusi transaksi PPOB di DesaPay
+class HasilEksekusiTransaksi {
+  final bool isSukses;
+  final String pesan;
+  final String refId;
+  final StatusTransaksi statusAkhir;
 
-  // ===================================================
-  // 2. FUNGSI AMBIL SEMUA DATA RIWAYAT
-  // ===================================================
-  /// Mengambil semua list transaksi dengan susunan data terbaru berada di posisi paling atas.
-  static List<Transaksi> semua() {
-    return _daftarTransaksi.reversed.toList();
-  }
+  const HasilEksekusiTransaksi({
+    required this.isSukses,
+    required this.pesan,
+    this.refId = '',
+    this.statusAkhir = StatusTransaksi.gagal,
+  });
+}
 
-  // ===================================================
-  // 3. FUNGSI PENAMBAHAN DATA (AUTO TWO-DIGIT PADDING)
-  // ===================================================
-  /// Mencatat riwayat transaksi baru ke dalam memori dengan pemformatan tanggal premium.
-  static void tambah({
-    required String produk,
-    required String tujuan,
-    required int harga,
-    required String status,
-  }) {
-    final DateTime sekarang = DateTime.now();
+/// Kontrak Abstraksi Layanan Alur Kerja Eksekusi Transaksi Finansial DesaPay (Domain Layer)
+abstract class ITransaksiService {
+  Future<HasilEksekusiTransaksi> prosesPembelianProdukBahu({
+    required String uid,
+    required Produk produk,
+    required String nomorTujuan,
+    required String metodePembayaran,
+  });
+}
 
-    // Menggunakan helper dua digit agar formatting tanggal rapi (contoh: 09:05, bukan 9:5)
-    final String hari = sekarang.day.toString().padLeft(2, '0');
-    final String bulan = sekarang.month.toString().padLeft(2, '0');
-    final String jam = sekarang.hour.toString().padLeft(2, '0');
-    final String menit = sekarang.minute.toString().padLeft(2, '0');
+/// Implementasi Orkes Logika Bisnis Transaksi Finansial Terintegrasi (Data Layer)
+class TransaksiService implements ITransaksiService {
+  final IDigiflazzService _digiflazzService;
+  final ISaldoService _saldoService;
+  final IRiwayatService _riwayatService;
 
-    final String stringTanggalFormated = "$hari/$bulan $jam:$menit";
+  /// Dependency Injection via Constructor untuk menjamin ketaatan pada SOLID Principles
+  TransaksiService({
+    required IDigiflazzService digiflazzService,
+    required ISaldoService saldoService,
+    required IRiwayatService riwayatService,
+  })  : _digiflazzService = digiflazzService,
+        _saldoService = saldoService,
+        _riwayatService = riwayatService;
 
-    _daftarTransaksi.add(
-      Transaksi(
-        produk: produk,
-        tujuan: tujuan,
-        harga: harga,
-        status: status,
-        tanggal: stringTanggalFormated,
-      ),
+  // =========================================================================
+  // CORE ENGINE TRANSAKSI PPOB (ANTI BALAPAN DATA & VERIFIKASI MULTI-LAYER)
+  // =========================================================================
+  @override
+  Future<HasilEksekusiTransaksi> prosesPembelianProdukBahu({
+    required String uid,
+    required Produk produk,
+    required String nomorTujuan,
+    required String metodePembayaran,
+  }) async {
+    // 1. Validasi Awal Parameter Input Finansial
+    if (nomorTujuan.trim().length < 4) {
+      return const HasilEksekusiTransaksi(
+        isSukses: false,
+        pesan: "Nomor tujuan atau ID pelanggan tidak valid. Periksa kembali.",
+      );
+    }
+
+    // Pembuatan ID Referensi Unik Sistem DesaPay (Sesuai Regulasi Pencegahan Double Payment)
+    final String generatedRefId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
+
+    // 2. Proteksi Finansial 1: Uji dan Kurangi Saldo Pengguna Lewat Jalur Transaksi Atomic
+    if (metodePembayaran.toUpperCase() == 'SALDO') {
+      final SaldoUpdateResult hasilPotongSaldo = await _saldoService.updateSaldo(
+        uid: uid,
+        nominal: produk.harga,
+        isTambah: false,
+        keterangan: "Pembelian ${produk.nama} ke $nomorTujuan",
+      );
+
+      if (!hasilPotongSaldo.isSuccess) {
+        return HasilEksekusiTransaksi(
+          isSukses: false,
+          pesan: hasilPotongSaldo.message,
+        );
+      }
+    }
+
+    // 3. Tembak API Pihak Ketiga (Digiflazz Gateway Engine)
+    final Map<String, dynamic> responDigiflazz = await _digiflazzService.kirimTransaksi(
+      buyerSkuCode: produk.kode,
+      customerNo: nomorTujuan.trim(),
     );
-  }
 
-  // ===================================================
-  // 4. FUNGSI CLEAR STATE (FOR TESTING PURPOSE)
-  // ===================================================
-  /// Menghapus seluruh data di dalam memori (biasanya digunakan untuk unit testing logout).
-  static void bersihkanSemua() {
-    _daftarTransaksi.clear();
+    final String statusRespon = (responDigiflazz['status'] ?? 'Gagal').toString().toLowerCase();
+    final String pesanRespon = responDigiflazz['message'] ?? 'Transaksi sedang diproses oleh aggregator';
+
+    StatusTransaksi statusAkhir = StatusTransaksi.pending;
+    bool isTransaksiBerhasil = false;
+
+    if (statusRespon == 'sukses') {
+      statusAkhir = StatusTransaksi.sukses;
+      isTransaksiBerhasil = true;
+    } else if (statusRespon == 'gagal') {
+      statusAkhir = StatusTransaksi.gagal;
+      isTransaksiBerhasil = false;
+    }
+
+    // 4. Siapkan Rekaman Model Objek Transaksi Resmi DesaPay (Type-Safe)
+    final Transaksi modelTransaksiLog = Transaksi(
+      uid: uid,
+      kodeProduk: produk.kode,
+      namaProduk: produk.nama,
+      nomorTujuan: nomorTujuan.trim(),
+      hargaNominal: produk.harga,
+      refId: generatedRefId,
+      status: statusAkhir,
+      metodePembayaran: metodePembayaran.toUpperCase(),
+      waktu: DateTime.now(),
+    );
+
+    // 5. Simpan Data Rekam Jejak Ke Firebase Cloud Firestore Melalui RiwayatService
+    await _riwayatService.simpan(modelTransaksiLog);
+
+    // 6. Rollback Engine: Mekanisme Refund Otomatis Jika Deteksi Status Digiflazz Menyatakan 'Gagal'
+    if (statusAkhir == StatusTransaksi.gagal && metodePembayaran.toUpperCase() == 'SALDO') {
+      await _saldoService.updateSaldo(
+        uid: uid,
+        nominal: produk.harga,
+        isTambah: true,
+        keterangan: "REFUND: Gagal isi ${produk.nama} ke $nomorTujuan",
+      );
+      
+      return HasilEksekusiTransaksi(
+        isSukses: false,
+        pesan: "Transaksi Gagal dari Provider: $pesanRespon. Saldo Anda telah dikembalikan secara utuh.",
+        refId: generatedRefId,
+        statusAkhir: StatusTransaksi.gagal,
+      );
+    }
+
+    // 7. Hasilkan Konfirmasi Final untuk Disajikan ke Halaman UI Resi Pengguna
+    return HasilEksekusiTransaksi(
+      isSukses: isTransaksiBerhasil || statusAkhir == StatusTransaksi.pending,
+      pesan: statusAkhir == StatusTransaksi.sukses 
+          ? "Transaksi berhasil diproses!" 
+          : "Transaksi Anda sedang dalam antrean jaringan pusat.",
+      refId: generatedRefId,
+      statusAkhir: statusAkhir,
+    );
   }
 }
