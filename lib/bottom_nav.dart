@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../config/warna.dart';
+
+// Import Layar Utama
 import '../screens/home/home_screen.dart';
-import '../screens/profil/profil_screen.dart';
 import '../screens/riwayat/riwayat_screen.dart';
+import '../screens/profil/profil_screen.dart';
 
 class BottomNav extends StatefulWidget {
   const BottomNav({super.key});
@@ -12,9 +14,10 @@ class BottomNav extends StatefulWidget {
 }
 
 class _BottomNavState extends State<BottomNav> {
-  int currentIndex = 0;
+  int _currentIndex = 0;
 
-  final List<Widget> pages = const [
+  // indexedStack menjaga state halaman tetap terjaga saat user berpindah tab
+  final List<Widget> _pages = const [
     HomeScreen(),
     RiwayatScreen(),
     ProfilScreen(),
@@ -23,12 +26,12 @@ class _BottomNavState extends State<BottomNav> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: WarnaDesaPay.background,
+      backgroundColor: WarnaDesaPay.lightBg, // Menggunakan palet standar DesaPay
       body: IndexedStack(
-        index: currentIndex,
-        children: pages,
+        index: _currentIndex,
+        children: _pages,
       ),
-
+      
       // ==========================================
       // LUXURY FLOATING BOTTOM NAVIGATION BAR
       // ==========================================
@@ -43,37 +46,35 @@ class _BottomNavState extends State<BottomNav> {
             BoxShadow(
               color: WarnaDesaPay.shadow.withOpacity(0.06),
               blurRadius: 20,
-              spreadRadius: 0,
-              offset: const Offset(0, -8), // Bayangan lembut mengarah ke atas
+              offset: const Offset(0, -8),
             ),
           ],
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Theme(
-              // Menghapus splash click dan highlight warna bawaan yang mengganggu estetika
               data: Theme.of(context).copyWith(
                 splashColor: Colors.transparent,
                 highlightColor: Colors.transparent,
               ),
               child: BottomNavigationBar(
-                currentIndex: currentIndex,
+                currentIndex: _currentIndex,
                 type: BottomNavigationBarType.fixed,
-                backgroundColor: Colors.transparent, // Menggunakan warna dari Container pembungkus
-                elevation: 0, // Matikan elevasi default agar tidak bentrok dengan bayangan kustom
+                backgroundColor: Colors.transparent,
+                elevation: 0,
                 
                 selectedItemColor: WarnaDesaPay.primary,
-                unselectedItemColor: WarnaDesaPay.textSub, // Menggunakan warna Slate Grey estetik
+                unselectedItemColor: WarnaDesaPay.textSub,
                 
                 selectedFontSize: 11,
                 unselectedFontSize: 11,
-                selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.2),
-                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, letterSpacing: 0.2),
+                selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.2),
 
                 onTap: (index) {
                   setState(() {
-                    currentIndex = index;
+                    _currentIndex = index;
                   });
                 },
 
@@ -81,33 +82,33 @@ class _BottomNavState extends State<BottomNav> {
                   BottomNavigationBarItem(
                     icon: Padding(
                       padding: EdgeInsets.only(bottom: 4),
-                      child: Icon(Icons.home_rounded, size: 24),
+                      child: Icon(Icons.home_rounded, size: 26),
                     ),
                     activeIcon: Padding(
                       padding: EdgeInsets.only(bottom: 4),
-                      child: Icon(Icons.home_filled, size: 24),
+                      child: Icon(Icons.home_filled, size: 26),
                     ),
                     label: "Beranda",
                   ),
                   BottomNavigationBarItem(
                     icon: Padding(
                       padding: EdgeInsets.only(bottom: 4),
-                      child: Icon(Icons.receipt_long_outlined, size: 24),
+                      child: Icon(Icons.receipt_long_outlined, size: 26),
                     ),
                     activeIcon: Padding(
                       padding: EdgeInsets.only(bottom: 4),
-                      child: Icon(Icons.receipt_long_rounded, size: 24),
+                      child: Icon(Icons.receipt_long_rounded, size: 26),
                     ),
                     label: "Riwayat",
                   ),
                   BottomNavigationBarItem(
                     icon: Padding(
                       padding: EdgeInsets.only(bottom: 4),
-                      child: Icon(Icons.person_outline_rounded, size: 24),
+                      child: Icon(Icons.person_outline_rounded, size: 26),
                     ),
                     activeIcon: Padding(
                       padding: EdgeInsets.only(bottom: 4),
-                      child: Icon(Icons.person_rounded, size: 24),
+                      child: Icon(Icons.person_rounded, size: 26),
                     ),
                     label: "Profil",
                   ),
