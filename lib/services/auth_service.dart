@@ -1,19 +1,56 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class AuthService {
+/// Kontrak Abstraksi untuk Layanan Autentikasi DesaPay (Domain Layer)
+abstract class IAuthService {
+  User? get currentUser;
+  Stream<User?> get authStateChanges;
+  
+  Future<String?> login({
+    required String email,
+    required String password,
+  });
+  
+  Future<String?> register({
+    required String nama,
+    required String email,
+    required String phone,
+    required String password,
+  });
+  
+  Future<String?> forgotPassword(String email);
+  
+  Future<void> logout();
+  
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required Function(PhoneAuthCredential) verificationCompleted,
+    required Function(FirebaseAuthException) verificationFailed,
+    required Function(String, int?) codeSent,
+    required Function(String) codeAutoRetrievalTimeout,
+  });
+  
+  Future<UserCredential?> signInWithPhoneNumber({
+    required String verificationId,
+    required String smsCode,
+  });
+}
+
+/// Implementasi Layanan Autentikasi DesaPay dengan Firebase (Data Layer)
+class AuthService implements IAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Mengambil user yang sedang login saat ini
-  User? get user => _auth.currentUser;
+  @override
+  User? get currentUser => _auth.currentUser;
 
-  // Stream untuk memantau perubahan status login (Reactive Auth State)
+  @override
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // ==========================================
   // 1. SISTEM MASUK AKUN (LOGIN)
   // ==========================================
+  @override
   Future<String?> login({
     required String email,
     required String password,
@@ -40,14 +77,15 @@ class AuthService {
         default:
           return e.message ?? "Terjadi kegagalan saat masuk akun.";
       }
-    } catch (_) {
-      return "Terjadi kesalahan sistem saat memproses login.";
+    } catch (e) {
+      return "Terjadi kesalahan sistem saat memproses login: ${e.toString()}";
     }
   }
 
   // ==========================================
   // 2. SISTEM DAFTAR AKUN BARU (REGISTER)
   // ==========================================
+  @override
   Future<String?> register({
     required String nama,
     required String email,
@@ -56,6 +94,14 @@ class AuthService {
   }) async {
     User? user;
     try {
+      // Standarisasi format nomor telepon Indonesia (+62)
+      String formattedPhone = phone.trim();
+      if (formattedPhone.startsWith('0')) {
+        formattedPhone = '+62${formattedPhone.substring(1)}';
+      } else if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+$formattedPhone';
+      }
+
       // 1. Buat Kredensial User di Firebase Authentication
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
@@ -70,7 +116,7 @@ class AuthService {
           "uid": user.uid,
           "nama": nama.trim(),
           "email": email.trim(),
-          "phone": phone.trim(),
+          "phone": formattedPhone,
           "saldo": 0,
           "poin": 0,
           "member": "Silver",
@@ -97,20 +143,23 @@ class AuthService {
         default:
           return e.message ?? "Terjadi kegagalan saat pendaftaran.";
       }
-    } catch (_) {
+    } catch (e) {
       // ROLLBACK SAFETY: Jika terjadi kegagalan umum database, hapus akun di Auth
       if (user != null) {
         try {
           await user.delete();
-        } catch (_) {}
+        } catch (ignoredError) {
+          // Mengabaikan error internal delete agar tidak mengaburkan pesan utama
+        }
       }
-      return "Gagal menyimpan data akun. Mohon coba sesaat lagi.";
+      return "Gagal menyimpan data akun. Detail error: ${e.toString()}";
     }
   }
 
   // ==========================================
   // 3. SISTEM RESET PASSWORD
   // ==========================================
+  @override
   Future<String?> forgotPassword(String email) async {
     try {
       await _auth.sendPasswordResetEmail(
@@ -128,31 +177,61 @@ class AuthService {
         default:
           return e.message ?? "Gagal mengirimkan email reset password.";
       }
-    } catch (_) {
-      return "Terjadi kesalahan sistem saat meminta reset password.";
+    } catch (e) {
+      return "Terjadi kesalahan sistem saat meminta reset password: ${e.toString()}";
     }
   }
 
   // ==========================================
-  // 4. KELUAR AKUN & CEK SESI
+  // 4. KELUAR AKUN
   // ==========================================
+  @override
   Future<void> logout() async {
     await _auth.signOut();
   }
 
-  Future<User?> currentUser() async {
-    return _auth.currentUser;
+  // ==========================================
+  // 5. FIREBASE PHONE AUTHENTICATION (OTP INTEGRATION)
+  // ==========================================
+  @override
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required Function(PhoneAuthCredential) verificationCompleted,
+    required Function(FirebaseAuthException) verificationFailed,
+    required Function(String, int?) codeSent,
+    required Function(String) codeAutoRetrievalTimeout,
+  }) async {
+    String formattedPhone = phoneNumber.trim();
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '+62${formattedPhone.substring(1)}';
+    } else if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+$formattedPhone';
+    }
+
+    await _auth.verifyPhoneNumber(
+      phoneNumber: formattedPhone,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+      timeout: const Duration(seconds: 60),
+    );
   }
 
-  // ==========================================
-  // 5. OTP SERVICE (SCAFFOLD UNTUK IMPLEMENTASI BERIKUTNYA)
-  // ==========================================
-  Future<void> sendOtp(String phone) async {
-    // Sesi pengembangan integrasi OTP WhatsApp / SMS Gateway
-  }
-
-  Future<bool> verifyOtp(String code) async {
-    // Sesi pengembangan validasi kode OTP
-    return true;
+  @override
+  Future<UserCredential?> signInWithPhoneNumber({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    try {
+      final AuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode.trim(),
+      );
+      return await _auth.signInWithCredential(credential);
+    } catch (e) {
+      // Melempar kembali exception agar ditangani oleh presenter/controller UI DesaPay
+      rethrow;
+    }
   }
 }
