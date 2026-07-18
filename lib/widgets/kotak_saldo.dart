@@ -1,7 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../config/warna.dart';
-import '../../services/digiflazz_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import '../services/saldo_service.dart';
 
+/// Palet Warna Resmi DesaPay Premium untuk Kebutuhan Visual UI Fintech
+class WarnaDesaPay {
+  static const Color primary = Color(0xFF1E3A8A);   // Royal Blue Utama DesaPay
+  static const Color secondary = Color(0xFF06B6D4); // Cyan/Teal Aksen Modern
+}
+
+/// Widget Dashboard Informasi Saldo Pengguna DesaPay (Presentation Layer)
 class KotakSaldo extends StatefulWidget {
   const KotakSaldo({super.key});
 
@@ -10,20 +19,40 @@ class KotakSaldo extends StatefulWidget {
 }
 
 class _KotakSaldoState extends State<KotakSaldo> with SingleTickerProviderStateMixin {
-  final DigiflazzService _digiflazzService = DigiflazzService();
-  late AnimationController _rotationController;
+  final ISaldoService _saldoService = SaldoService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   
-  int _saldoAgen = 0;
-  bool _memuatSaldo = false;
+  late AnimationController _rotationController;
+  Stream<int>? _saldoStream;
+  bool _isRefreshing = false;
+
+  // Nilai konstan visual dideklarasikan di tingkat kelas demi efisiensi render (No Memory Leak)
+  static const LinearGradient _premiumCardGradient = LinearGradient(
+    colors: [
+      WarnaDesaPay.primary,
+      Color(0xFF1E40AF), // Royal Blue gelap untuk dimensi kedalaman visual
+    ],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static final List<BoxShadow> _cardShadow = [
+    BoxShadow(
+      color: WarnaDesaPay.primary.withOpacity(0.12),
+      blurRadius: 16,
+      spreadRadius: 0,
+      offset: const Offset(0, 8),
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
     _rotationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 800),
     );
-    _ambilSaldoTerbaru(); 
+    _inisialisasiStreamSaldo();
   }
 
   @override
@@ -32,70 +61,62 @@ class _KotakSaldoState extends State<KotakSaldo> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  Future<void> _ambilSaldoTerbaru() async {
-    if (!mounted) return;
+  /// Membangun koneksi pipa data reaktif ke Firestore berdasarkan ID pengguna aktif
+  void _inisialisasiStreamSaldo() {
+    final User? currentUser = _auth.currentUser;
+    if (currentUser != null) {
+      _saldoStream = _saldoService.streamSaldo(currentUser.uid);
+    }
+  }
+
+  /// Simulasi manual trigger refresh untuk memberikan animasi taktil premium pada ikon
+  Future<void> _manualRefreshTrigger() async {
+    if (_isRefreshing) return;
+
     setState(() {
-      _memuatSaldo = true;
+      _isRefreshing = true;
     });
     
-    // Memutar ikon refresh selama loading berjalan
     _rotationController.repeat();
-    
-    final int hasilSaldo = await _digiflazzService.cekSaldoModal();
+
+    // Memberikan delay jeda visual agar animasi rotasi berputar halus setara GoPay/OVO
+    await Future.delayed(const Duration(milliseconds: 1000));
     
     if (!mounted) return;
     
     _rotationController.stop();
     _rotationController.reset();
-
+    
     setState(() {
-      _saldoAgen = hasilSaldo;
-      _memuatSaldo = false;
+      _isRefreshing = false;
     });
   }
 
-  // Fungsi pemformat mata uang rupiah agar rapi dengan pemisah titik
-  String _formatRupiah(dynamic angka) {
-    final int value = int.tryParse(angka.toString()) ?? 0;
-    return value.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]}.',
-    );
+  /// Helper format mata uang Rupiah internal berbasis int (Type-Safe & No Crash)
+  String _formatKeRupiah(int nominal) {
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    ).format(nominal);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Gradasi Royal Blue Premium disinkronkan dengan WarnaDesaPay Baru
-    final LinearGradient premiumCardGradient = LinearGradient(
-      colors: [
-        WarnaDesaPay.primary,
-        const Color(0xFF1E40AF), // Royal Blue gelap untuk dimensi kedalaman
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: premiumCardGradient,
-        boxShadow: [
-          BoxShadow(
-            color: WarnaDesaPay.primary.withOpacity(0.12),
-            blurRadius: 16,
-            spreadRadius: 0,
-            offset: const Offset(0, 8), // Efek bayangan melayang yang realistis
-          ),
-        ],
+        gradient: _premiumCardGradient,
+        boxShadow: _cardShadow,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Stack(
           children: [
-            // ==========================================
-            // 1. DEKORASI ORNAMEN LINGKARAN ABSTRAK (FINTECH STYLE)
-            // ==========================================
+            // =========================================================================
+            // 1. DEKORASI ORNAMEN LINGKARAN ABSTRAK (PREMIUM FINTECH GLOWING STYLE)
+            // =========================================================================
             Positioned(
               right: -30,
               top: -40,
@@ -121,9 +142,9 @@ class _KotakSaldoState extends State<KotakSaldo> with SingleTickerProviderStateM
               ),
             ),
 
-            // ==========================================
-            // 2. KONTEN UTAMA TEXT & ACTION
-            // ==========================================
+            // =========================================================================
+            // 2. KONTEN DYNAMIC STREAM BUILDER (ANTI INFINITE REBUILD)
+            // =========================================================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
               child: Row(
@@ -150,7 +171,7 @@ class _KotakSaldoState extends State<KotakSaldo> with SingleTickerProviderStateM
                             ),
                             const SizedBox(width: 10),
                             Text(
-                              "Saldo Modal DesaPay",
+                              "Saldo DesaPay Anda",
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.85),
                                 fontSize: 13,
@@ -161,34 +182,36 @@ class _KotakSaldoState extends State<KotakSaldo> with SingleTickerProviderStateM
                           ],
                         ),
                         const SizedBox(height: 14),
-                        _memuatSaldo 
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white.withOpacity(0.9),
-                                  strokeWidth: 2,
+                        StreamBuilder<int>(
+                          stream: _saldoStream,
+                          initialData: 0,
+                          builder: (context, snapshot) {
+                            final int saldoAktif = snapshot.data ?? 0;
+                            
+                            return FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                _formatKeRupiah(saldoAktif),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
-                            )
-                          : Text(
-                              "Rp ${_formatRupiah(_saldoAgen)}",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
 
-                  // ==========================================
-                  // 3. REVOLVING REFRESH BUTTON (ANIMATED)
-                  // ==========================================
+                  const SizedBox(width: 12),
+
+                  // =========================================================================
+                  // 3. REVOLVING REFRESH BUTTON (ANIMATED GENTLE SPLASH)
+                  // =========================================================================
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.12),
@@ -202,8 +225,8 @@ class _KotakSaldoState extends State<KotakSaldo> with SingleTickerProviderStateM
                       turns: _rotationController,
                       child: IconButton(
                         icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
-                        tooltip: "Perbarui Saldo",
-                        onPressed: _memuatSaldo ? null : _ambilSaldoTerbaru,
+                        tooltip: "Perbarui Tampilan",
+                        onPressed: _isRefreshing ? null : _manualRefreshTrigger,
                         splashColor: Colors.transparent,
                         highlightColor: Colors.transparent,
                       ),
