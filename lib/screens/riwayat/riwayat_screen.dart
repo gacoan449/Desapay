@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../config/warna.dart';
-import '../../models/transaksi.dart'; // Tambahan Import Model Agar Type-Safe
-import '../../services/riwayat_service.dart'; // Menggunakan RiwayatService Core yang sudah kita bangun
-import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce demi konsistensi sentuhan premium
+import '../../models/transaksi.dart';
+import '../../services/riwayat_service.dart';
+import '../../widgets/menu_item.dart';
 
 class RiwayatScreen extends StatefulWidget {
   const RiwayatScreen({super.key});
@@ -21,7 +21,6 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    // Mengontrol 3 tab utama: Semua, Berhasil, Pending/Gagal
     _tabController = TabController(length: 3, vsync: this);
   }
 
@@ -31,7 +30,6 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  /// Helper format mata uang Rupiah
   String _formatRupiah(int nominal) {
     return NumberFormat.currency(
       locale: 'id_ID',
@@ -40,7 +38,6 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
     ).format(nominal);
   }
 
-  /// Helper untuk mengambil warna visual status transaksi secara dinamis
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'sukses':
@@ -55,7 +52,6 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
     }
   }
 
-  /// Helper untuk mengambil ikon visual status transaksi secara dinamis
   IconData _getStatusIcon(String status) {
     switch (status.toLowerCase()) {
       case 'sukses':
@@ -78,7 +74,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
-        automaticallyImplyLeading: false, // Menghapus tombol back karena ini menu utama Tab Utama
+        automaticallyImplyLeading: false,
         title: const Text(
           "Riwayat Transaksi",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
@@ -116,12 +112,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
     );
   }
 
-  // =========================================================================
-  // PIPI DATA REAL-TIME STREAM BUILDER (ANTI HARDCODED DATA)
-  // =========================================================================
   Widget _buildDaftarRiwayat({required String filter}) {
-    // Menghubungkan Stream secara reaktif ke Firestore data log transaksi DesaPay
-    // Type-Safety: StreamBuilder kini diekspektasikan menerima List<Transaksi>
     return StreamBuilder<List<Transaksi>>(
       stream: _riwayatService.streamRiwayatTransaksi(uid: _uid, filter: filter),
       builder: (context, snapshot) {
@@ -138,9 +129,9 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
               children: [
                 Icon(Icons.receipt_long_rounded, size: 64, color: WarnaDesaPay.textSub.withOpacity(0.3)),
                 const SizedBox(height: 16),
-                Text(
+                const Text(
                   "Belum ada riwayat transaksi",
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: WarnaDesaPay.textSub),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: WarnaDesaPay.textSub),
                 ),
               ],
             ),
@@ -155,13 +146,12 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
           itemCount: listTransaksi.length,
           itemBuilder: (context, index) {
             final Transaksi tx = listTransaksi[index];
-            final String status = tx.status; // Menggunakan properti objek type-safe
+            // PERBAIKAN MUTLAK: Mengambil nilai representasi String dari data Enum secara aman
+            final String status = tx.status.name; 
             final Color statusColor = _getStatusColor(status);
 
             return CustomBounce(
-              onTap: () {
-                // Arahkan ke halaman detail resi/struk cetak di fase berikutnya
-              },
+              onTap: () {},
               child: Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
@@ -179,25 +169,20 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                   borderRadius: BorderRadius.circular(20),
                   child: Row(
                     children: [
-                      // Indikator Warna Garis Vertikal Sisi Kiri (Premium Highlight)
                       Container(
                         width: 5,
                         height: 84,
                         color: statusColor,
                       ),
-                      
-                      // Isi Konten Struk Transaksi Moduler
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // 1. INFO LAYANAN & TUJUAN
                               Expanded(
                                 child: Row(
                                   children: [
-                                    // Bulatan Ikon Status (Mencerminkan desain di screenshot)
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
@@ -211,8 +196,6 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                                       ),
                                     ),
                                     const SizedBox(width: 14),
-                                    
-                                    // Deskripsi Teks Nama Produk & Nomor
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,10 +228,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> with SingleTickerProvider
                                   ],
                                 ),
                               ),
-                              
                               const SizedBox(width: 8),
-
-                              // 2. NOMINAL HARGA & TAG STATUS TEXT
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 mainAxisSize: MainAxisSize.min,
