@@ -17,10 +17,9 @@ import '../riwayat/riwayat_screen.dart';
 import '../ewallet/ewallet_screen.dart';
 import '../profil/profil_screen.dart';
 
-// Import Re-usable Premium Widgets (CTO Standard)
+// Import Re-usable Premium Widgets (Secara Eksklusif sebagai Induk CustomBounce)
 import '../../widgets/menu_item.dart';
 import '../../widgets/promo_card.dart';
-// Asumsi BannerPromo dapat dipanggil atau diadaptasi secara langsung
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentBannerIndex = 0;
   Timer? _bannerTimer;
 
-  // Data Banner Animasi (Saran: Pindahkan ke database Firestore di fase berikutnya)
   final List<String> _promoBanners = [
     "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80",
     "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=500&q=80",
@@ -52,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _startBannerAnimation();
   }
 
-  /// Mengatur perputaran otomatis carousel banner promo
   void _startBannerAnimation() {
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (!mounted) return;
@@ -78,7 +75,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  /// Format Rupiah Internal yang Aman (Mencegah regex crash pada tipe data)
   String _formatRupiah(int number) {
     return number.toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -86,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Fungsi WhatsApp dengan fallback error handling sesuai standar CI/CD
   Future<void> _launchWA() async {
     const String phone = "6285642131263";
     const String message = "Halo CS DesaPay, saya butuh bantuan terkait transaksi.";
@@ -94,23 +89,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     try {
       if (!await launchUrl(waUrl, mode: LaunchMode.externalApplication)) {
-        debugPrint('Bypass: Aplikasi WA tidak ditemukan, gagal meluncurkan intent.');
+        debugPrint('Bypass: Aplikasi WA tidak ditemukan.');
       }
     } catch (e) {
       debugPrint("Error WA Intent: $e");
     }
   }
 
-  /// Umpan balik taktil untuk refresh layar (Premium UX)
   Future<void> _onRefresh() async {
     HapticFeedback.mediumImpact();
     await Future.delayed(const Duration(milliseconds: 1200));
     if (mounted) setState(() {}); 
   }
 
-  // =========================================================================
-  // WIDGET BUILDER: DASHBOARD BERANDA (INDEX 0)
-  // =========================================================================
   Widget _buildHomeDashboard() {
     return RefreshIndicator(
       onRefresh: _onRefresh,
@@ -119,9 +110,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         slivers: [
-          // ---------------------------------------------------------
-          // 1. SLIVER APP BAR: HEADER & DOMPET SALDO MEWAH
-          // ---------------------------------------------------------
           SliverAppBar(
             expandedHeight: 260,
             pinned: true,
@@ -129,7 +117,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             backgroundColor: WarnaDesaPay.primary,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                // PERBAIKAN: Kata kunci 'const' dihapus dari BoxDecoration ini
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [WarnaDesaPay.primary, const Color(0xFF1E40AF), WarnaDesaPay.secondary],
@@ -142,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // PROFIL & NOTIFIKASI
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -187,7 +173,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 28),
                       
-                      // INFORMASI SALDO REAKTIF
                       Text("Total Saldo Anda", style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
                       StreamBuilder<int>(
@@ -224,7 +209,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       
                       const SizedBox(height: 28),
                       
-                      // TINDAKAN CEPAT (QUICK ACTIONS)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
@@ -240,23 +224,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-
-          // ---------------------------------------------------------
-          // 2. SLIVER BODY: PPOB, BANNER & FEED
-          // ---------------------------------------------------------
           SliverToBoxAdapter(
             child: Container(
-              // PERBAIKAN: Kata kunci 'const' dihapus dari BoxDecoration ini
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: WarnaDesaPay.lightBg,
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+                borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 24),
-                  
-                  // A. CAROUSEL BANNER PROMO
                   SizedBox(
                     height: 150,
                     child: PageView.builder(
@@ -265,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       onPageChanged: (index) => setState(() => _currentBannerIndex = index),
                       itemBuilder: (context, index) {
                         return CustomBounce(
-                          onTap: () {}, // Arahkan ke detail promo nantinya
+                          onTap: () {},
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 20),
                             decoration: BoxDecoration(
@@ -281,8 +258,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // B. MENU GRID PPOB (Menggunakan Modular MenuItem yang sudah distandarisasi)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     child: GridView.count(
@@ -328,10 +303,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
-                  // C. LIVE FEED TICKER (Glassmorphism Halus)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -355,10 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 28),
-                  
-                  // D. PROMO DEALS (Menggunakan Modular PromoCard yang sudah distandarisasi)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 20),
                     child: Text("Promo Untung DesaPay", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain, letterSpacing: 0.2)),
@@ -386,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 120), // Buffer untuk Bottom Nav
+                  const SizedBox(height: 120), 
                 ],
               ),
             ),
@@ -396,7 +365,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper Widget Khusus Aksi Cepat di Header (Internal)
   Widget _buildHeaderAction(IconData icon, String label, VoidCallback onTap) {
     return CustomBounce(
       onTap: onTap,
@@ -419,7 +387,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Membuat status bar transparan menyatu dengan SliverAppBar
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
@@ -428,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final List<Widget> bodyPages = [
       _buildHomeDashboard(),
       const RiwayatScreen(),
-      const SizedBox.shrink(), // Placeholder Kamera Pindai
+      const SizedBox.shrink(), 
       const EwalletScreen(),
       const ProfilScreen(),
     ];
@@ -436,10 +403,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: WarnaDesaPay.lightBg,
       body: bodyPages[_currentIndex],
-      
-      // ---------------------------------------------------------
-      // BOTTOM NAVIGATION BAR (GAYA FINTECH PREMIUM)
-      // ---------------------------------------------------------
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
@@ -454,8 +417,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           unselectedItemColor: WarnaDesaPay.textSub,
           selectedFontSize: 11,
           unselectedFontSize: 11,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800, marginTop: 4),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, marginTop: 4),
+          // PERBAIKAN: Menghapus properti ilegal 'marginTop' dari TextStyle
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
           elevation: 0,
           onTap: (index) {
             if (index == 2) {
@@ -465,16 +429,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             }
           },
           items: [
-            const BottomNavigationBarItem(icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_filled, size: 24)), label: "Beranda"),
-            const BottomNavigationBarItem(icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.receipt_long_rounded, size: 24)), label: "Riwayat"),
-            
-            // TOMBOL SCAN QR TENGAH MELAYANG (FAB STYLE)
+            const BottomNavigationBarItem(
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_filled, size: 24)), 
+              label: "Beranda"
+            ),
+            const BottomNavigationBarItem(
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.receipt_long_rounded, size: 24)), 
+              label: "Riwayat"
+            ),
             BottomNavigationBarItem(
               icon: Container(
                 margin: const EdgeInsets.only(bottom: 4),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  // PERBAIKAN: Kata kunci 'const' dihapus dari LinearGradient ini
                   gradient: LinearGradient(
                     colors: [WarnaDesaPay.primary, WarnaDesaPay.secondary],
                     begin: Alignment.topLeft,
@@ -489,8 +456,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ), 
               label: "Pay"
             ),
-            const BottomNavigationBarItem(icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_rounded, size: 24)), label: "Dompet"),
-            const BottomNavigationBarItem(icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_rounded, size: 24)), label: "Profil"),
+            const BottomNavigationBarItem(
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_rounded, size: 24)), 
+              label: "Dompet"
+            ),
+            const BottomNavigationBarItem(
+              icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_rounded, size: 24)), 
+              label: "Profil"
+            ),
           ],
         ),
       ),
