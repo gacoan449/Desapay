@@ -46,36 +46,34 @@ class RiwayatService implements IRiwayatService {
   }
 
   // ===================================================
-  // 2. STREAM BACA RIWAYAT REAL-TIME & TYPE-SAFE
+  // 2. STREAM BACA RIWAYAT REAL-TIME & TYPE-SAFE (ENUM COMPATIBLE)
   // ===================================================
   @override
   Stream<List<Transaksi>> streamRiwayatTransaksi({required String uid, required String filter}) {
-    // Mengembalikan aliran data list objek model yang siap pakai langsung oleh StreamBuilder di UI
     return _firestore
         .collection("transaksi")
         .where("uid", isEqualTo: uid)
         .orderBy("waktu", descending: true)
         .snapshots()
         .map((snapshot) {
-          // Parsing seluruh dokumen ke dalam Model Objek
           final List<Transaksi> semuaTransaksi = snapshot.docs.map((doc) {
             return Transaksi.fromFirestore(doc);
           }).toList();
 
-          // Client-Side Filtering: Mencegah error index Firestore sekaligus menghemat kuota operasi baca
+          // Memanfaatkan nama properti dari Enum secara aman (.name) untuk penyaringan data
           if (filter == 'berhasil') {
             return semuaTransaksi.where((tx) => 
-              tx.status.toLowerCase() == 'sukses' || 
-              tx.status.toLowerCase() == 'berhasil'
+              tx.status.name.toLowerCase() == 'sukses' || 
+              tx.status.name.toLowerCase() == 'berhasil'
             ).toList();
           } else if (filter == 'pending_gagal') {
             return semuaTransaksi.where((tx) => 
-              tx.status.toLowerCase() != 'sukses' && 
-              tx.status.toLowerCase() != 'berhasil'
+              tx.status.name.toLowerCase() != 'sukses' && 
+              tx.status.name.toLowerCase() != 'berhasil'
             ).toList();
           }
           
-          return semuaTransaksi; // Default kembalikan 'semua'
+          return semuaTransaksi;
         });
   }
 }
