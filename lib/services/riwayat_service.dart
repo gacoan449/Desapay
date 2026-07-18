@@ -1,58 +1,70 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import '../models/transaksi.dart';
 
-class RiwayatService {
+/// Kontrak Abstraksi Layanan Riwayat Transaksi DesaPay (Domain Layer)
+abstract class IRiwayatService {
+  Future<bool> simpan(Transaksi transaksi);
+  Stream<List<Transaksi>> dapatkanRiwayatUser();
+}
+
+/// Implementasi Layanan Manajemen Riwayat & Log Mutasi (Data Layer)
+class RiwayatService implements IRiwayatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ===================================================
-  // 1. FUNGSI SIMPAN RIWAYAT TRANSAKSI (AUTO-METADATA)
+  // 1. FUNGSI SIMPAN RIWAYAT TRANSAKSI REAL (NO DUMMY)
   // ===================================================
-  /// Menyimpan data transaksi pengguna ke Firestore dengan metadata otomatis.
-  Future<bool> simpan(Map<String, dynamic> trx) async {
+  @override
+  Future<bool> simpan(Transaksi transaksi) async {
     try {
       final User? currentUser = _auth.currentUser;
       if (currentUser == null) {
-        if (kDebugMode) print("RiwayatService Error: Sesi pengguna tidak ditemukan.");
-        return false;
+        throw Exception("Sesi pengguna tidak ditemukan. Aksi dibatalkan demi keamanan.");
       }
 
-      // Membuat salinan data transaksi untuk disisipi metadata tambahan
-      final Map<String, dynamic> dataTransaksiLog = Map<String, dynamic>.from(trx);
+      // Memastikan data yang disimpan diikat langsung ke UID pengguna aktif saat ini
+      final Transaksi secureTransaksi = Transaksi(
+        uid: currentUser.uid,
+        kodeProduk: transaksi.kodeProduk,
+        namaProduk: transaksi.namaProduk,
+        nomorTujuan: transaksi.nomorTujuan,
+        hargaNominal: transaksi.hargaNominal,
+        refId: transaksi.refId,
+        status: transaksi.status,
+        metodePembayaran: transaksi.metodePembayaran,
+      );
 
-      // Otomatisasi pengisian parameter metadata demi keamanan & konsistensi data
-      dataTransaksiLog["uid"] = currentUser.uid;
-      dataTransaksiLog["waktu"] = FieldValue.serverTimestamp(); // Menggunakan server-side timestamp
-      
-      // Jika field status belum ditentukan, default ke PENDING
-      dataTransaksiLog["status"] = (dataTransaksiLog["status"] ?? "PENDING").toString().toUpperCase();
-
-      // Menyimpan data ke koleksi 'transaksi' (Sinkron dengan Admin Dashboard & Riwayat)
-      await _firestore.collection("transaksi").add(dataTransaksiLog);
-      
+      // Menambahkan log mutasi langsung ke koleksi 'transaksi' produksi
+      await _firestore.collection("transaksi").add(secureTransaksi.toFirestore());
       return true;
     } catch (e) {
-      if (kDebugMode) print("RiwayatService Exception: Gagal menyimpan mutasi transaksi -> $e");
+      // Penanganan kesalahan terkendali tanpa memicu crash aplikasi saat rilis APK
       return false;
     }
   }
 
   // ===================================================
-  // 2. STREAM UNTUK BACA RIWAYAT USER SECARA REAL-TIME
+  // 2. STREAM BACA RIWAYAT REAL-TIME & TYPE-SAFE
   // ===================================================
-  /// Mengambil aliran data transaksi real-time khusus milik pengguna yang sedang aktif login.
-  Stream<QuerySnapshot<Map<String, dynamic>>> dapatkanRiwayatUser() {
+  @override
+  Stream<List<Transaksi>> dapatkanRiwayatUser() {
     final User? currentUser = _auth.currentUser;
     if (currentUser == null) {
-      // Mengembalikan Stream kosong yang aman jika belum terautentikasi
       return const Stream.empty();
     }
 
+    // Mengembalikan aliran data list objek model yang siap pakai langsung oleh StreamBuilder di UI
     return _firestore
         .collection("transaksi")
         .where("uid", isEqualTo: currentUser.uid)
         .orderBy("waktu", descending: true)
-        .snapshots();
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return Transaksi.fromFirestore(doc);
+          }).toList();
+        });
   }
 }
