@@ -1,57 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+// Import Konfigurasi & Widget Modular Utama (CTO Standard)
 import '../../config/warna.dart';
 import '../../services/digiflazz_service.dart';
+import '../../widgets/menu_item.dart'; // Memuat CustomBounce dari sumber tunggal
 
-// Pembungkus Animasi Memantul (Micro-interaction) Premium saat Tombol Ditekan
-class CustomBounce extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-
-  const CustomBounce({super.key, required this.child, required this.onTap});
-
-  @override
-  State<CustomBounce> createState() => _CustomBounceState();
-}
-
-class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 100),
-    );
-    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: widget.child,
-      ),
-    );
-  }
-}
-
+/// Layar Instruksi dan Tagihan Pembayaran (Invoice) DesaPay
 class PaymentScreen extends StatefulWidget {
   final Map<String, dynamic> data;
 
@@ -71,24 +26,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void initState() {
     super.initState();
+    // Mengamankan data injeksi awal agar tidak null
     _currentTxData = widget.data["data"] ?? {};
   }
 
+  /// Memanggil API untuk memverifikasi status pembayaran mutakhir secara Real-time
   Future<void> _periksaStatusPembayaran() async {
+    // Menampilkan loading overlay
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: WarnaDesaPay.primary),
+      ),
     );
 
-    int nominalAngka = int.tryParse(_currentTxData["amount"].toString()) ?? 0;
+    final int nominalAngka = int.tryParse(_currentTxData["amount"].toString()) ?? 0;
 
-    Map<String, dynamic> hasilTerbaru = await _digiflazzService.cekStatusDeposit(
+    // Memanggil servis core
+    final Map<String, dynamic> hasilTerbaru = await _digiflazzService.cekStatusDeposit(
       jumlahNominal: nominalAngka,
     );
 
-    if (mounted) Navigator.pop(context);
+    // Menutup loading overlay dengan aman
+    if (!mounted) return;
+    Navigator.pop(context);
 
+    // Memperbarui UI State
     setState(() {
       if (hasilTerbaru.isNotEmpty && hasilTerbaru['rc'] == '00') {
         _currentTxData["status"] = "PAID / BERHASIL";
@@ -97,50 +61,62 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Status Terbaru: ${_currentTxData["status"]}"),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: WarnaDesaPay.primary,
-        ),
-      );
-    }
+    _tampilkanNotifikasi("Status Terbaru: ${_currentTxData["status"]}");
   }
 
-  String rupiah(dynamic angka) {
-    int value = int.tryParse(angka.toString()) ?? 0;
-    return value.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]}.',
+  /// Helper Notifikasi Moduler
+  void _tampilkanNotifikasi(String pesan) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          pesan, 
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: WarnaDesaPay.primary,
+      ),
     );
   }
 
-  Color _getStatusColor() {
-    String status = (_currentTxData["status"] ?? "UNPAID").toString().toUpperCase();
-    if (status.contains("PAID") || status.contains("BERHASIL") || status.contains("SUKSES")) {
-      return Colors.green.shade600;
-    } else if (status.contains("FAIL") || status.contains("GAGAL")) {
-      return Colors.red.shade600;
+  /// Standardisasi Format Mata Uang Menggunakan Package `intl`
+  String _formatRupiah(dynamic angka) {
+    final int value = int.tryParse(angka.toString()) ?? 0;
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    ).format(value);
+  }
+
+  /// Helper cerdas penentu warna indikator transaksi
+  Color _getStatusColor(String status) {
+    final String safeStatus = status.toUpperCase();
+    if (safeStatus.contains("PAID") || safeStatus.contains("BERHASIL") || safeStatus.contains("SUKSES")) {
+      return WarnaDesaPay.success;
+    } else if (safeStatus.contains("FAIL") || safeStatus.contains("GAGAL")) {
+      return WarnaDesaPay.danger;
     }
-    return Colors.orange.shade600;
+    return WarnaDesaPay.warning; // Default untuk UNPAID / PENDING
   }
 
   @override
   Widget build(BuildContext context) {
-    final Color statusColor = _getStatusColor();
     final String statusText = (_currentTxData["status"] ?? "UNPAID").toString().toUpperCase();
+    final Color statusColor = _getStatusColor(statusText);
+    final bool isSukses = statusText.contains("PAID") || statusText.contains("BERHASIL");
 
     return Scaffold(
-      backgroundColor: const Color(0xffF8FAFC),
+      backgroundColor: WarnaDesaPay.lightBg,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
+        centerTitle: true,
         title: const Text(
           "Invoice Pembayaran",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
@@ -153,17 +129,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
         child: Column(
           children: [
             // ==========================================
-            // 1. PREMIUM INVOICE TICKET HEADER LAYOUT
+            // 1. KARTU TIKET INVOICE (PREMIUM RECEIPT LAYOUT)
             // ==========================================
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: WarnaDesaPay.lightCard,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: WarnaDesaPay.shadow.withOpacity(0.06),
                     blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(0, 6),
                   )
                 ],
               ),
@@ -171,16 +147,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.08),
+                      color: statusColor.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      statusText.contains("PAID") || statusText.contains("BERHASIL")
-                          ? Icons.check_circle_rounded
-                          : Icons.receipt_long_rounded,
-                      size: 42,
+                      isSukses ? Icons.check_circle_rounded : Icons.receipt_long_rounded,
+                      size: 46,
                       color: statusColor,
                     ),
                   ),
@@ -188,43 +162,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   Text(
                     _currentTxData["payment_name"] ?? "Deposit Saldo DesaPay",
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
+                  const SizedBox(height: 6),
+                  const Text(
                     "Detail instruksi invoice pengisian saldo akun",
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                    style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub, fontWeight: FontWeight.w500),
                   ),
+                  
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Divider(height: 1, thickness: 0.5),
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Divider(height: 1, color: WarnaDesaPay.lightField),
                   ),
-                  _buildInvoiceRow("Total Pembayaran", "Rp ${rupiah(_currentTxData["amount"])}", isHighlight: true),
+                  
+                  _buildInvoiceRow("Total Pembayaran", _formatRupiah(_currentTxData["amount"]), isHighlight: true),
                   _buildInvoiceRow("Nomor Referensi", _currentTxData["reference"] ?? "REF-AUTOMATIC"),
                   _buildInvoiceRow("Status Tiket", statusText, valueColor: statusColor, isStatus: true),
                   if (_currentTxData["pay_code"] != null)
-                    _buildInvoiceRow("Kode Bayar / Pemilik", _currentTxData["pay_code"].toString()),
+                    _buildInvoiceRow("Kode Bayar / Virtual", _currentTxData["pay_code"].toString()),
                 ],
               ),
             ),
             
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ==========================================
-            // 2. INTERACTIVE QRIS DISPLAY BOX
+            // 2. KOTAK TAMPILAN QRIS INTERAKTIF
             // ==========================================
             if (_currentTxData["qr_url"] != null)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: WarnaDesaPay.lightCard,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+                      color: WarnaDesaPay.shadow.withOpacity(0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
                     )
                   ],
                 ),
@@ -233,38 +209,48 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.black87),
+                        Icon(Icons.qr_code_scanner_rounded, size: 20, color: WarnaDesaPay.textMain),
                         SizedBox(width: 8),
                         Text(
                           "Metode Pembayaran QRIS",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textMain),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
+                    const SizedBox(height: 6),
+                    const Text(
                       "Simpan atau screenshot kode QRIS di bawah ini",
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                      style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub, fontWeight: FontWeight.w500),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
+                    
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade100),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: WarnaDesaPay.lightField, width: 2),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         child: Image.network(
                           _currentTxData["qr_url"],
-                          height: 230,
+                          height: 240,
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) {
-                            return const SizedBox(
-                              height: 230,
-                              child: Center(
-                                child: Text("Gagal memuat gambar QRIS dari server.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            return SizedBox(
+                              height: 240,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.broken_image_rounded, size: 48, color: WarnaDesaPay.textSub.withOpacity(0.3)),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    "Gagal memuat gambar QRIS.\nPeriksa koneksi internet Anda.", 
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 12)
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -275,10 +261,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
               ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 36),
 
             // ==========================================
-            // 3. CUSTOMBOUNCE ON REFRESH ACTION
+            // 3. TOMBOL AKSI UTAMA (CUSTOM BOUNCE)
             // ==========================================
             CustomBounce(
               onTap: _periksaStatusPembayaran,
@@ -290,8 +276,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: WarnaDesaPay.primary.withOpacity(0.2),
-                      blurRadius: 12,
+                      color: WarnaDesaPay.primary.withOpacity(0.24),
+                      blurRadius: 14,
                       offset: const Offset(0, 6),
                     ),
                   ],
@@ -304,19 +290,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     SizedBox(width: 8),
                     Text(
                       "CEK STATUS TRANSAKSI",
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.8),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.6),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
+  /// Pembangun Baris Data Invoice dengan Fitur Selectable Text
   Widget _buildInvoiceRow(String label, String value, {bool isHighlight = false, Color? valueColor, bool isStatus = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -324,16 +311,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(
+            label, 
+            style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 13, fontWeight: FontWeight.w600)
+          ),
           const SizedBox(width: 16),
           Expanded(
-            child: SelectableText(
+            child: SelectableText( // Memungkinkan pengguna menyorot & menyalin teks (seperti No. Referensi)
               value,
               textAlign: TextAlign.end,
               style: TextStyle(
-                fontWeight: isHighlight || isStatus ? FontWeight.bold : FontWeight.w600,
+                fontWeight: isHighlight || isStatus ? FontWeight.w900 : FontWeight.w700,
                 fontSize: isHighlight ? 16 : 13,
-                color: valueColor ?? (isHighlight ? WarnaDesaPay.primary : Colors.black87),
+                color: valueColor ?? (isHighlight ? WarnaDesaPay.primary : WarnaDesaPay.textMain),
               ),
             ),
           ),
