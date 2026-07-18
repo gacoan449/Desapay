@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Palet Warna Resmi DesaPay Premium untuk Komponen UI Ragam Menu
-class WarnaDesaPay {
-  static const Color primary = Color(0xFF1E3A8A);   // Royal Blue Utama DesaPay
-  static const Color textMain = Color(0xFF0F172A);  // Slate 900 untuk Teks Utama
-  static const Color shadow = Color(0xFF64748B);    // Slate 500 untuk Aksen Bayangan
-}
+// Mengarahkan ke konfigurasi warna pusat DesaPay untuk menghindari error duplikasi impor
+import '../config/warna.dart';
 
 /// Pembungkus Animasi Memantul (Micro-interaction) Premium untuk Menu Grid DesaPay
 class CustomBounce extends StatefulWidget {
