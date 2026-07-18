@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'config/warna.dart';
 import 'firebase_options.dart';
 import 'screens/splash/splash_screen.dart';
+// ⚠️ Kalau file bottom_nav.dart BELUM DIBUAT: tambah // di depan baris di bawah
 import 'widgets/bottom_nav.dart'; // Navigasi Utama (Logged In)
 import 'screens/login/login_screen.dart'; // Gerbang Login
 
@@ -51,13 +52,13 @@ class DesaPayApp extends StatelessWidget {
             return const SplashScreen();
           }
           
-          // Jika user sudah login, langsung ke BottomNav (Dashboard)
+          // ✅ Hapus kata const di bawah ini
           if (snapshot.hasData) {
-            return const BottomNav();
+            return BottomNav();
           }
           
-          // Jika user belum login, lempar ke Login
-          return const LoginScreen();
+          // ✅ Hapus kata const di bawah ini
+          return LoginScreen();
         },
       ),
     );
