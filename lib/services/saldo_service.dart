@@ -1,32 +1,64 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import '../models/mutasi_saldo.dart';
 
-class SaldoService {
+/// Objek pembungkus respon transaksi saldo agar UI dapat membaca status secara rinci
+class SaldoUpdateResult {
+  final bool isSuccess;
+  final String message;
+  final int saldoAkhir;
+
+  const SaldoUpdateResult({
+    required this.isSuccess,
+    required this.message,
+    this.saldoAkhir = 0,
+  });
+}
+
+/// Kontrak Abstraksi Layanan Manajemen Saldo DesaPay (Domain Layer)
+abstract class ISaldoService {
+  Future<SaldoUpdateResult> updateSaldo({
+    required String uid,
+    required int nominal,
+    required bool isTambah,
+    String keterangan,
+  });
+  Stream<int> streamSaldo(String uid);
+  Stream<List<MutasiSaldo>> streamMutasiUser(String uid);
+}
+
+/// Implementasi Layanan Manajemen Dompet & Audit Saldo Finansial (Data Layer)
+class SaldoService implements ISaldoService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ===================================================
-  // 1. UPDATE SALDO DENGAN ATOMIC TRANSACTION & SAFETY
-  // ===================================================
-  /// Melakukan penambahan atau pengurangan saldo pengguna secara aman (Atomic).
-  /// [isTambah] = true untuk top-up, false untuk potong saldo transaksi.
-  Future<bool> updateSaldo({
+  // =========================================================================
+  // 1. UPDATE SALDO DENGAN ATOMIC TRANSACTION & SAFETY (ANTI DOUBLE SPENDING)
+  // =========================================================================
+  @override
+  Future<SaldoUpdateResult> updateSaldo({
     required String uid,
     required int nominal,
     required bool isTambah,
     String keterangan = "Transaksi",
   }) async {
-    if (nominal <= 0) return false;
+    if (nominal <= 0) {
+      return const SaldoUpdateResult(
+        isSuccess: false, 
+        message: "Nominal transaksi harus lebih besar dari nol.",
+      );
+    }
 
     final DocumentReference<Map<String, dynamic>> userDoc =
         _firestore.collection("users").doc(uid);
 
     try {
-      final bool transaksiSukses = await _firestore.runTransaction<bool>((transaction) async {
+      final SaldoUpdateResult result = await _firestore.runTransaction<SaldoUpdateResult>((transaction) async {
         final DocumentSnapshot<Map<String, dynamic>> snap = await transaction.get(userDoc);
 
         if (!snap.exists) {
-          if (kDebugMode) print("SaldoService: Dokumen user tidak ditemukan.");
-          return false;
+          return const SaldoUpdateResult(
+            isSuccess: false, 
+            message: "Akun dompet pengguna tidak terdaftar di sistem.",
+          );
         }
 
         final Map<String, dynamic> data = snap.data() ?? {};
@@ -37,46 +69,57 @@ class SaldoService {
         if (isTambah) {
           saldoBaru = saldoSekarang + nominal;
         } else {
-          // PROTEKSI FINANCIAL: Cegah saldo menjadi minus saat bertransaksi
+          // PROTEKSI FINANCIAL: Validasi kecukupan saldo (Cegah Nilai Minus/Fraud)
           if (saldoSekarang < nominal) {
-            if (kDebugMode) print("SaldoService: Saldo tidak mencukupi.");
-            return false;
+            return SaldoUpdateResult(
+              isSuccess: false, 
+              message: "Transaksi ditolak. Saldo DesaPay Anda tidak mencukupi.",
+              saldoAkhir: saldoSekarang,
+            );
           }
           saldoBaru = saldoSekarang - nominal;
         }
 
-        // Jalankan pembaruan saldo di dalam transaksi atomic
+        // 1. Eksekusi mutasi saldo pada dokumen user secara aman
         transaction.update(userDoc, {"saldo": saldoBaru});
 
-        // ===================================================
-        // 2. AUDIT TRAIL: BIKIN LOG MUTASI REAL-TIME
-        // ===================================================
+        // 2. Buat Log Audit Trail Mutasi (Type-Safe & Menggunakan Model Transaksi Asli)
         final DocumentReference logMutasiDoc = _firestore.collection("mutasi_saldo").doc();
-        transaction.set(logMutasiDoc, {
-          "uid": uid,
-          "tipe": isTambah ? "MASUK" : "KELUAR",
-          "nominal": nominal,
-          "saldoAwal": saldoSekarang,
-          "saldoAkhir": saldoBaru,
-          "keterangan": keterangan,
-          "waktu": FieldValue.serverTimestamp(),
-        });
+        final MutasiSaldo logMutasi = MutasiSaldo(
+          uid: uid,
+          tipe: isTambah ? TipeMutasi.masuk : TipeMutasi.keluar,
+          nominal: nominal,
+          saldoAwal: saldoSekarang,
+          saldoAkhir: saldoBaru,
+          keterangan: keterangan.trim(),
+        );
 
-        return true;
+        transaction.set(logMutasiDoc, logMutasi.toFirestore());
+
+        return SaldoUpdateResult(
+          isSuccess: true, 
+          message: isTambah ? "Pengisian saldo berhasil." : "Pembayaran saldo berhasil.",
+          saldoAkhir: saldoBaru,
+        );
       });
 
-      return transaksiSukses;
+      return result;
     } catch (e) {
-      if (kDebugMode) print("SaldoService Exception: Gagal memproses transaksi saldo -> $e");
-      return false;
+      // Keamanan Finansial: Jika transaction timeout/interrupted, otomatis rollback & no crash
+      return SaldoUpdateResult(
+        isSuccess: false, 
+        message: "Gagal memproses transaksi saldo: ${e.toString()}",
+      );
     }
   }
 
-  // ===================================================
-  // 3. STREAM CEK SALDO USER SECARA REAL-TIME
-  // ===================================================
-  /// Memantau perubahan saldo pengguna secara real-time untuk memperbarui UI dashboard.
+  // =========================================================================
+  // 2. STREAM MONITORING SALDO REAL-TIME UNTUK DASHBOARD PREMIUM
+  // =========================================================================
+  @override
   Stream<int> streamSaldo(String uid) {
+    if (uid.isEmpty) return Stream.value(0);
+    
     return _firestore
         .collection("users")
         .doc(uid)
@@ -86,6 +129,27 @@ class SaldoService {
             return int.tryParse(snap.data()!["saldo"].toString()) ?? 0;
           }
           return 0;
+        });
+  }
+
+  // =========================================================================
+  // 3. STREAM LOG MUTASI UANG MASUK/KELUAR UNTUK HALAMAN POCKET/AKUN
+  // =========================================================================
+  @override
+  Stream<List<MutasiSaldo>> streamMutasiUser(String uid) {
+    if (uid.isEmpty) return Stream.value([]);
+
+    return _firestore
+        .collection("mutasi_saldo")
+        .where("uid", isEqualTo: uid)
+        .orderBy("waktu", descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return MutasiSaldo.fromFirestore(
+              doc as DocumentSnapshot<Map<String, dynamic>>,
+            );
+          }).toList();
         });
   }
 }
