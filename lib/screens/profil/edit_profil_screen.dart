@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Import Konfigurasi & Widget Modular Utama (CTO Standard)
 import '../../config/warna.dart';
@@ -23,6 +24,9 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   bool _isLoading = false;
+  
+  // Status KTP (Bisa diambil dari database nanti, default true untuk contoh KYC)
+  final bool _isKtpVerified = true; 
 
   @override
   void initState() {
@@ -49,9 +53,9 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
       final data = doc.data()!;
       setState(() {
-        _namaController.text = data["nama"] ?? "";
-        _emailController.text = data["email"] ?? "";
-        _phoneController.text = data["phone"] ?? "";
+        _namaController.text = data["nama"] ?? user.displayName ?? "";
+        _emailController.text = data["email"] ?? user.email ?? "";
+        _phoneController.text = data["phone"] ?? user.phoneNumber ?? "";
       });
     } catch (e) {
       debugPrint("Error loading user data: $e");
@@ -74,6 +78,10 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     try {
       final User? user = _auth.currentUser;
       if (user != null) {
+        // Update ke Firebase Auth
+        await user.updateDisplayName(namaTrim);
+        
+        // Update ke Firestore
         await _firestore.collection("users").doc(user.uid).update({
           "nama": namaTrim,
           "email": emailTrim,
@@ -83,7 +91,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         if (!mounted) return;
         setState(() => _isLoading = false);
         _tampilkanSnackBar("Profil Anda berhasil diperbarui", isError: false);
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Kirim flag 'true' agar layar sebelumnya ter-refresh
       }
     } catch (e) {
       if (!mounted) return;
@@ -92,13 +100,31 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     }
   }
 
+  /// Fungsi untuk menghubungi Admin via WhatsApp jika ingin ubah KTP
+  Future<void> _hubungiAdminKtp() async {
+    const String phone = "6285642131263";
+    const String message = "Halo Admin DesaPay, saya ingin mengajukan perubahan data e-KTP di akun saya. Mohon panduannya.";
+    final Uri waUrl = Uri.parse("https://wa.me/$phone?text=${Uri.encodeComponent(message)}");
+
+    try {
+      if (!await launchUrl(waUrl, mode: LaunchMode.externalApplication)) {
+        _tampilkanSnackBar("Tidak dapat membuka WhatsApp", isError: true);
+      }
+    } catch (e) {
+      _tampilkanSnackBar("Terjadi kesalahan sistem", isError: true);
+    }
+  }
+
   /// Helper penampil notifikasi SnackBar premium
   void _tampilkanSnackBar(String pesan, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          pesan, 
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)
+        content: Row(
+          children: [
+            Icon(isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Text(pesan, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white))),
+          ],
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -109,11 +135,11 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    // Penyesuaian tema, menggunakan default ke false jika tidak ada setup dark mode penuh
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? WarnaDesaPay.darkBg : WarnaDesaPay.lightBg,
+      backgroundColor: isDark ? WarnaDesaPay.lightBg : WarnaDesaPay.lightBg, // Fallback aman
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
@@ -142,7 +168,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: isDark ? WarnaDesaPay.darkCard : Colors.white,
+                      color: Colors.white,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -163,13 +189,14 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                     right: 2,
                     child: CustomBounce(
                       onTap: () {
-                        // Implementasi pemilihan media gambar kustom di masa depan
+                        _tampilkanSnackBar("Fitur upload foto wajah sedang dikembangkan.", isError: false);
                       },
                       child: Container(
                         padding: const EdgeInsets.all(7),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: WarnaDesaPay.warning,
                           shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
                         ),
                         child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                       ),
@@ -187,7 +214,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? WarnaDesaPay.darkCard : Colors.white,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
@@ -203,7 +230,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   _buildModernTextField(
                     context: context,
                     controller: _namaController,
-                    label: "Nama Lengkap Sesuai KTP",
+                    label: "Nama Lengkap / Username",
                     hint: "Masukkan nama lengkap",
                     icon: Icons.person_outline_rounded,
                   ),
@@ -229,10 +256,74 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
               ),
             ),
 
+            const SizedBox(height: 24),
+
+            // =========================================================================
+            // 3. KEAMANAN IDENTITAS (KYC/KTP) YANG DIKUNCI
+            // =========================================================================
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: WarnaDesaPay.lightCard,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: WarnaDesaPay.lightField, width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _isKtpVerified ? WarnaDesaPay.success.withOpacity(0.1) : WarnaDesaPay.warning.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isKtpVerified ? Icons.verified_user_rounded : Icons.pending_actions_rounded, 
+                          color: _isKtpVerified ? WarnaDesaPay.success : WarnaDesaPay.warning, 
+                          size: 20
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text("Data e-KTP (KYC)", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textMain)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "Demi keamanan akun dari tindak pencurian identitas, perubahan foto e-KTP dan NIK hanya dapat dilakukan melalui validasi Admin.",
+                    style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub, height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  CustomBounce(
+                    onTap: _hubungiAdminKtp,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: WarnaDesaPay.primary.withOpacity(0.3), width: 1),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.support_agent_rounded, color: WarnaDesaPay.primary, size: 18),
+                          SizedBox(width: 8),
+                          Text("Hubungi Admin", style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            ),
+
             const SizedBox(height: 36),
 
             // =========================================================================
-            // 3. E-WALLET ACTION BUTTON DENGAN UKURAN KONSISTEN & MIKRO INTERAKSI
+            // 4. E-WALLET ACTION BUTTON DENGAN UKURAN KONSISTEN & MIKRO INTERAKSI
             // =========================================================================
             CustomBounce(
               onTap: _simpanPerubahan,
@@ -241,9 +332,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                 width: double.infinity,
                 height: 54,
                 decoration: BoxDecoration(
-                  color: _isLoading 
-                      ? (isDark ? Colors.grey.shade700 : Colors.grey.shade400) 
-                      : WarnaDesaPay.primary,
+                  color: _isLoading ? Colors.grey.shade400 : WarnaDesaPay.primary,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: _isLoading 
                     ? [] 
@@ -291,18 +380,15 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     required IconData icon,
     TextInputType type = TextInputType.text,
   }) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12, 
             fontWeight: FontWeight.w800, 
-            color: isDark ? WarnaDesaPay.textDarkSub : WarnaDesaPay.textSub,
+            color: WarnaDesaPay.textSub,
             letterSpacing: 0.2,
           ),
         ),
@@ -310,14 +396,22 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         TextField(
           controller: controller,
           keyboardType: type,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 15, 
             fontWeight: FontWeight.w700, 
-            color: isDark ? WarnaDesaPay.textDarkMain : WarnaDesaPay.textMain
+            color: WarnaDesaPay.textMain
           ),
-          decoration: theme.inputDecorationTheme.copyWith(
+          decoration: InputDecoration(
             hintText: hint,
+            hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal),
             prefixIcon: Icon(icon, color: WarnaDesaPay.primary, size: 20),
+            filled: true,
+            fillColor: WarnaDesaPay.lightBg,
+            contentPadding: const EdgeInsets.symmetric(vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
       ],
