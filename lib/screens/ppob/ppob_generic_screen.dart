@@ -1,356 +1,116 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
-
-// Import Konfigurasi & Reusable Widget
 import '../../config/warna.dart';
-import '../../widgets/menu_item.dart'; // Untuk mendapatkan CustomBounce
+import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce & MenuItem
+import 'ppob_generic_screen.dart'; // Untuk dilempar ke form transaksi
 
-/// Layar Sapu Jagat (Generic) untuk menangani multi-kategori PPOB via Digiflazz
-/// (Game, PDAM, BPJS, TV Kabel, Internet, dll)
-class PpobGenericScreen extends StatefulWidget {
-  final String kategori; // Nama layanan (Cth: "PDAM Nasional", "Topup Game")
-  
-  const PpobGenericScreen({super.key, required this.kategori});
+class SemuaLayananScreen extends StatelessWidget {
+  const SemuaLayananScreen({super.key});
 
-  @override
-  State<PpobGenericScreen> createState() => _PpobGenericScreenState();
-}
-
-class _PpobGenericScreenState extends State<PpobGenericScreen> {
-  final TextEditingController _nomorController = TextEditingController();
-  final FocusNode _nomorFocus = FocusNode();
-  
-  bool _isLoading = false;
-  String? _selectedSku; // Menyimpan SKU produk Digiflazz yang dipilih
-
-  // =======================================================================
-  // DUMMY DATA: Representasi respons API Digiflazz (Buyer SKU Code)
-  // Nantinya ini diisi dinamis dari service pemanggilan API berdasarkan widget.kategori
-  // =======================================================================
-  late final List<Map<String, dynamic>> _produkList;
-
-  @override
-  void initState() {
-    super.initState();
-    // Membangun data dummy yang cerdas berdasarkan kategori yang diklik
-    _produkList = _generateMockDigiflazzData(widget.kategori);
-  }
-
-  @override
-  void dispose() {
-    _nomorController.dispose();
-    _nomorFocus.dispose();
-    super.dispose();
-  }
-
-  // Helper pemformatan Rupiah
-  String _formatRupiah(int nominal) {
-    return NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    ).format(nominal);
-  }
-
-  // Simulator respons API Digiflazz
-  List<Map<String, dynamic>> _generateMockDigiflazzData(String kategori) {
-    if (kategori.toLowerCase().contains("game")) {
-      return [
-        {'sku': 'ML_1', 'nama': '53 Diamonds', 'harga': 14500, 'desc': 'Mobile Legends'},
-        {'sku': 'ML_2', 'nama': '77 Diamonds', 'harga': 21000, 'desc': 'Mobile Legends'},
-        {'sku': 'FF_1', 'nama': '140 Diamonds', 'harga': 25000, 'desc': 'Free Fire'},
-        {'sku': 'PUBG_1', 'nama': '60 UC', 'harga': 15000, 'desc': 'PUBG Mobile'},
-      ];
-    } else if (kategori.toLowerCase().contains("pdam") || kategori.toLowerCase().contains("bpjs")) {
-      return [
-        {'sku': 'CEK_TAGIHAN', 'nama': 'Cek Tagihan $kategori', 'harga': 0, 'desc': 'Biaya admin Rp 2.500'},
-      ];
-    } else {
-      return [
-        {'sku': 'GEN_1', 'nama': 'Paket Basic', 'harga': 50000, 'desc': 'Layanan standar'},
-        {'sku': 'GEN_2', 'nama': 'Paket Premium', 'harga': 100000, 'desc': 'Layanan super cepat'},
-      ];
-    }
-  }
-
-  void _prosesTransaksi() {
-    // Validasi form dasar
-    if (_nomorController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Mohon masukkan Nomor Pelanggan / ID terlebih dahulu."),
-          backgroundColor: WarnaDesaPay.danger,
-          behavior: SnackBarBehavior.floating,
-        )
-      );
-      return;
-    }
-
-    if (_selectedSku == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Mohon pilih layanan/nominal yang tersedia."),
-          backgroundColor: WarnaDesaPay.warning,
-          behavior: SnackBarBehavior.floating,
-        )
-      );
-      return;
-    }
-
-    // TODO: Arahkan ke Layar Konfirmasi / PIN Transaksi sebelum tembak API Digiflazz
-    setState(() => _isLoading = true);
-    
-    // Simulasi loading jaringan
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Berhasil memproses SKU: $_selectedSku"),
-            backgroundColor: WarnaDesaPay.success,
-            behavior: SnackBarBehavior.floating,
-          )
-        );
-      }
-    });
+  void _bukaLayanan(BuildContext context, String namaLayanan) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PpobGenericScreen(kategori: namaLayanan)));
   }
 
   @override
   Widget build(BuildContext context) {
-    // Menentukan hint text secara cerdas
-    final String hintInput = widget.kategori.toLowerCase().contains("game") 
-        ? "Masukkan ID Game & Server" 
-        : "Masukkan Nomor Pelanggan";
-
-    final IconData iconInput = widget.kategori.toLowerCase().contains("game") 
-        ? Icons.sports_esports_rounded 
-        : Icons.confirmation_number_rounded;
-
-    // Mendapatkan detail produk yang sedang dipilih untuk BottomBar
-    final Map<String, dynamic>? selectedProduct = _selectedSku != null 
-        ? _produkList.firstWhere((p) => p['sku'] == _selectedSku)
-        : null;
-
     return Scaffold(
-      backgroundColor: WarnaDesaPay.lightBg,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: WarnaDesaPay.primary,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        title: Text(
-          widget.kategori,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
+        backgroundColor: Colors.white,
+        foregroundColor: WarnaDesaPay.textMain,
+        title: const Text("Semua Produk & Layanan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: WarnaDesaPay.lightField, height: 1),
         ),
       ),
-      body: Stack(
+      body: ListView(
+        physics: const BouncingScrollPhysics(),
         children: [
-          // ==========================================
-          // 1. LAYER KONTEN UTAMA (SCROLLABLE)
-          // ==========================================
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(left: 20, right: 20, top: 24, bottom: 120), // Bottom padding untuk area floating bar
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // INFO HEADER BANNER
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: WarnaDesaPay.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: WarnaDesaPay.primary.withOpacity(0.15), width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded, color: WarnaDesaPay.primary, size: 24),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "Pastikan nomor yang Anda masukkan benar. Kesalahan input bukan tanggung jawab sistem.",
-                          style: TextStyle(color: WarnaDesaPay.textMain.withOpacity(0.8), fontSize: 12, height: 1.4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-
-                // INPUT NOMOR PELANGGAN
-                Text("Data Pelanggan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: WarnaDesaPay.textMain)),
-                const SizedBox(height: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
-                    ]
-                  ),
-                  child: TextField(
-                    controller: _nomorController,
-                    focusNode: _nomorFocus,
-                    keyboardType: TextInputType.text,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    decoration: InputDecoration(
-                      hintText: hintInput,
-                      hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, fontSize: 14),
-                      prefixIcon: Icon(iconInput, color: WarnaDesaPay.primary),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 18),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // DAFTAR PRODUK (GRID/LIST)
-                Text("Pilih Layanan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: WarnaDesaPay.textMain)),
-                const SizedBox(height: 12),
-                
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.6, // Mengatur rasio lebar:tinggi kartu
-                  ),
-                  itemCount: _produkList.length,
-                  itemBuilder: (context, index) {
-                    final produk = _produkList[index];
-                    final bool isSelected = _selectedSku == produk['sku'];
-
-                    return CustomBounce(
-                      onTap: () {
-                        // Menutup keyboard saat user memilih produk
-                        _nomorFocus.unfocus();
-                        setState(() => _selectedSku = produk['sku']);
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isSelected ? WarnaDesaPay.primary.withOpacity(0.08) : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isSelected ? WarnaDesaPay.primary : WarnaDesaPay.lightField,
-                            width: isSelected ? 2 : 1,
-                          ),
-                          boxShadow: [
-                            if (!isSelected)
-                              BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4))
-                          ]
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              produk['nama'],
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800, 
-                                fontSize: 14, 
-                                color: isSelected ? WarnaDesaPay.primary : WarnaDesaPay.textMain
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              produk['harga'] == 0 ? "Cek Detail" : _formatRupiah(produk['harga']),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold, 
-                                fontSize: 13, 
-                                color: isSelected ? WarnaDesaPay.primary : WarnaDesaPay.textSub
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              produk['desc'],
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
+          _buildKategoriSection(
+            context,
+            judul: "Telekomunikasi",
+            layanan: [
+              _ItemData("Pulsa Murah", Icons.phone_android_rounded, const Color(0xFFEFF6FF), WarnaDesaPay.primary),
+              _ItemData("Paket Data", Icons.wifi_tethering_rounded, const Color(0xFFF0F9FF), const Color(0xFF0284C7)),
+              _ItemData("Telkom", Icons.phone_in_talk_rounded, const Color(0xFFFEE2E2), const Color(0xFFDC2626)),
+            ],
+          ),
+          
+          Container(height: 8, color: WarnaDesaPay.lightBg), // Pemisah abu-abu ala Shopee
+          
+          _buildKategoriSection(
+            context,
+            judul: "Tagihan & Gaya Hidup",
+            layanan: [
+              _ItemData("Listrik PLN", Icons.bolt_rounded, const Color(0xFFFFFBEB), const Color(0xFFD97706)),
+              _ItemData("PDAM Air", Icons.water_drop_rounded, const Color(0xFFECFEFF), WarnaDesaPay.secondary),
+              _ItemData("BPJS", Icons.health_and_safety_rounded, const Color(0xFFF0FDF4), const Color(0xFF16A34A)),
+              _ItemData("TV Kabel", Icons.tv_rounded, const Color(0xFFFAF5FF), const Color(0xFF9333EA)),
+            ],
           ),
 
-          // ==========================================
-          // 2. LAYER BOTTOM ACTION BAR (FLOATING)
-          // ==========================================
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32), // Padding bawah ekstra untuk area gesture swipe OS
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-                boxShadow: [
-                  BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -5))
-                ]
-              ),
-              child: Row(
-                children: [
-                  // Sisi Kiri: Informasi Harga Total
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("Total Pembayaran", style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        Text(
-                          selectedProduct != null 
-                              ? (selectedProduct['harga'] == 0 ? "-" : _formatRupiah(selectedProduct['harga']))
-                              : "Rp 0",
-                          style: const TextStyle(color: WarnaDesaPay.textMain, fontSize: 18, fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 16),
-                  
-                  // Sisi Kanan: Tombol Eksekusi
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: WarnaDesaPay.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: _isLoading ? null : _prosesTransaksi,
-                    child: _isLoading 
-                        ? const SizedBox(
-                            width: 20, height: 20, 
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)
-                          )
-                        : const Text("Lanjutkan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
-                  )
-                ],
-              ),
+          Container(height: 8, color: WarnaDesaPay.lightBg),
+
+          _buildKategoriSection(
+            context,
+            judul: "Hiburan & Top Up",
+            layanan: [
+              _ItemData("Top Up Games", Icons.sports_esports_rounded, const Color(0xFFFFF1F2), const Color(0xFFE11D48)),
+              _ItemData("Uang Elektronik", Icons.account_balance_wallet_rounded, const Color(0xFFF5F3FF), const Color(0xFF7C3AED)),
+              _ItemData("Streaming", Icons.play_circle_filled_rounded, const Color(0xFFFFF7ED), const Color(0xFFEA580C)),
+            ],
+          ),
+          
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKategoriSection(BuildContext context, {required String judul, required List<_ItemData> layanan}) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(judul, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: WarnaDesaPay.textMain)),
+          const SizedBox(height: 20),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 20,
+              childAspectRatio: 0.85,
             ),
+            itemCount: layanan.length,
+            itemBuilder: (context, index) {
+              final item = layanan[index];
+              return MenuItem(
+                icon: item.icon,
+                title: item.title,
+                badgeColor: item.bgColor,
+                iconColor: item.iconColor,
+                onTap: () => _bukaLayanan(context, item.title),
+              );
+            },
           ),
         ],
       ),
     );
   }
+}
+
+class _ItemData {
+  final String title;
+  final IconData icon;
+  final Color bgColor;
+  final Color iconColor;
+  _ItemData(this.title, this.icon, this.bgColor, this.iconColor);
 }
