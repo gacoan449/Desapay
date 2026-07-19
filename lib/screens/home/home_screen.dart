@@ -16,10 +16,12 @@ import '../pindai/pindai_qris_screen.dart' hide CustomBounce;
 import '../riwayat/riwayat_screen.dart' hide CustomBounce;
 import '../ewallet/ewallet_screen.dart' hide CustomBounce; 
 import '../profil/profil_screen.dart' hide CustomBounce;
-// Import Layar Sapu Jagat PPOB
-import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
 
-// Import Re-usable Premium Widgets (Secara Eksklusif sebagai Induk Tunggal CustomBounce)
+// Import Layar PPOB Dinamis (Jembatan ke Digiflazz)
+import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
+import '../ppob/semua_layanan_screen.dart' hide CustomBounce;
+
+// Import Re-usable Premium Widgets
 import '../../widgets/menu_item.dart';
 import '../../widgets/promo_card.dart';
 
@@ -42,9 +44,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Banner Premium dengan nuansa Superhero/Gaming/Tech Mewah
   final List<String> _promoBanners = [
-    "https://images.unsplash.com/photo-1612036781124-847f8939b154?w=800&q=80", // Vibe Action/Superhero
-    "https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=800&q=80", // Vibe Tech Mewah
-    "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80", // Vibe Gaming/Neon
+    "https://images.unsplash.com/photo-1612036781124-847f8939b154?w=800&q=80",
+    "https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=800&q=80",
+    "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80",
   ];
 
   @override
@@ -106,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() {}); 
   }
 
-  // Fungsi routing dinamis ke Layar PPOB Generik
+  // Fungsi routing dinamis ke Layar PPOB Generik (Jembatan Digiflazz)
   void _bukaLayananGenerik(String namaLayanan) {
     Navigator.push(
       context, 
@@ -123,7 +125,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         slivers: [
           SliverAppBar(
-            // PERBAIKAN MUTLAK: Tinggi ditambah menjadi 310 agar tombol aksi tidak terpotong
             expandedHeight: 310, 
             pinned: true,
             elevation: 0,
@@ -156,7 +157,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 child: const CircleAvatar(
                                   radius: 20,
                                   backgroundColor: WarnaDesaPay.primary,
-                                  // PERBAIKAN: Avatar dinamis, bukan foto bule hardcoded
                                   child: Icon(Icons.person_rounded, size: 24, color: Colors.white), 
                                 ),
                               ),
@@ -186,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ],
                       ),
                       
-                      const Spacer(), // Mendorong sisa elemen ke bawah secara proporsional
+                      const Spacer(),
                       
                       Text("Total Saldo Anda", style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
@@ -233,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           _buildHeaderAction(Icons.qr_code_scanner_rounded, "Pindai", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen()))),
                         ],
                       ),
-                      const SizedBox(height: 24), // Memberikan jarak aman dari ujung bawah lengkungan
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -274,51 +274,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  
+                  // =================================================================
+                  // PERBAIKAN: GRID MENU LENGKAP ALA SHOPEE/DANA (12 ITEM DINAMIS)
+                  // =================================================================
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     child: GridView.count(
                       crossAxisCount: 4,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 16,
+                      mainAxisSpacing: 20,
                       crossAxisSpacing: 12,
                       padding: EdgeInsets.zero,
                       children: [
-                        MenuItem(
-                          icon: Icons.phone_android_rounded, title: "Pulsa", badgeColor: const Color(0xFFEFF6FF), iconColor: WarnaDesaPay.primary,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen())),
-                        ),
-                        MenuItem(
-                          icon: Icons.bolt_rounded, title: "PLN Listrik", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen())),
-                        ),
-                        MenuItem(
-                          icon: Icons.water_drop_rounded, title: "PDAM Air", badgeColor: const Color(0xFFECFEFF), iconColor: WarnaDesaPay.secondary,
-                          onTap: () => _bukaLayananGenerik("PDAM Nasional"),
-                        ),
-                        MenuItem(
-                          icon: Icons.health_and_safety_rounded, title: "BPJS", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF16A34A),
-                          onTap: () => _bukaLayananGenerik("BPJS Kesehatan"),
-                        ),
-                        MenuItem(
-                          icon: Icons.tv_rounded, title: "TV Kabel", badgeColor: const Color(0xFFFAF5FF), iconColor: const Color(0xFF9333EA),
-                          onTap: () => _bukaLayananGenerik("TV & Streaming"),
-                        ),
-                        MenuItem(
-                          icon: Icons.gamepad_rounded, title: "Game", badgeColor: const Color(0xFFFFF1F2), iconColor: const Color(0xFFE11D48),
-                          onTap: () => _bukaLayananGenerik("Topup Game"),
-                        ),
-                        MenuItem(
-                          icon: Icons.wifi_rounded, title: "Internet", badgeColor: const Color(0xFFF0F9FF), iconColor: const Color(0xFF0284C7),
-                          onTap: () => _bukaLayananGenerik("Internet Pascabayar"),
-                        ),
-                        MenuItem(
-                          icon: Icons.grid_view_rounded, title: "Lainnya", badgeColor: WarnaDesaPay.lightField, iconColor: WarnaDesaPay.textSub,
-                          onTap: () => _bukaLayananGenerik("Semua Layanan"),
-                        ),
+                        MenuItem(icon: Icons.phone_android_rounded, title: "Pulsa", badgeColor: const Color(0xFFEFF6FF), iconColor: WarnaDesaPay.primary, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()))),
+                        MenuItem(icon: Icons.bolt_rounded, title: "PLN Listrik", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen()))),
+                        MenuItem(icon: Icons.account_balance_wallet_rounded, title: "E-Wallet", badgeColor: const Color(0xFFF5F3FF), iconColor: const Color(0xFF7C3AED), onTap: () => _bukaLayananGenerik("Topup E-Wallet / E-Toll")),
+                        MenuItem(icon: Icons.sports_esports_rounded, title: "Game", badgeColor: const Color(0xFFFFF1F2), iconColor: const Color(0xFFE11D48), onTap: () => _bukaLayananGenerik("Voucher Game")),
+                        MenuItem(icon: Icons.water_drop_rounded, title: "PDAM Air", badgeColor: const Color(0xFFECFEFF), iconColor: WarnaDesaPay.secondary, onTap: () => _bukaLayananGenerik("PDAM Nasional")),
+                        MenuItem(icon: Icons.health_and_safety_rounded, title: "BPJS", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF16A34A), onTap: () => _bukaLayananGenerik("BPJS Kesehatan")),
+                        MenuItem(icon: Icons.tv_rounded, title: "Internet & TV", badgeColor: const Color(0xFFFAF5FF), iconColor: const Color(0xFF9333EA), onTap: () => _bukaLayananGenerik("Internet & TV Cable")),
+                        MenuItem(icon: Icons.local_fire_department_rounded, title: "Gas PGN", badgeColor: const Color(0xFFFFF7ED), iconColor: const Color(0xFFEA580C), onTap: () => _bukaLayananGenerik("Gas PGN")),
+                        MenuItem(icon: Icons.receipt_long_rounded, title: "Angsuran", badgeColor: const Color(0xFFF1F5F9), iconColor: const Color(0xFF475569), onTap: () => _bukaLayananGenerik("Angsuran Kredit")),
+                        MenuItem(icon: Icons.account_balance_rounded, title: "Pajak PBB", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF059669), onTap: () => _bukaLayananGenerik("Pajak PBB")),
+                        MenuItem(icon: Icons.directions_bus_rounded, title: "Tiket", badgeColor: const Color(0xFFFEF2F2), iconColor: const Color(0xFFDC2626), onTap: () => _bukaLayananGenerik("Tiket Perjalanan")),
+                        MenuItem(icon: Icons.grid_view_rounded, title: "Semua", badgeColor: WarnaDesaPay.lightField, iconColor: WarnaDesaPay.textSub, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SemuaLayananScreen()))),
                       ],
                     ),
                   ),
+                  
                   const SizedBox(height: 24),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -334,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            "Feed: Transaksi PLN Token a/n Budi berhasil",
+                            "Feed: Transaksi E-Toll a/n Budi berhasil",
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WarnaDesaPay.textMain),
@@ -391,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.15),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.2), width: 1), // Efek Glassmorphism Mewah
+              border: Border.all(color: Colors.white.withOpacity(0.2), width: 1), 
             ),
             child: Icon(icon, color: Colors.white, size: 26),
           ),
