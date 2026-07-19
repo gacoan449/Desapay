@@ -3,11 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// Import Konfigurasi & Widget Modular Utama (CTO Standard)
 import '../../config/warna.dart';
-import '../../widgets/menu_item.dart'; // Menggunakan CustomBounce pusat terstandardisasi
+import '../../widgets/menu_item.dart';
 
-/// Halaman Ubah Data Profil Fintek Premium DesaPay (Presentation Layer)
 class EditProfilScreen extends StatefulWidget {
   const EditProfilScreen({super.key});
 
@@ -24,8 +22,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   bool _isLoading = false;
-  
-  // Status KTP (Bisa diambil dari database nanti, default true untuk contoh KYC)
   final bool _isKtpVerified = true; 
 
   @override
@@ -42,7 +38,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     super.dispose();
   }
 
-  /// Memuat data terkini pengguna dari repositori Firestore
   Future<void> _loadDataPengguna() async {
     final User? user = _auth.currentUser;
     if (user == null) return;
@@ -62,7 +57,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     }
   }
 
-  /// Mengirim pembaruan entitas profil ke Firestore dengan validasi ketat
   Future<void> _simpanPerubahan() async {
     final String namaTrim = _namaController.text.trim();
     final String emailTrim = _emailController.text.trim();
@@ -78,10 +72,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     try {
       final User? user = _auth.currentUser;
       if (user != null) {
-        // Update ke Firebase Auth
         await user.updateDisplayName(namaTrim);
-        
-        // Update ke Firestore
         await _firestore.collection("users").doc(user.uid).update({
           "nama": namaTrim,
           "email": emailTrim,
@@ -91,7 +82,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         if (!mounted) return;
         setState(() => _isLoading = false);
         _tampilkanSnackBar("Profil Anda berhasil diperbarui", isError: false);
-        Navigator.pop(context, true); // Kirim flag 'true' agar layar sebelumnya ter-refresh
+        Navigator.pop(context, true); 
       }
     } catch (e) {
       if (!mounted) return;
@@ -100,7 +91,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     }
   }
 
-  /// Fungsi untuk menghubungi Admin via WhatsApp jika ingin ubah KTP
   Future<void> _hubungiAdminKtp() async {
     const String phone = "6285642131263";
     const String message = "Halo Admin DesaPay, saya ingin mengajukan perubahan data e-KTP di akun saya. Mohon panduannya.";
@@ -115,7 +105,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     }
   }
 
-  /// Helper penampil notifikasi SnackBar premium
   void _tampilkanSnackBar(String pesan, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -135,11 +124,8 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Penyesuaian tema, menggunakan default ke false jika tidak ada setup dark mode penuh
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      backgroundColor: isDark ? WarnaDesaPay.lightBg : WarnaDesaPay.lightBg, // Fallback aman
+      backgroundColor: WarnaDesaPay.lightBg, 
       appBar: AppBar(
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
@@ -159,9 +145,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           children: [
-            // =========================================================================
-            // 1. DEKORASI FOTO PROFIL & CIRCLING CAMERA ICON PANEL
-            // =========================================================================
             Center(
               child: Stack(
                 children: [
@@ -171,11 +154,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                       color: Colors.white,
                       shape: BoxShape.circle,
                       boxShadow: [
-                        BoxShadow(
-                          color: WarnaDesaPay.shadow.withOpacity(0.06),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
-                        ),
+                        BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, 6)),
                       ],
                     ),
                     child: CircleAvatar(
@@ -208,27 +187,19 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
             
             const SizedBox(height: 32),
 
-            // =========================================================================
-            // 2. FORM INPUT PREMIUM DENGAN DUKUNGAN THEMED COMPATIBILITY
-            // =========================================================================
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
-                  BoxShadow(
-                    color: WarnaDesaPay.shadow.withOpacity(0.04),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
+                  BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6)),
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildModernTextField(
-                    context: context,
                     controller: _namaController,
                     label: "Nama Lengkap / Username",
                     hint: "Masukkan nama lengkap",
@@ -236,7 +207,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   ),
                   const SizedBox(height: 20),
                   _buildModernTextField(
-                    context: context,
                     controller: _emailController,
                     label: "Alamat Email Aktif",
                     hint: "contoh@domain.com",
@@ -245,7 +215,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   ),
                   const SizedBox(height: 20),
                   _buildModernTextField(
-                    context: context,
                     controller: _phoneController,
                     label: "Nomor Handphone Terdaftar",
                     hint: "Contoh: 08xxxxxxxxxx",
@@ -258,9 +227,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
             const SizedBox(height: 24),
 
-            // =========================================================================
-            // 3. KEAMANAN IDENTITAS (KYC/KTP) YANG DIKUNCI
-            // =========================================================================
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -322,9 +288,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
             const SizedBox(height: 36),
 
-            // =========================================================================
-            // 4. E-WALLET ACTION BUTTON DENGAN UKURAN KONSISTEN & MIKRO INTERAKSI
-            // =========================================================================
             CustomBounce(
               onTap: _simpanPerubahan,
               isDisabled: _isLoading,
@@ -337,31 +300,15 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   boxShadow: _isLoading 
                     ? [] 
                     : [
-                        BoxShadow(
-                          color: WarnaDesaPay.primary.withOpacity(0.24),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
-                        ),
+                        BoxShadow(color: WarnaDesaPay.primary.withOpacity(0.24), blurRadius: 14, offset: const Offset(0, 6)),
                       ],
                 ),
                 alignment: Alignment.center,
                 child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                     : const Text(
                         "SIMPAN PERUBAHAN",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          letterSpacing: 0.6,
-                        ),
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.6),
                       ),
               ),
             ),
@@ -371,9 +318,8 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     );
   }
 
-  /// Builder modular Input Field terintegrasi dengan Dekorasi Global Aplikasi
+  // PERBAIKAN: Menghapus argument 'context' yang tidak perlu dan memperbaiki 'hintText'
   Widget _buildModernTextField({
-    required BuildContext context,
     required TextEditingController controller,
     required String label,
     required String hint,
