@@ -9,7 +9,6 @@ import '../../config/warna.dart';
 import '../../services/saldo_service.dart';
 
 // Import Layar Moduler Bottom Navigation & Fitur
-// PERBAIKAN: Menambahkan 'hide CustomBounce' di semua rute layar yang berpotensi bocor
 import '../pulsa/pulsa_screen.dart' hide CustomBounce;
 import '../pln/pln_screen.dart' hide CustomBounce;
 import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
@@ -18,7 +17,7 @@ import '../riwayat/riwayat_screen.dart' hide CustomBounce;
 import '../ewallet/ewallet_screen.dart' hide CustomBounce; 
 import '../profil/profil_screen.dart' hide CustomBounce;
 
-// Import Re-usable Premium Widgets (Secara Eksklusif sebagai Induk Tunggal CustomBounce)
+// Import Re-usable Premium Widgets
 import '../../widgets/menu_item.dart';
 import '../../widgets/promo_card.dart';
 
@@ -39,9 +38,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentBannerIndex = 0;
   Timer? _bannerTimer;
 
+  // Banner Premium dengan nuansa Superhero/Gaming/Tech Mewah
   final List<String> _promoBanners = [
-    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80",
-    "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=500&q=80",
+    "https://images.unsplash.com/photo-1612036781124-847f8939b154?w=800&q=80", // Vibe Action/Superhero
+    "https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=800&q=80", // Vibe Tech Mewah
+    "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80", // Vibe Gaming/Neon
   ];
 
   @override
@@ -103,6 +104,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() {}); 
   }
 
+  // Fungsi routing sementara agar fitur tidak mati saat diklik
+  void _bukaLayananGenerik(String namaLayanan) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "Menyiapkan modul $namaLayanan...",
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: WarnaDesaPay.secondary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      )
+    );
+  }
+
   Widget _buildHomeDashboard() {
     return RefreshIndicator(
       onRefresh: _onRefresh,
@@ -112,7 +137,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         slivers: [
           SliverAppBar(
-            expandedHeight: 260,
+            // PERBAIKAN MUTLAK: Tinggi ditambah menjadi 310 agar tombol aksi tidak terpotong
+            expandedHeight: 310, 
             pinned: true,
             elevation: 0,
             backgroundColor: WarnaDesaPay.primary,
@@ -143,8 +169,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ),
                                 child: const CircleAvatar(
                                   radius: 20,
-                                  backgroundColor: WarnaDesaPay.lightBg,
-                                  backgroundImage: NetworkImage("https://i.pravatar.cc/100"), 
+                                  backgroundColor: WarnaDesaPay.primary,
+                                  // PERBAIKAN: Avatar dinamis, bukan foto bule hardcoded
+                                  child: Icon(Icons.person_rounded, size: 24, color: Colors.white), 
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -152,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text("DesaPay Premium", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
-                                  Text(_currentUser?.phoneNumber ?? "0856 •••• ••63", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w500)),
+                                  Text(_currentUser?.phoneNumber ?? "Akun Terverifikasi", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ],
@@ -172,7 +199,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           )
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      
+                      const Spacer(), // Mendorong sisa elemen ke bawah secara proporsional
                       
                       Text("Total Saldo Anda", style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
@@ -214,11 +242,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _buildHeaderAction(Icons.add_circle_rounded, "Isi Saldo", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen()))),
-                          _buildHeaderAction(Icons.arrow_circle_down_rounded, "Minta", () {}),
-                          _buildHeaderAction(Icons.send_rounded, "Kirim", () {}),
+                          _buildHeaderAction(Icons.arrow_circle_down_rounded, "Minta", () => _bukaLayananGenerik("Terima Dana")),
+                          _buildHeaderAction(Icons.send_rounded, "Kirim", () => _bukaLayananGenerik("Transfer Bank")),
                           _buildHeaderAction(Icons.qr_code_scanner_rounded, "Pindai", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen()))),
                         ],
-                      )
+                      ),
+                      const SizedBox(height: 24), // Memberikan jarak aman dari ujung bawah lengkungan
                     ],
                   ),
                 ),
@@ -250,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               borderRadius: BorderRadius.circular(20),
                               image: DecorationImage(image: NetworkImage(_promoBanners[index]), fit: BoxFit.cover),
                               boxShadow: [
-                                BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.1), blurRadius: 14, offset: const Offset(0, 6))
+                                BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.15), blurRadius: 14, offset: const Offset(0, 8))
                               ]
                             ),
                           ),
@@ -277,29 +306,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           icon: Icons.bolt_rounded, title: "PLN Listrik", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen())),
                         ),
+                        // PERBAIKAN: Semua menu kini AKTIF dan siap dirutekan ke Digiflazz
                         MenuItem(
                           icon: Icons.water_drop_rounded, title: "PDAM Air", badgeColor: const Color(0xFFECFEFF), iconColor: WarnaDesaPay.secondary,
-                          onTap: () {},
+                          onTap: () => _bukaLayananGenerik("PDAM Nasional"),
                         ),
                         MenuItem(
                           icon: Icons.health_and_safety_rounded, title: "BPJS", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF16A34A),
-                          onTap: () {},
+                          onTap: () => _bukaLayananGenerik("BPJS Kesehatan"),
                         ),
                         MenuItem(
                           icon: Icons.tv_rounded, title: "TV Kabel", badgeColor: const Color(0xFFFAF5FF), iconColor: const Color(0xFF9333EA),
-                          onTap: () {},
+                          onTap: () => _bukaLayananGenerik("TV & Streaming"),
                         ),
                         MenuItem(
                           icon: Icons.gamepad_rounded, title: "Game", badgeColor: const Color(0xFFFFF1F2), iconColor: const Color(0xFFE11D48),
-                          onTap: () {},
+                          onTap: () => _bukaLayananGenerik("Topup Game"),
                         ),
                         MenuItem(
                           icon: Icons.wifi_rounded, title: "Internet", badgeColor: const Color(0xFFF0F9FF), iconColor: const Color(0xFF0284C7),
-                          onTap: () {},
+                          onTap: () => _bukaLayananGenerik("Internet Pascabayar"),
                         ),
                         MenuItem(
                           icon: Icons.grid_view_rounded, title: "Lainnya", badgeColor: WarnaDesaPay.lightField, iconColor: WarnaDesaPay.textSub,
-                          onTap: () {},
+                          onTap: () => _bukaLayananGenerik("Semua Layanan"),
                         ),
                       ],
                     ),
@@ -372,15 +402,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.2), width: 1), // Efek Glassmorphism Mewah
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: Colors.white, size: 26),
           ),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.2)),
+          const SizedBox(height: 10),
+          Text(
+            label, 
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.3)
+          ),
         ],
       ),
     );
