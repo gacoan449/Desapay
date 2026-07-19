@@ -16,8 +16,10 @@ import '../pindai/pindai_qris_screen.dart' hide CustomBounce;
 import '../riwayat/riwayat_screen.dart' hide CustomBounce;
 import '../ewallet/ewallet_screen.dart' hide CustomBounce; 
 import '../profil/profil_screen.dart' hide CustomBounce;
+// Import Layar Sapu Jagat PPOB
+import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
 
-// Import Re-usable Premium Widgets
+// Import Re-usable Premium Widgets (Secara Eksklusif sebagai Induk Tunggal CustomBounce)
 import '../../widgets/menu_item.dart';
 import '../../widgets/promo_card.dart';
 
@@ -104,27 +106,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() {}); 
   }
 
-  // Fungsi routing sementara agar fitur tidak mati saat diklik
+  // Fungsi routing dinamis ke Layar PPOB Generik
   void _bukaLayananGenerik(String namaLayanan) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                "Menyiapkan modul $namaLayanan...",
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: WarnaDesaPay.secondary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
-      )
+    Navigator.push(
+      context, 
+      MaterialPageRoute(builder: (_) => PpobGenericScreen(kategori: namaLayanan))
     );
   }
 
@@ -306,7 +292,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           icon: Icons.bolt_rounded, title: "PLN Listrik", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706),
                           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen())),
                         ),
-                        // PERBAIKAN: Semua menu kini AKTIF dan siap dirutekan ke Digiflazz
                         MenuItem(
                           icon: Icons.water_drop_rounded, title: "PDAM Air", badgeColor: const Color(0xFFECFEFF), iconColor: WarnaDesaPay.secondary,
                           onTap: () => _bukaLayananGenerik("PDAM Nasional"),
