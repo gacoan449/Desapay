@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
-import '../../widgets/menu_item.dart';
+import '../../widgets/menu_item.dart'; // Untuk CustomBounce
 import '../login/login_screen.dart'; 
-// Import layar Edit Profil yang baru kita buat
 import 'edit_profil_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
@@ -73,10 +72,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
         padding: const EdgeInsets.all(20),
         physics: const BouncingScrollPhysics(),
         children: [
+          // KARTU PROFIL UTAMA
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: WarnaDesaPay.lightCard,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 6))],
             ),
@@ -86,9 +86,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.1), shape: BoxShape.circle),
                   child: const CircleAvatar(
-                    radius: 32,
+                    radius: 36,
                     backgroundColor: WarnaDesaPay.primary,
-                    child: Icon(Icons.person_rounded, size: 36, color: Colors.white),
+                    child: Icon(Icons.person_rounded, size: 40, color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -107,16 +107,15 @@ class _ProfilScreenState extends State<ProfilScreen> {
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 13, fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       
-                      // PERBAIKAN: Mengganti Badge menjadi Tombol Navigasi Edit Profil
                       CustomBounce(
                         onTap: () async {
                           final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilScreen()));
-                          if (result == true) setState(() {}); // Refresh jika profil diupdate
+                          if (result == true) setState(() {}); 
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
                             color: WarnaDesaPay.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(100),
@@ -125,9 +124,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.edit_rounded, color: WarnaDesaPay.primary, size: 12),
+                              Icon(Icons.edit_rounded, color: WarnaDesaPay.primary, size: 14),
                               SizedBox(width: 6),
-                              Text("Ubah Profil & KTP", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: WarnaDesaPay.primary)),
+                              Text("Ubah Profil & KTP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: WarnaDesaPay.primary)),
                             ],
                           ),
                         ),
@@ -138,21 +137,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 28),
-
-          const Text("Pengaturan Keamanan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textSub)),
-          const SizedBox(height: 12),
-          _buildMenuRow(Icons.lock_outline_rounded, "Ubah PIN Transaksi", () {}),
-          _buildMenuRow(Icons.fingerprint_rounded, "Keamanan Biometrik", () {}),
           
-          const SizedBox(height: 24),
-          const Text("Pusat Bantuan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textSub)),
-          const SizedBox(height: 12),
-          _buildMenuRow(Icons.help_outline_rounded, "Syarat & Ketentuan Layanan", () {}),
-          _buildMenuRow(Icons.headset_mic_rounded, "Hubungi CS (WhatsApp Aktif)", () {}),
-
-          const SizedBox(height: 36),
+          const SizedBox(height: 36), // Jarak lega ke tombol keluar
           
+          // TOMBOL KELUAR APLIKASI
           CustomBounce(
             onTap: () => _logout(context),
             child: Container(
@@ -173,34 +161,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 100),
+          const SizedBox(height: 40),
         ],
-      ),
-    );
-  }
-
-  Widget _buildMenuRow(IconData icon, String title, VoidCallback onTap) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: CustomBounce(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: WarnaDesaPay.lightCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: WarnaDesaPay.lightField, width: 1),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.08), shape: BoxShape.circle),
-              child: Icon(icon, color: WarnaDesaPay.primary, size: 20),
-            ),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: WarnaDesaPay.textMain)),
-            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: WarnaDesaPay.textSub),
-          ),
-        ),
       ),
     );
   }
