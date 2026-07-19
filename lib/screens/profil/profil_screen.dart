@@ -111,8 +111,9 @@ class ProfilScreen extends StatelessWidget {
                   ),
                   child: const CircleAvatar(
                     radius: 32,
-                    backgroundColor: Colors.grey,
-                    backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+                    backgroundColor: WarnaDesaPay.primary,
+                    // PERBAIKAN: Menghapus hardcoded NetworkImage menjadi Icon default yang elegan
+                    child: Icon(Icons.person_rounded, size: 36, color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -168,7 +169,9 @@ class ProfilScreen extends StatelessWidget {
           // =========================================================================
           const Text("Pengaturan Keamanan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textSub, letterSpacing: 0.3)),
           const SizedBox(height: 12),
-          _buildMenuRow(Icons.lock_outline_rounded, "Ubah PIN Transaksi", () {}),
+          _buildMenuRow(Icons.lock_outline_rounded, "Ubah PIN Transaksi", () {
+            // TODO: Integrasikan ke layar pembaruan PIN di tahap selanjutnya
+          }),
           _buildMenuRow(Icons.fingerprint_rounded, "Keamanan Biometrik", () {}),
           _buildMenuRow(Icons.verified_user_outlined, "Verifikasi KTP (KYC)", () {}),
           
