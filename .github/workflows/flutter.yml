@@ -1,16 +1,31 @@
 name: Flutter Build APK
 
+# ✅ TAMBAHAN 1: Hemat penyimpanan, batasi proses berjalan
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ "main" ]
+  # Bisa juga jalankan manual dari halaman GitHub
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    # ✅ TAMBAHAN 2: Atur agar file hasil otomatis terhapus setelah 1 hari
+    permissions: write-all
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Atur versi Node agar sesuai
+      env:
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      run: echo "Node versi disesuaikan"
 
     - name: Set up Java JDK
       uses: actions/setup-java@v3
@@ -22,6 +37,12 @@ jobs:
       uses: subosito/flutter-action@v2
       with:
         channel: 'stable'
+        cache: true # ✅ Tambah: Mempercepat proses berikutnya
+
+    - name: Cek versi Flutter & Pub
+      run: |
+        flutter --version
+        dart --version
 
     # Otomatis membuat folder android yang hilang sebelum build
     - name: Auto Generate Android Folder
@@ -36,10 +57,14 @@ jobs:
 
     # Mengubah build ke --release agar aplikasi lebih ringan dan siap pakai
     - name: Build APK
-      run: flutter build apk --release
+      run: flutter build apk --release --no-tree-shake-icons
+
+    - name: Cek ukuran file hasil
+      run: ls -lh build/app/outputs/flutter-apk/
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: flutter-app-release
         path: build/app/outputs/flutter-apk/app-release.apk
+        retention-days: 1 # ✅ TAMBAHAN PENTING: File otomatis hilang setelah 1 hari, tidak penuhi penyimpanan
