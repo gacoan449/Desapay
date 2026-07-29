@@ -16,6 +16,8 @@ class PpobGenericScreen extends StatefulWidget {
 class _PpobGenericScreenState extends State<PpobGenericScreen> {
   final TextEditingController _nomorController = TextEditingController();
   final FocusNode _nomorFocus = FocusNode();
+  
+  // Menggunakan Service Digiflazz yang baru
   final DigiflazzService _apiService = DigiflazzService();
   
   bool _isProcessingTransaction = false;
@@ -33,17 +35,52 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
 
   Future<void> _fetchDataDigiflazz() async {
     setState(() => _isLoadingData = true);
-    // Menembak API secara asinkron
-    final result = await _apiService.getProdukByKategori(widget.kategori);
     
-    // Urutkan berdasarkan harga dari yang termurah
-    result.sort((a, b) => (a['price'] as int).compareTo(b['price'] as int));
+    try {
+      // 1. Ambil SEMUA data menggunakan fungsi dari Service Anda
+      final allProducts = await _apiService.ambilSemuaProduk();
 
-    if (mounted) {
-      setState(() {
-        _produkList = result;
-        _isLoadingData = false;
+      // 2. Pemetaan kategori dari UI ke "brand" atau "category" Digiflazz
+      String targetKategori = "";
+      if (widget.kategori.toLowerCase().contains("game")) targetKategori = "Games";
+      else if (widget.kategori.toLowerCase().contains("pdam")) targetKategori = "PDAM";
+      else if (widget.kategori.toLowerCase().contains("pln")) targetKategori = "PLN";
+      else if (widget.kategori.toLowerCase().contains("e-wallet")) targetKategori = "E-Money";
+      else targetKategori = widget.kategori;
+
+      // 3. Filter produk agar hanya muncul yang sesuai kategori dan sedang aktif
+      List<dynamic> filteredProducts = allProducts.where((p) {
+        final category = p['category']?.toString().toLowerCase() ?? '';
+        final brand = p['brand']?.toString().toLowerCase() ?? '';
+        
+        final isKategoriMatch = category.contains(targetKategori.toLowerCase()) || 
+                                brand.contains(targetKategori.toLowerCase());
+                                
+        final isAktif = p['buyer_product_status'] == true && p['seller_product_status'] == true;
+        
+        return isKategoriMatch && isAktif;
+      }).toList();
+
+      // 4. Urutkan berdasarkan harga dari yang termurah
+      filteredProducts.sort((a, b) {
+        final int priceA = int.tryParse(a['price'].toString()) ?? 0;
+        final int priceB = int.tryParse(b['price'].toString()) ?? 0;
+        return priceA.compareTo(priceB);
       });
+
+      if (mounted) {
+        setState(() {
+          _produkList = filteredProducts;
+          _isLoadingData = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingData = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal memuat produk: $e"), backgroundColor: WarnaDesaPay.danger),
+        );
+      }
     }
   }
 
@@ -62,11 +99,11 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     if (_nomorController.text.trim().isEmpty || _selectedSku == null) return;
     setState(() => _isProcessingTransaction = true);
     
-    // TODO: Arahkan ke form konfirmasi PIN atau langsung tembak API Transaksi Digiflazz
+    // TODO: Nanti kita hubungkan ini ke _apiService.kirimTransaksi()
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() => _isProcessingTransaction = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Transaksi diproses!")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Transaksi sedang diproses...")));
       }
     });
   }
@@ -121,12 +158,11 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                     itemCount: _produkList.length,
                     itemBuilder: (context, index) {
                       final produk = _produkList[index];
-                      // Menyesuaikan dengan key JSON Digiflazz
+                      // Sesuai JSON Digiflazz
                       final sku = produk['buyer_sku_code'];
                       final nama = produk['product_name'];
-                      // Tambahkan margin keuntungan Anda (misal + Rp 1500 dari harga asli Digiflazz)
-                      final hargaAsli = produk['price'] as int;
-                      final hargaJual = hargaAsli + 1500; 
+                      // Harga sudah dimarkup Rp 1.000 dari service Anda
+                      final hargaJual = int.tryParse(produk['price'].toString()) ?? 0; 
                       
                       final isSelected = _selectedSku == sku;
 
