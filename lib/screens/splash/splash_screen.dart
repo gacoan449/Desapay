@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
-import '../home/home_screen.dart';
+
+// ✅ PERBAIKAN 1: Import BottomNav, buang import HomeScreen
+import '../../widgets/bottom_nav.dart'; // Sesuaikan path ini jika posisi file bottom_nav.dart Anda berbeda
 import '../welcome_screen.dart'; 
-// Hapus import login_screen yang salah path sebelumnya
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -28,10 +29,10 @@ class _SplashScreenState extends State<SplashScreen> {
       final User? user = FirebaseAuth.instance.currentUser;
       
       if (user != null) {
-        // Jika sudah login, lempar ke Home
+        // ✅ PERBAIKAN 2: Jika sudah login, lempar ke BottomNav (agar menu bawah muncul)
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const BottomNav()),
         );
       } else {
         // Jika belum login, lempar ke Welcome Screen (sesuai alur UI Anda)
