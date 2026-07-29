@@ -555,9 +555,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
+  // ✅ PERBAIKAN: Fungsi ini sudah menggunakan InputDecoration langsung (Bukan copyWith)
   Widget _buildModernInput({required BuildContext context, required TextEditingController controller, required String label, required String hint, int maxLines = 1}) {
-    final theme = Theme.of(context);
-    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -567,8 +566,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           controller: controller,
           maxLines: maxLines,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: WarnaDesaPay.textMain),
-          decoration: theme.inputDecorationTheme.copyWith(
+          decoration: InputDecoration(
             hintText: hint,
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
+            filled: true,
+            fillColor: WarnaDesaPay.lightBg,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: WarnaDesaPay.lightField, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: WarnaDesaPay.primary, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
         ),
       ],
