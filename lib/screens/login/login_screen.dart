@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 
-// --- PERBAIKAN JALUR IMPORT (Menyesuaikan Struktur Folder Anda) ---
-import '../home/home_screen.dart';
+// ✅ PERBAIKAN: Import file BottomNav, bukan HomeScreen
+import '../../widgets/bottom_nav.dart'; // Jika file bottom_nav.dart Anda ada di folder screens, ubah menjadi '../bottom_nav.dart'
 import '../auth/forgot_password_screen.dart';
 import '../auth/register_screen.dart';
 
@@ -62,11 +62,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (hasil == null) {
 
-      // --- PERBAIKAN NAVIGASI: Arahkan ke HomeScreen setelah login sukses ---
+      // ✅ PERBAIKAN NAVIGASI MUTLAK: Arahkan ke BottomNav agar menu bawah langsung muncul
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
+          builder: (_) => const BottomNav(),
         ),
       );
 
@@ -85,7 +85,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
-      // ✅ PERBAIKAN: Ganti WarnaDesaPay.background jadi Colors.white
       backgroundColor: Colors.white,
 
       body: SafeArea(
@@ -105,7 +104,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // Judul Aplikasi dibuat Bold dan Hitam Pekat Dominan
               const Text(
                 "DesaPay",
                 style: TextStyle(
@@ -115,7 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // Teks Subtitle diubah dari abu-abu pudar ke abu-abu gelap tegas (kontras naik)
               const Text(
                 "Masuk ke akun Anda",
                 style: TextStyle(
@@ -127,11 +124,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 40),
 
-              // Form Input Email Dipertegas Warna Label, Icon, dan Border Aktifnya
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: Colors.black87), // Warna teks input ketikan user
+                style: const TextStyle(color: Colors.black87),
                 decoration: InputDecoration(
                   labelText: "Email",
                   labelStyle: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w500),
@@ -150,11 +146,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // Form Input Password Dipertegas Warna Label, Icon, dan Border Aktifnya
               TextField(
                 controller: passwordController,
                 obscureText: hidePassword,
-                style: const TextStyle(color: Colors.black87), // Warna teks input ketikan user
+                style: const TextStyle(color: Colors.black87),
                 decoration: InputDecoration(
                   labelText: "Password",
                   labelStyle: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w500),
@@ -184,7 +179,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // Tombol Lupa Password diganti menjadi Warna Brand Utama (Biru Terang Tegas)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -208,7 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 10),
 
-              // Tombol Login Dipertegas Warnanya Berbasis Primary Color
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -232,7 +225,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 15),
 
-              // Tombol Daftar Akun Menggunakan Outlined dengan Teks Biru Brand Utama yang Sangat Jelas
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -263,7 +255,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // Bagian Kontak Bantuan Bawah Diperjelas Menggunakan Hitam Pekat yang Terbaca Jelas
               const Text(
                 "Butuh Bantuan?",
                 style: TextStyle(
