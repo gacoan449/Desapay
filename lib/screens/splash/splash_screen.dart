@@ -4,8 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
 
-// ✅ PERBAIKAN 1: Import BottomNav, buang import HomeScreen
-import '../../widgets/bottom_nav.dart'; // Sesuaikan path ini jika posisi file bottom_nav.dart Anda berbeda
+// ✅ PERBAIKAN 1: Import BottomNav & Layar Admin
+import '../../widgets/bottom_nav.dart'; 
+import '../admin/admin_dashboard_screen.dart'; // Sesuaikan path ini jika posisi file Anda berbeda
 import '../welcome_screen.dart'; 
 
 class SplashScreen extends StatefulWidget {
@@ -29,13 +30,22 @@ class _SplashScreenState extends State<SplashScreen> {
       final User? user = FirebaseAuth.instance.currentUser;
       
       if (user != null) {
-        // ✅ PERBAIKAN 2: Jika sudah login, lempar ke BottomNav (agar menu bawah muncul)
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const BottomNav()),
-        );
+        // ✅ PERBAIKAN 2: Cek Email untuk memisahkan Admin dan User
+        if (user.email?.toLowerCase() == "annisaulinayah55@gmail.com") {
+          // JIKA ADMIN: Lempar langsung ke Command Center / Dashboard Admin
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+          );
+        } else {
+          // JIKA USER BIASA: Lempar ke BottomNav (agar menu bawah muncul)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const BottomNav()),
+          );
+        }
       } else {
-        // Jika belum login, lempar ke Welcome Screen (sesuai alur UI Anda)
+        // Jika belum login, lempar ke Welcome Screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const WelcomeScreen()),
