@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 
-// ✅ PERBAIKAN: Import file BottomNav, bukan HomeScreen
-import '../../widgets/bottom_nav.dart'; // Jika file bottom_nav.dart Anda ada di folder screens, ubah menjadi '../bottom_nav.dart'
+// Import Navigasi Pengguna Biasa & Admin
+import '../../widgets/bottom_nav.dart'; 
+import '../admin/admin_dashboard_screen.dart'; // Pastikan path folder admin ini sudah sesuai
+
 import '../auth/forgot_password_screen.dart';
 import '../auth/register_screen.dart';
 
@@ -33,10 +35,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> login() async {
+    final emailInput = emailController.text.trim();
+    final passwordInput = passwordController.text.trim();
 
-    if (emailController.text.isEmpty ||
-        passwordController.text.isEmpty) {
-
+    if (emailInput.isEmpty || passwordInput.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Email dan password wajib diisi"),
@@ -50,8 +52,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     final hasil = await auth.login(
-      email: emailController.text.trim(),
-      password: passwordController.text.trim(),
+      email: emailInput,
+      password: passwordInput,
     );
 
     setState(() {
@@ -61,29 +63,35 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (hasil == null) {
-
-      // ✅ PERBAIKAN NAVIGASI MUTLAK: Arahkan ke BottomNav agar menu bawah langsung muncul
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const BottomNav(),
-        ),
-      );
-
+      // --- LOGIKA PEMISAH AKUN (ROLE-BASED ACCESS CONTROL) ---
+      if (emailInput.toLowerCase() == "annisaulinayah55@gmail.com") {
+        // JIKA ADMIN: Lempar ke Command Center (Dashboard Khusus Admin)
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AdminDashboardScreen(),
+          ),
+        );
+      } else {
+        // JIKA USER BIASA: Lempar ke BottomNav Utama DesaPay
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const BottomNav(),
+          ),
+        );
+      }
     } else {
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(hasil),
         ),
       );
-
     }
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: Colors.white,
 
