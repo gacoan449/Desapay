@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Import Konfigurasi & Widget Modular
+// Import Konfigurasi & Widget Modular Utama
 import '../../config/warna.dart';
 import '../../widgets/menu_item.dart'; 
 
-/// Halaman Command Center / Panel Admin DesaPay (Versi Super Admin)
+/// Halaman Command Center / Panel Admin DesaPay (100% REAL DATA)
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -31,14 +31,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   @override
   void initState() {
     super.initState();
-    // ✅ PERBAIKAN: Menjadi 5 Tab untuk mengakomodasi semua fitur skala Enterprise
     _adminTabController = TabController(length: 5, vsync: this);
     _loadInitialConfiguration();
   }
 
   Future<void> _loadInitialConfiguration() async {
     try {
-      // Load Promo
+      // Load Promo dari Database
       DocumentSnapshot docApp = await _firestore.collection("pengaturan").doc("aplikasi").get();
       if (docApp.exists && mounted) {
         final data = docApp.data() as Map<String, dynamic>;
@@ -48,7 +47,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         });
       }
       
-      // Load Pengaturan Keuangan (Markup)
+      // Load Pengaturan Keuangan (Markup) dari Database
       DocumentSnapshot docFin = await _firestore.collection("pengaturan").doc("finansial").get();
       if (docFin.exists && mounted) {
         final data = docFin.data() as Map<String, dynamic>;
@@ -142,6 +141,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     return parsed.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
   }
 
+  String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return "-";
+    DateTime dt = timestamp.toDate();
+    return "${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,7 +172,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             color: WarnaDesaPay.darkBg,
             child: TabBar(
               controller: _adminTabController,
-              isScrollable: true, // ✅ Agar tidak berdesakan karena tabnya banyak
+              isScrollable: true, 
               indicatorColor: WarnaDesaPay.warning,
               indicatorWeight: 3,
               labelColor: WarnaDesaPay.warning,
@@ -188,18 +193,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         controller: _adminTabController,
         physics: const BouncingScrollPhysics(),
         children: [
-          _buildPanelKontenUI(),     // Tab 1
-          _buildPanelPengguna(),     // Tab 2 (Baru)
-          _buildPanelKeuangan(),     // Tab 3 (Diperluas)
-          _buildPanelSistem(),       // Tab 4 (Baru)
-          _buildPanelTiketCS(),      // Tab 5 (Diperbarui)
+          _buildPanelKontenUI(),     
+          _buildPanelPengguna(),     
+          _buildPanelKeuangan(),     
+          _buildPanelSistem(),       
+          _buildPanelTiketCS(),      
         ],
       ),
     );
   }
 
   // ==========================================
-  // TAB 1: KONTEN UI (Mirip Gambar Anda)
+  // TAB 1: KONTEN UI (REALTIME DATABASE)
   // ==========================================
   Widget _buildPanelKontenUI() {
     return SingleChildScrollView(
@@ -235,19 +240,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           const SizedBox(height: 32),
           const Text("Manajemen Modul Layanan", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain)),
           const SizedBox(height: 12),
-          // Stream builder menu OTA (sama seperti sebelumnya) disingkat untuk keterbacaan
-          const Center(child: Text("Sistem Menu OTA Aktif.", style: TextStyle(color: WarnaDesaPay.textSub))),
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection("menu_layanan").orderBy("urutan").snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: WarnaDesaPay.primary)));
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) return const Center(child: Text("Belum ada menu custom yang dibuat.", style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 12)));
+              
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final item = docs[index].data() as Map<String, dynamic>;
+                  bool isAktif = item["isAktif"] ?? false;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: WarnaDesaPay.lightField)),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.grid_view_rounded, color: WarnaDesaPay.primary, size: 20)),
+                      title: Text(item["nama"] ?? "-", style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: WarnaDesaPay.textMain)),
+                      subtitle: Text("ID Modul: ${item["id"]}", style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 11)),
+                      trailing: Switch.adaptive(
+                        value: isAktif, activeColor: WarnaDesaPay.success,
+                        onChanged: (val) => _firestore.collection("menu_layanan").doc(item["id"]).update({"isAktif": val}),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
   // ==========================================
-  // TAB 2: MANAJEMEN PENGGUNA & SALDO (BARU)
+  // TAB 2: MANAJEMEN PENGGUNA & SALDO (REAL DATA)
   // ==========================================
   Widget _buildPanelPengguna() {
     return StreamBuilder<QuerySnapshot>(
-      // Membaca koleksi users di Firestore
       stream: _firestore.collection("users").orderBy("createdAt", descending: true).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: WarnaDesaPay.primary));
@@ -286,7 +320,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                         ),
                       ),
                       Switch.adaptive(
-                        value: !isBlocked, // Terbalik: Jika on berarti aktif, off berarti blokir
+                        value: !isBlocked,
                         activeColor: WarnaDesaPay.success,
                         inactiveThumbColor: WarnaDesaPay.danger,
                         onChanged: (val) {
@@ -342,7 +376,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   // ==========================================
-  // TAB 3: KONTROL KEUANGAN & MUTASI (DIPERLUAS)
+  // TAB 3: KONTROL KEUANGAN & MUTASI (100% REAL DATA DARI FIRESTORE)
   // ==========================================
   Widget _buildPanelKeuangan() {
     return SingleChildScrollView(
@@ -359,7 +393,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               children: [
                 const Text("Setel Markup Profit Global", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 10),
-                const Text("Sistem akan otomatis menambahkan nominal ini ke harga dasar dari Digiflazz.", style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub)),
+                const Text("Sistem otomatis menambahkan nominal ini ke harga dasar dari API.", style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub)),
                 const SizedBox(height: 16),
                 _buildModernInput(context: context, controller: markupController, label: "Markup Keuntungan (Rp)", hint: "Contoh: 150"),
                 const SizedBox(height: 16),
@@ -372,19 +406,100 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             ),
           ),
           const SizedBox(height: 24),
-          // PANEL SALDO API
-          Row(
-            children: [
-              Expanded(child: _buildInfoCard("Saldo Digiflazz", "Rp 1.450.000", Icons.api_rounded, WarnaDesaPay.primary)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildInfoCard("Saldo TriPay", "Rp 320.000", Icons.payment_rounded, Colors.orange)),
-            ],
+          
+          // REALTIME SALDO INFO CARD (Menarik data dari database)
+          StreamBuilder<DocumentSnapshot>(
+            stream: _firestore.collection("pengaturan").doc("finansial").snapshots(),
+            builder: (context, snapshot) {
+              int saldoDigi = 0;
+              int saldoTri = 0;
+              if (snapshot.hasData && snapshot.data!.exists) {
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                saldoDigi = data["saldoDigiflazz"] ?? 0; // Jika tidak ada, fallback ke 0
+                saldoTri = data["saldoTriPay"] ?? 0;
+              }
+              return Row(
+                children: [
+                  Expanded(child: _buildInfoCard("Saldo Digiflazz", "Rp ${_formatCurrency(saldoDigi)}", Icons.api_rounded, WarnaDesaPay.primary)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildInfoCard("Saldo TriPay", "Rp ${_formatCurrency(saldoTri)}", Icons.payment_rounded, Colors.orange)),
+                ],
+              );
+            },
           ),
+          
           const SizedBox(height: 24),
           const Text("Live Mutasi Transaksi User", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 10),
-          // (Di sini masukkan StreamBuilder untuk collection "transaksi" seperti kode sebelumnya)
-          const Center(child: Text("Data mutasi realtime dimuat di sini.", style: TextStyle(color: WarnaDesaPay.textSub))),
+          
+          // REALTIME STREAM BUILDER TRANSAKSI (Bukan Teks Kosong Lagi)
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection("transaksi").orderBy("waktu", descending: true).limit(50).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: WarnaDesaPay.primary)));
+              }
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return Center(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Icon(Icons.analytics_outlined, size: 48, color: WarnaDesaPay.textSub.withOpacity(0.3)),
+                      const SizedBox(height: 10),
+                      const Text("Belum ada log transaksi terekam di database.", style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 13)),
+                    ],
+                  ),
+                );
+              }
+              
+              return ListView.builder(
+                shrinkWrap: true, // Wajib true karena di dalam SingleChildScrollView
+                physics: const NeverScrollableScrollPhysics(), // Wajib false agar tidak dobel scroll
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final log = docs[index].data() as Map<String, dynamic>;
+                  String status = (log["status"] ?? "PENDING").toString().toUpperCase();
+                  
+                  Color statusColor;
+                  if (status.contains("SUKSES") || status.contains("BERHASIL")) {
+                    statusColor = WarnaDesaPay.success;
+                  } else if (status.contains("GAGAL")) {
+                    statusColor = WarnaDesaPay.danger;
+                  } else {
+                    statusColor = WarnaDesaPay.warning;
+                  }
+                  
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: WarnaDesaPay.lightField)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                              child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                            ),
+                            Text("Rp ${_formatCurrency(log["hargaJual"] ?? log["price"] ?? 0)}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: WarnaDesaPay.textMain)),
+                          ],
+                        ),
+                        const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: WarnaDesaPay.lightField)),
+                        _buildDetailRow("Produk", log["product_name"] ?? log["buyer_sku_code"] ?? "-"),
+                        _buildDetailRow("Tujuan", log["customer_no"] ?? log["tujuan"] ?? "-"),
+                        _buildDetailRow("SN/Reff", log["sn"] ?? log["message"] ?? "-"),
+                        _buildDetailRow("Waktu", _formatDate(log["waktu"] as Timestamp?)),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
@@ -406,53 +521,87 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
-  // ==========================================
-  // TAB 4: SISTEM KEAMANAN & LOG (BARU)
-  // ==========================================
-  Widget _buildPanelSistem() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore.collection("system_logs").orderBy("timestamp", descending: true).limit(30).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        // Jika belum ada data dummy, kita tampilkan template designnya
-        return ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            const Text("Log Aktivitas Server & Keamanan", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-            const SizedBox(height: 20),
-            _buildLogItem("OTP_SENT", "Kode OTP dikirim ke 085642131263 via WhatsApp. Status: Sukses.", "10 Menit lalu", WarnaDesaPay.success),
-            _buildLogItem("API_ERROR", "Digiflazz Timeout: Gagal melakukan pengecekan saldo.", "1 Jam lalu", WarnaDesaPay.danger),
-            _buildLogItem("LOGIN_ATTEMPT", "Percobaan login gagal dari IP 114.120.x.x (Email: hacker@test.com).", "3 Jam lalu", WarnaDesaPay.warning),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildLogItem(String tipe, String pesan, String waktu, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border(left: BorderSide(color: color, width: 4)), color: WarnaDesaPay.lightCard),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(tipe, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: color)),
-              Text(waktu, style: const TextStyle(fontSize: 10, color: WarnaDesaPay.textSub)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(pesan, style: const TextStyle(fontSize: 12, color: WarnaDesaPay.textMain)),
+          Text(label, style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 12, fontWeight: FontWeight.w600)),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: WarnaDesaPay.textMain), textAlign: TextAlign.end, maxLines: 1, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
   }
 
   // ==========================================
-  // TAB 5: TIKET CS (DIPERBARUI DENGAN STATUS 3 TINGKAT)
+  // TAB 4: SISTEM KEAMANAN & LOG (100% REAL DATA DARI FIRESTORE)
+  // ==========================================
+  Widget _buildPanelSistem() {
+    return StreamBuilder<QuerySnapshot>(
+      // Membaca full dari database (tidak ada lagi hardcode)
+      stream: _firestore.collection("system_logs").orderBy("timestamp", descending: true).limit(30).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: WarnaDesaPay.primary));
+        
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          // Jika kosong, tampilkan layar info aman, bukan data error bohong.
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.shield_rounded, size: 60, color: WarnaDesaPay.success.withOpacity(0.5)),
+                const SizedBox(height: 16),
+                const Text("Sistem Berjalan Aman", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: WarnaDesaPay.textMain)),
+                const SizedBox(height: 8),
+                const Text("Belum ada log error atau aktivitas mencurigakan yang terekam di database server.", textAlign: TextAlign.center, style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 12)),
+              ],
+            ),
+          );
+        }
+        
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final log = docs[index].data() as Map<String, dynamic>;
+            
+            String tipe = log["tipe"] ?? "INFO";
+            String pesan = log["pesan"] ?? "-";
+            String waktu = _formatDate(log["timestamp"] as Timestamp?);
+            
+            Color color = WarnaDesaPay.success;
+            if (tipe.toUpperCase() == "ERROR" || tipe.toUpperCase() == "CRITICAL") color = WarnaDesaPay.danger;
+            if (tipe.toUpperCase() == "WARNING" || tipe.toUpperCase() == "LOGIN_ATTEMPT") color = WarnaDesaPay.warning;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(border: Border(left: BorderSide(color: color, width: 4)), color: WarnaDesaPay.lightCard),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(tipe, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: color)),
+                      Text(waktu, style: const TextStyle(fontSize: 10, color: WarnaDesaPay.textSub)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(pesan, style: const TextStyle(fontSize: 12, color: WarnaDesaPay.textMain)),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ==========================================
+  // TAB 5: TIKET CS (REAL DATA)
   // ==========================================
   Widget _buildPanelTiketCS() {
     return StreamBuilder<QuerySnapshot>(
@@ -468,18 +617,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           itemBuilder: (context, index) {
             final tiket = docs[index].data() as Map<String, dynamic>;
             final tiketId = docs[index].id;
-            String status = tiket["status"] ?? "Pending"; // Pending, Proses, Selesai
+            String status = tiket["status"] ?? "Pending"; 
             
             Color statusColor = status == "Selesai" ? WarnaDesaPay.success : (status == "Proses" ? WarnaDesaPay.warning : WarnaDesaPay.danger);
 
             return Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: WarnaDesaPay.lightCard,
-                borderRadius: BorderRadius.circular(16),
-                border: Border(left: BorderSide(color: statusColor, width: 5)),
-              ),
+              decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(16), border: Border(left: BorderSide(color: statusColor, width: 5))),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -487,7 +632,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(tiket["namaUser"] ?? "Anonymous", style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                      // Dropdown Status
                       Container(
                         height: 30,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
