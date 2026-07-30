@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../../config/warna.dart';
 
-// Pembungkus Animasi Memantul (Micro-interaction) Premium saat Notifikasi Disentuh
+// Pembungkus Animasi Memantul (Micro-interaction) Premium
 class CustomBounce extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -60,6 +63,7 @@ class NotifikasiScreen extends StatefulWidget {
 
 class _NotifikasiScreenState extends State<NotifikasiScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final User? _currentUser = FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
@@ -89,7 +93,6 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> with SingleTickerPr
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        // SEGMENTED TABS UNTUK FILTER NOTIFIKASI ALA E-WALLET MEWAH
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
@@ -113,77 +116,89 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> with SingleTickerPr
         controller: _tabController,
         physics: const BouncingScrollPhysics(),
         children: [
-          // TAB 1: AKTIVITAS TRANSAKSI
-          ListView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            children: [
-              _buildSectionHeader("Hari Ini"),
-              _NotifCard(
-                icon: Icons.check_circle_rounded,
-                color: Colors.green.shade600,
-                title: "Transaksi Berhasil",
-                subtitle: "Pulsa Telkomsel Rp20.000 sukses diproses ke nomor tujuan.",
-                time: "Baru saja",
-                onTap: () {},
-              ),
-              _NotifCard(
-                icon: Icons.account_balance_wallet_rounded,
-                color: Colors.blue.shade600,
-                title: "Saldo Masuk via Bank",
-                subtitle: "Top Up saldo Rp100.000 melalui VA otomatis berhasil ditambahkan.",
-                time: "10 menit lalu",
-                onTap: () {},
-              ),
-              const SizedBox(height: 12),
-              _buildSectionHeader("Kategori Lampau"),
-              _NotifCard(
-                icon: Icons.cancel_rounded,
-                color: Colors.red.shade600,
-                title: "Transaksi Dibatalkan",
-                subtitle: "Pengisian Token PLN Rp50.000 gagal. Saldo telah dikembalikan utuh.",
-                time: "2 hari lalu",
-                onTap: () {},
-              ),
-            ],
-          ),
+          // TAB 1: AKTIVITAS TRANSAKSI (Membaca koleksi 'notifikasi' jenis transaksi dari Firestore)
+          _buildStreamNotifikasi(kategori: 'transaksi'),
 
-          // TAB 2: PROMO & INFO
-          ListView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            children: [
-              _buildSectionHeader("Terbaru"),
-              _NotifCard(
-                icon: Icons.local_offer_rounded,
-                color: Colors.orange.shade700,
-                title: "Promo Spesial Gajian",
-                subtitle: "Dapatkan potongan harga langsung s.d 10% untuk pengisian produk PPOB terpilih malam ini.",
-                time: "Hari ini",
-                onTap: () {},
-              ),
-              _NotifCard(
-                icon: Icons.info_rounded,
-                color: Colors.purple.shade600,
-                title: "Pemberitahuan Sistem",
-                subtitle: "Selamat datang di ekosistem DesaPay Premium Release Build v2.1.1. Nikmati kemudahan bertransaksi.",
-                time: "Kemarin",
-                onTap: () {},
-              ),
-            ],
-          ),
+          // TAB 2: PROMO & INFO (Membaca koleksi 'notifikasi' jenis info/promo dari Firestore)
+          _buildStreamNotifikasi(kategori: 'promo'),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 0.5),
-      ),
+  Widget _buildStreamNotifikasi({required String kategori}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifikasi')
+          .where('uid', whereIn: [_currentUser?.uid ?? 'guest', 'global']) // Mengambil notifikasi user spesifik atau pengumuman global
+          .where('tipe', isEqualTo: kategori)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: WarnaDesaPay.primary));
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                Text(
+                  kategori == 'transaksi' ? "Belum ada riwayat aktivitas transaksi" : "Belum ada promo atau info terbaru",
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        var docs = snapshot.data!.docs;
+
+        return ListView.builder(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            var data = docs[index].data() as Map<String, dynamic>;
+            
+            String title = data['judul'] ?? 'Notifikasi';
+            String subtitle = data['pesan'] ?? '';
+            String status = data['status'] ?? 'sukses'; // sukses, gagal, info
+            
+            Timestamp? ts = data['timestamp'] as Timestamp?;
+            String time = ts != null 
+                ? DateFormat('dd MMM yyyy, HH:mm').format(ts.toDate())
+                : "Baru saja";
+
+            Color warnaIndikator = Colors.blue.shade600;
+            IconData ikonNotif = Icons.info_rounded;
+
+            if (status == 'sukses') {
+              warnaIndikator = Colors.green.shade600;
+              ikonNotif = Icons.check_circle_rounded;
+            } else if (status == 'gagal') {
+              warnaIndikator = Colors.red.shade600;
+              ikonNotif = Icons.cancel_rounded;
+            } else if (kategori == 'promo') {
+              warnaIndikator = Colors.orange.shade700;
+              ikonNotif = Icons.local_offer_rounded;
+            }
+
+            return _NotifCard(
+              icon: ikonNotif,
+              color: warnaIndikator,
+              title: title,
+              subtitle: subtitle,
+              time: time,
+              onTap: () {},
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -226,7 +241,6 @@ class _NotifCard extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Container(
-              // MEMBERIKAN BORDER INDIKATOR WARNA DI SISI KIRI LAYAKNYA APLIKASI PREMIUM
               decoration: BoxDecoration(
                 border: Border(
                   left: BorderSide(color: color, width: 5),
@@ -236,7 +250,6 @@ class _NotifCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // LINGKARAN IKON MODERN
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -246,7 +259,6 @@ class _NotifCard extends StatelessWidget {
                     child: Icon(icon, color: color, size: 22),
                   ),
                   const SizedBox(width: 14),
-                  // KONTEN NOTIFIKASI
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
