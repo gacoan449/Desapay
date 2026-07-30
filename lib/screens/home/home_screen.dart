@@ -14,7 +14,7 @@ import '../pulsa/pulsa_screen.dart' hide CustomBounce;
 import '../pln/pln_screen.dart' hide CustomBounce;
 import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
 import '../pindai/pindai_qris_screen.dart' hide CustomBounce;
-import '../notifikasi/notifikasi_screen.dart'; // FILE BARU UNTUK PUSAT NOTIFIKASI
+import '../notifikasi/notifikasi_screen.dart' hide CustomBounce; // <-- PERBAIKAN DI SINI
 
 // Import Layar Sapu Jagat PPOB (Otomatis Nembak API Digiflazz)
 import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
