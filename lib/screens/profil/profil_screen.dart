@@ -60,110 +60,196 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
     return Scaffold(
       backgroundColor: WarnaDesaPay.lightBg,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: WarnaDesaPay.primary,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        title: const Text("Profil Premium", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
-        children: [
-          // KARTU PROFIL UTAMA
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 6))],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.1), shape: BoxShape.circle),
-                  child: const CircleAvatar(
-                    radius: 36,
-                    backgroundColor: WarnaDesaPay.primary,
-                    child: Icon(Icons.person_rounded, size: 40, color: Colors.white),
+        slivers: [
+          // HEADER GRADIENT MEWAH
+          SliverAppBar(
+            expandedHeight: 220,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: WarnaDesaPay.primary,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [WarnaDesaPay.primary, Color(0xFF1E40AF), WarnaDesaPay.secondary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+                child: SafeArea(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        user?.displayName ?? "Member DesaPay",
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain),
+                      const Text(
+                        "Profil Pengguna",
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user?.phoneNumber ?? user?.email ?? "Belum terverifikasi",
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 13, fontWeight: FontWeight.w500),
+                      const SizedBox(height: 20),
+                      // FOTO PROFIL DENGAN RING EMAS/PUTIH GLOW
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withOpacity(0.8), width: 2),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))],
+                            ),
+                            child: const CircleAvatar(
+                              radius: 42,
+                              backgroundColor: Colors.white,
+                              child: Icon(Icons.person_rounded, size: 50, color: WarnaDesaPay.primary),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle), // Aksen Gold VIP
+                            child: const Icon(Icons.verified_rounded, color: Colors.white, size: 14),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      
-                      CustomBounce(
-                        onTap: () async {
-                          final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilScreen()));
-                          if (result == true) setState(() {}); 
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: WarnaDesaPay.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(100),
-                            border: Border.all(color: WarnaDesaPay.primary.withOpacity(0.3), width: 1),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.edit_rounded, color: WarnaDesaPay.primary, size: 14),
-                              SizedBox(width: 6),
-                              Text("Ubah Profil & KTP", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: WarnaDesaPay.primary)),
-                            ],
-                          ),
-                        ),
-                      )
                     ],
                   ),
-                )
-              ],
+                ),
+              ),
             ),
           ),
-          
-          const SizedBox(height: 36), // Jarak lega ke tombol keluar
-          
-          // TOMBOL KELUAR APLIKASI
-          CustomBounce(
-            onTap: () => _logout(context),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: WarnaDesaPay.danger.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: WarnaDesaPay.danger.withOpacity(0.15), width: 1),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+
+          // KONTEN UTAMA HALAMAN PROFIL
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.logout_rounded, color: WarnaDesaPay.danger, size: 18),
-                  SizedBox(width: 8),
-                  Text("Keluar Aplikasi", style: TextStyle(color: WarnaDesaPay.danger, fontWeight: FontWeight.w800, fontSize: 14)),
+                  // KARTU IDENTITAS UTAMA
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 6))],
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          user?.displayName ?? "Member DesaPay",
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: WarnaDesaPay.textMain),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          user?.phoneNumber ?? user?.email ?? "Belum terverifikasi",
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 16),
+                        const Divider(color: WarnaDesaPay.lightField, height: 1),
+                        const SizedBox(height: 16),
+                        
+                        // TOMBOL UBAH PROFIL & KTP
+                        SizedBox(
+                          width: double.infinity,
+                          child: CustomBounce(
+                            onTap: () async {
+                              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilScreen()));
+                              if (result == true) setState(() {}); 
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: WarnaDesaPay.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: WarnaDesaPay.primary.withOpacity(0.2), width: 1),
+                              ),
+                              alignment: Alignment.center,
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.edit_rounded, color: WarnaDesaPay.primary, size: 16),
+                                  SizedBox(width: 8),
+                                  Text("Ubah Profil & Verifikasi KTP", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: WarnaDesaPay.primary)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // SEKSI MENU PENGATURAN & KEAMANAN
+                  const Text("Pengaturan & Keamanan", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: WarnaDesaPay.textSub)),
+                  const SizedBox(height: 12),
+                  
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+                    ),
+                    child: Column(
+                      children: [
+                        _buildMenuTile(Icons.security_rounded, "Keamanan Akun", "PIN Transaksi & Biometrik", () {}),
+                        const Divider(height: 1, indent: 56, color: WarnaDesaPay.lightField),
+                        _buildMenuTile(Icons.headset_mic_rounded, "Pusat Bantuan CS", "Layanan Pelanggan 24/7", () {}),
+                        const Divider(height: 1, indent: 56, color: WarnaDesaPay.lightField),
+                        _buildMenuTile(Icons.info_outline_rounded, "Tentang Aplikasi", "DesaPay v1.0.0 (Production)", () {}),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32), 
+                  
+                  // TOMBOL KELUAR APLIKASI
+                  CustomBounce(
+                    onTap: () => _logout(context),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: WarnaDesaPay.danger.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: WarnaDesaPay.danger.withOpacity(0.15), width: 1),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.logout_rounded, color: WarnaDesaPay.danger, size: 18),
+                          SizedBox(width: 8),
+                          Text("Keluar Aplikasi", style: TextStyle(color: WarnaDesaPay.danger, fontWeight: FontWeight.w800, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+
+  // Widget pendukung untuk menu list yang rapi
+  Widget _buildMenuTile(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.08), shape: BoxShape.circle),
+        child: Icon(icon, color: WarnaDesaPay.primary, size: 20),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: WarnaDesaPay.textMain)),
+      subtitle: Text(subtitle, style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 11, fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: WarnaDesaPay.textSub),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
     );
   }
 }
