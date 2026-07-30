@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // WAJIB UNTUK DATA REALTIME PRODUKSI
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 
@@ -13,8 +14,9 @@ import '../pulsa/pulsa_screen.dart' hide CustomBounce;
 import '../pln/pln_screen.dart' hide CustomBounce;
 import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
 import '../pindai/pindai_qris_screen.dart' hide CustomBounce;
+import '../notifikasi/notifikasi_screen.dart'; // FILE BARU UNTUK PUSAT NOTIFIKASI
 
-// Import Layar Sapu Jagat PPOB
+// Import Layar Sapu Jagat PPOB (Otomatis Nembak API Digiflazz)
 import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
 import '../ppob/semua_layanan_screen.dart' hide CustomBounce;
 
@@ -38,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentBannerIndex = 0;
   Timer? _bannerTimer;
 
+  // Banner Promo (Pastikan URL gambar aktif untuk rilis)
   final List<String> _promoBanners = [
     "https://images.unsplash.com/photo-1612036781124-847f8939b154?w=800&q=80",
     "https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=800&q=80",
@@ -85,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _launchWA() async {
     const String phone = "6285642131263";
-    const String message = "Halo CS DesaPay, saya butuh bantuan terkait transaksi.";
+    const String message = "Halo CS DesaPay, saya butuh bantuan terkait transaksi akun saya.";
     final Uri waUrl = Uri.parse("https://wa.me/$phone?text=${Uri.encodeComponent(message)}");
     try {
       if (!await launchUrl(waUrl, mode: LaunchMode.externalApplication)) {
@@ -102,6 +105,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() {}); 
   }
 
+  // Fungsi dinamis nembak API Digiflazz
   void _bukaLayananGenerik(String namaLayanan) {
     Navigator.push(
       context, 
@@ -111,7 +115,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Scaffold di sini sekarang murni hanya untuk konten (tidak ada bottomNavigationBar lagi)
     return Scaffold(
       backgroundColor: WarnaDesaPay.lightBg,
       body: RefreshIndicator(
@@ -171,9 +174,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   child: const Icon(Icons.headset_mic_rounded, color: Colors.white, size: 24),
                                 ),
                                 const SizedBox(width: 16),
+                                
+                                // TOMBOL NOTIFIKASI AKTIF (RILIS PRODUKSI)
                                 CustomBounce(
-                                  onTap: (){}, 
-                                  child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 24),
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const NotifikasiScreen()));
+                                  }, 
+                                  child: Stack(
+                                    children: [
+                                      const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 24),
+                                      Positioned(
+                                        right: 0,
+                                        top: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                          constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                                        ),
+                                      )
+                                    ],
+                                  ),
                                 ),
                               ],
                             )
@@ -269,6 +289,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 24),
                     
+                    // ====================================================
+                    // GRID MENU KOMPLIT PPOB - MODE NEMBAK API DIGIFLAZZ
+                    // ====================================================
                     Container(
                       margin: const EdgeInsets.symmetric(horizontal: 20),
                       child: GridView.count(
@@ -279,23 +302,52 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         crossAxisSpacing: 12,
                         padding: EdgeInsets.zero,
                         children: [
+                          // 1. Kebutuhan Telekomunikasi & Dasar
                           MenuItem(icon: Icons.phone_android_rounded, title: "Pulsa", badgeColor: const Color(0xFFEFF6FF), iconColor: WarnaDesaPay.primary, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PulsaScreen()))),
-                          MenuItem(icon: Icons.bolt_rounded, title: "PLN Listrik", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen()))),
-                          MenuItem(icon: Icons.account_balance_wallet_rounded, title: "E-Wallet", badgeColor: const Color(0xFFF5F3FF), iconColor: const Color(0xFF7C3AED), onTap: () => _bukaLayananGenerik("Topup E-Wallet / E-Toll")),
-                          MenuItem(icon: Icons.sports_esports_rounded, title: "Game", badgeColor: const Color(0xFFFFF1F2), iconColor: const Color(0xFFE11D48), onTap: () => _bukaLayananGenerik("Voucher Game")),
-                          MenuItem(icon: Icons.water_drop_rounded, title: "PDAM Air", badgeColor: const Color(0xFFECFEFF), iconColor: WarnaDesaPay.secondary, onTap: () => _bukaLayananGenerik("PDAM Nasional")),
+                          MenuItem(icon: Icons.wifi_tethering_rounded, title: "Paket Data", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF16A34A), onTap: () => _bukaLayananGenerik("Paket Data")),
+                          MenuItem(icon: Icons.phone_in_talk_rounded, title: "Telp & SMS", badgeColor: const Color(0xFFFEF2F2), iconColor: const Color(0xFFDC2626), onTap: () => _bukaLayananGenerik("Paket SMS & Telepon")),
+                          MenuItem(icon: Icons.bolt_rounded, title: "Token PLN", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlnScreen()))),
+                          
+                          // 2. Hiburan & E-Wallet
+                          MenuItem(icon: Icons.sports_esports_rounded, title: "Top Up Game", badgeColor: const Color(0xFFFFF1F2), iconColor: const Color(0xFFE11D48), onTap: () => _bukaLayananGenerik("Top Up Game")),
+                          MenuItem(icon: Icons.gamepad_rounded, title: "Voucher Game", badgeColor: const Color(0xFFFAF5FF), iconColor: const Color(0xFF9333EA), onTap: () => _bukaLayananGenerik("Voucher Game")),
+                          MenuItem(icon: Icons.account_balance_wallet_rounded, title: "E-Wallet", badgeColor: const Color(0xFFF5F3FF), iconColor: const Color(0xFF7C3AED), onTap: () => _bukaLayananGenerik("E-Wallet")),
+                          MenuItem(icon: Icons.shopping_bag_rounded, title: "Voucher Belanja", badgeColor: const Color(0xFFFFF7ED), iconColor: const Color(0xFFEA580C), onTap: () => _bukaLayananGenerik("Voucher Digital")),
+                          
+                          // 3. Digital & Nomor
+                          MenuItem(icon: Icons.play_circle_filled_rounded, title: "Streaming", badgeColor: const Color(0xFFFEF2F2), iconColor: const Color(0xFFDC2626), onTap: () => _bukaLayananGenerik("Streaming")),
+                          MenuItem(icon: Icons.update_rounded, title: "Masa Aktif", badgeColor: const Color(0xFFECFEFF), iconColor: const Color(0xFF0891B2), onTap: () => _bukaLayananGenerik("Masa Aktif")),
+                          MenuItem(icon: Icons.qr_code_scanner_rounded, title: "Aktivasi Vcr", badgeColor: const Color(0xFFF1F5F9), iconColor: const Color(0xFF475569), onTap: () => _bukaLayananGenerik("Aktivasi Voucher")),
+                          MenuItem(icon: Icons.sim_card_rounded, title: "Kartu Perdana", badgeColor: const Color(0xFFEFF6FF), iconColor: const Color(0xFF2563EB), onTap: () => _bukaLayananGenerik("Paket Perdana")),
+                          
+                          // 4. Pascabayar & Utilitas
+                          MenuItem(icon: Icons.electric_meter_rounded, title: "PLN Pasca", badgeColor: const Color(0xFFFFFBEB), iconColor: const Color(0xFFD97706), onTap: () => _bukaLayananGenerik("PLN Pascabayar")),
+                          MenuItem(icon: Icons.water_drop_rounded, title: "PDAM Air", badgeColor: const Color(0xFFECFEFF), iconColor: WarnaDesaPay.secondary, onTap: () => _bukaLayananGenerik("PDAM")),
                           MenuItem(icon: Icons.health_and_safety_rounded, title: "BPJS", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF16A34A), onTap: () => _bukaLayananGenerik("BPJS Kesehatan")),
-                          MenuItem(icon: Icons.tv_rounded, title: "Internet & TV", badgeColor: const Color(0xFFFAF5FF), iconColor: const Color(0xFF9333EA), onTap: () => _bukaLayananGenerik("Internet & TV Cable")),
-                          MenuItem(icon: Icons.local_fire_department_rounded, title: "Gas PGN", badgeColor: const Color(0xFFFFF7ED), iconColor: const Color(0xFFEA580C), onTap: () => _bukaLayananGenerik("Gas PGN")),
+                          MenuItem(icon: Icons.router_rounded, title: "IndiHome", badgeColor: const Color(0xFFFEF2F2), iconColor: const Color(0xFFDC2626), onTap: () => _bukaLayananGenerik("Telkom")),
+                          
+                          // 5. Cicilan & Pasca Lainnya
                           MenuItem(icon: Icons.receipt_long_rounded, title: "Angsuran", badgeColor: const Color(0xFFF1F5F9), iconColor: const Color(0xFF475569), onTap: () => _bukaLayananGenerik("Angsuran Kredit")),
-                          MenuItem(icon: Icons.account_balance_rounded, title: "Pajak PBB", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF059669), onTap: () => _bukaLayananGenerik("Pajak PBB")),
+                          MenuItem(icon: Icons.contact_phone_rounded, title: "HP Pasca", badgeColor: const Color(0xFFEFF6FF), iconColor: const Color(0xFF2563EB), onTap: () => _bukaLayananGenerik("HP Pascabayar")),
+                          MenuItem(icon: Icons.tv_rounded, title: "TV Kabel", badgeColor: const Color(0xFFFAF5FF), iconColor: const Color(0xFF9333EA), onTap: () => _bukaLayananGenerik("TV Berlangganan")),
+                          MenuItem(icon: Icons.account_balance_rounded, title: "Pajak PBB", badgeColor: const Color(0xFFF0FDF4), iconColor: const Color(0xFF059669), onTap: () => _bukaLayananGenerik("PBB")),
+                          
+                          // 6. Negara & Transportasi
+                          MenuItem(icon: Icons.local_fire_department_rounded, title: "Gas PGN", badgeColor: const Color(0xFFFFF7ED), iconColor: const Color(0xFFEA580C), onTap: () => _bukaLayananGenerik("PGN")),
+                          MenuItem(icon: Icons.directions_car_rounded, title: "E-Samsat", badgeColor: const Color(0xFFF5F3FF), iconColor: const Color(0xFF7C3AED), onTap: () => _bukaLayananGenerik("E-Samsat")),
                           MenuItem(icon: Icons.directions_bus_rounded, title: "Tiket", badgeColor: const Color(0xFFFEF2F2), iconColor: const Color(0xFFDC2626), onTap: () => _bukaLayananGenerik("Tiket Perjalanan")),
+                          
+                          // TOMBOL SEMUA
                           MenuItem(icon: Icons.grid_view_rounded, title: "Semua", badgeColor: WarnaDesaPay.lightField, iconColor: WarnaDesaPay.textSub, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SemuaLayananScreen()))),
                         ],
                       ),
                     ),
                     
                     const SizedBox(height: 24),
+
+                    // ====================================================
+                    // PENGUMUMAN REALTIME FIRESTORE (BUKAN DATA DUMMY)
+                    // ====================================================
                     Container(
                       margin: const EdgeInsets.symmetric(horizontal: 20),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -304,21 +356,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: WarnaDesaPay.lightField, width: 1.5),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.campaign_rounded, color: WarnaDesaPay.primary, size: 22),
-                          SizedBox(width: 12),
+                          const Icon(Icons.campaign_rounded, color: WarnaDesaPay.primary, size: 22),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              "Feed: Transaksi E-Toll a/n Budi berhasil",
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WarnaDesaPay.textMain),
+                            child: StreamBuilder<QuerySnapshot>(
+                              // Query ke Firebase membaca pesan terbaru
+                              stream: FirebaseFirestore.instance
+                                  .collection('pengumuman')
+                                  .orderBy('timestamp', descending: true)
+                                  .limit(1)
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                String textBerjalan = "Selamat Datang di DesaPay! Nikmati transaksi cepat & aman.";
+                                
+                                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                                  // Ambil field 'pesan' dari database
+                                  var data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                                  textBerjalan = data['pesan'] ?? textBerjalan;
+                                }
+
+                                return Text(
+                                  textBerjalan,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: WarnaDesaPay.textMain),
+                                );
+                              }
                             ),
                           ),
                         ],
                       ),
                     ),
+
                     const SizedBox(height: 28),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 20),
@@ -347,7 +418,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 120), // Memberi ruang ekstra agar tidak tertutup nav bar
+                    const SizedBox(height: 120),
                   ],
                 ),
               ),
