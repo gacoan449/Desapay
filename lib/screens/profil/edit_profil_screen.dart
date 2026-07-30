@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../config/warna.dart';
 import '../../widgets/menu_item.dart';
@@ -20,9 +22,21 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final ImagePicker _picker = ImagePicker();
 
   bool _isLoading = false;
-  final bool _isKtpVerified = true; 
+  
+  // Data dari Firestore
+  String _kycStatus = "Belum"; // Belum, Pending, Terverifikasi, Ditolak
+  String? _fotoProfilUrl;
+  String? _fotoKtpUrl;
+  String? _fotoSelfieUrl;
+
+  // File lokal yang baru dipilih pengguna (sebelum diupload)
+  File? _imageProfilBaru;
+  File? _imageKtpBaru;
+  File? _imageSelfieBaru;
 
   @override
   void initState() {
@@ -51,9 +65,41 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         _namaController.text = data["nama"] ?? user.displayName ?? "";
         _emailController.text = data["email"] ?? user.email ?? "";
         _phoneController.text = data["phone"] ?? user.phoneNumber ?? "";
+        
+        _fotoProfilUrl = data["fotoProfil"];
+        _fotoKtpUrl = data["fotoKtp"];
+        _fotoSelfieUrl = data["fotoSelfie"];
+        _kycStatus = data["kycStatus"] ?? "Belum";
       });
     } catch (e) {
       debugPrint("Error loading user data: $e");
+    }
+  }
+
+  /// Fungsi untuk memilih gambar dari Galeri atau Kamera
+  Future<void> _pilihGambar(String tipe) async {
+    final XFile? image = await _picker.pickImage(
+      source: tipe == 'profil' ? ImageSource.gallery : ImageSource.camera,
+      imageQuality: 70, // Kompresi agar tidak memberatkan server
+    );
+
+    if (image != null) {
+      setState(() {
+        if (tipe == 'profil') _imageProfilBaru = File(image.path);
+        if (tipe == 'ktp') _imageKtpBaru = File(image.path);
+        if (tipe == 'selfie') _imageSelfieBaru = File(image.path);
+      });
+    }
+  }
+
+  /// Fungsi untuk mengunggah gambar ke Firebase Storage dan mengembalikan URL-nya
+  Future<String?> _uploadKeStorage(File file, String path) async {
+    try {
+      TaskSnapshot snapshot = await _storage.ref().child(path).putFile(file);
+      return await snapshot.ref.getDownloadURL();
+    } catch (e) {
+      debugPrint("Upload error: $e");
+      return null;
     }
   }
 
@@ -63,7 +109,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     final String phoneTrim = _phoneController.text.trim();
 
     if (namaTrim.isEmpty || emailTrim.isEmpty || phoneTrim.isEmpty) {
-      _tampilkanSnackBar("Semua data wajib diisi secara lengkap", isError: true);
+      _tampilkanSnackBar("Semua data teks wajib diisi", isError: true);
       return;
     }
 
@@ -72,36 +118,55 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     try {
       final User? user = _auth.currentUser;
       if (user != null) {
+        String? finalProfilUrl = _fotoProfilUrl;
+        String? finalKtpUrl = _fotoKtpUrl;
+        String? finalSelfieUrl = _fotoSelfieUrl;
+        String finalKycStatus = _kycStatus;
+
+        // 1. Upload Foto Profil jika ada yang baru
+        if (_imageProfilBaru != null) {
+          final url = await _uploadKeStorage(_imageProfilBaru!, 'users/${user.uid}/profil.jpg');
+          if (url != null) finalProfilUrl = url;
+        }
+
+        // 2. Upload KTP jika ada yang baru
+        if (_imageKtpBaru != null) {
+          final url = await _uploadKeStorage(_imageKtpBaru!, 'users/${user.uid}/ktp.jpg');
+          if (url != null) finalKtpUrl = url;
+        }
+
+        // 3. Upload Selfie jika ada yang baru
+        if (_imageSelfieBaru != null) {
+          final url = await _uploadKeStorage(_imageSelfieBaru!, 'users/${user.uid}/selfie.jpg');
+          if (url != null) finalSelfieUrl = url;
+        }
+
+        // Jika KTP dan Selfie baru diupload, otomatis ubah status KYC jadi Pending (Menunggu divalidasi admin)
+        if (_imageKtpBaru != null && _imageSelfieBaru != null) {
+          finalKycStatus = "Pending";
+        }
+
+        // 4. Simpan semua data & URL foto ke Firestore
         await user.updateDisplayName(namaTrim);
         await _firestore.collection("users").doc(user.uid).update({
           "nama": namaTrim,
           "email": emailTrim,
           "phone": phoneTrim,
+          "fotoProfil": finalProfilUrl,
+          "fotoKtp": finalKtpUrl,
+          "fotoSelfie": finalSelfieUrl,
+          "kycStatus": finalKycStatus,
         });
 
         if (!mounted) return;
-        setState(() => _isLoading = false);
-        _tampilkanSnackBar("Profil Anda berhasil diperbarui", isError: false);
+        _tampilkanSnackBar("Data Profil & Dokumen berhasil disimpan!", isError: false);
         Navigator.pop(context, true); 
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
-      _tampilkanSnackBar(e.toString(), isError: true);
-    }
-  }
-
-  Future<void> _hubungiAdminKtp() async {
-    const String phone = "6285642131263";
-    const String message = "Halo Admin DesaPay, saya ingin mengajukan perubahan data e-KTP di akun saya. Mohon panduannya.";
-    final Uri waUrl = Uri.parse("https://wa.me/$phone?text=${Uri.encodeComponent(message)}");
-
-    try {
-      if (!await launchUrl(waUrl, mode: LaunchMode.externalApplication)) {
-        _tampilkanSnackBar("Tidak dapat membuka WhatsApp", isError: true);
-      }
-    } catch (e) {
-      _tampilkanSnackBar("Terjadi kesalahan sistem", isError: true);
+      _tampilkanSnackBar("Gagal menyimpan data: $e", isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -131,52 +196,43 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
         centerTitle: true,
-        title: const Text(
-          "Ubah Data Profil",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text("Ubah Data Profil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20), onPressed: () => Navigator.pop(context)),
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           children: [
+            // FOTO PROFIL SECTION
             Center(
               child: Stack(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, 6)),
-                      ],
+                      color: Colors.white, shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, 6))],
                     ),
                     child: CircleAvatar(
                       radius: 46,
                       backgroundColor: WarnaDesaPay.primary.withOpacity(0.08),
-                      child: const Icon(Icons.person_rounded, size: 54, color: WarnaDesaPay.primary),
+                      // Tampilkan gambar baru, atau gambar dari internet, atau ikon default
+                      backgroundImage: _imageProfilBaru != null 
+                          ? FileImage(_imageProfilBaru!) 
+                          : (_fotoProfilUrl != null ? NetworkImage(_fotoProfilUrl!) : null) as ImageProvider?,
+                      child: (_imageProfilBaru == null && _fotoProfilUrl == null) 
+                          ? const Icon(Icons.person_rounded, size: 54, color: WarnaDesaPay.primary) 
+                          : null,
                     ),
                   ),
                   Positioned(
-                    bottom: 2,
-                    right: 2,
+                    bottom: 2, right: 2,
                     child: CustomBounce(
-                      onTap: () {
-                        _tampilkanSnackBar("Fitur upload foto wajah sedang dikembangkan.", isError: false);
-                      },
+                      onTap: () => _pilihGambar('profil'),
                       child: Container(
                         padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: WarnaDesaPay.warning,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
+                        decoration: BoxDecoration(color: WarnaDesaPay.warning, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
                         child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                       ),
                     ),
@@ -187,52 +243,38 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
             
             const SizedBox(height: 32),
 
+            // FORM DATA DIRI
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6)),
-                ],
+                color: Colors.white, borderRadius: BorderRadius.circular(24),
+                boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildModernTextField(
-                    controller: _namaController,
-                    label: "Nama Lengkap / Username",
-                    hint: "Masukkan nama lengkap",
-                    icon: Icons.person_outline_rounded,
-                  ),
+                  _buildModernTextField(controller: _namaController, label: "Nama Lengkap (Sesuai KTP)", hint: "Masukkan nama lengkap", icon: Icons.person_outline_rounded),
                   const SizedBox(height: 20),
-                  _buildModernTextField(
-                    controller: _emailController,
-                    label: "Alamat Email Aktif",
-                    hint: "contoh@domain.com",
-                    icon: Icons.email_outlined,
-                    type: TextInputType.emailAddress,
-                  ),
+                  _buildModernTextField(controller: _emailController, label: "Alamat Email Aktif", hint: "contoh@domain.com", icon: Icons.email_outlined, type: TextInputType.emailAddress),
                   const SizedBox(height: 20),
-                  _buildModernTextField(
-                    controller: _phoneController,
-                    label: "Nomor Handphone Terdaftar",
-                    hint: "Contoh: 08xxxxxxxxxx",
-                    icon: Icons.phone_android_rounded,
-                    type: TextInputType.phone,
-                  ),
+                  _buildModernTextField(controller: _phoneController, label: "Nomor Handphone Terdaftar", hint: "Contoh: 08xxxxxxxxxx", icon: Icons.phone_android_rounded, type: TextInputType.phone),
                 ],
               ),
             ),
 
             const SizedBox(height: 24),
 
+            // DOKUMEN KYC (KTP & SELFIE) SECTION
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: WarnaDesaPay.lightCard,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: WarnaDesaPay.lightField, width: 1.5),
+                border: Border.all(
+                  color: _kycStatus == "Terverifikasi" ? WarnaDesaPay.success : 
+                         _kycStatus == "Pending" ? WarnaDesaPay.warning : WarnaDesaPay.danger.withOpacity(0.5), 
+                  width: 1.5
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,52 +284,65 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: _isKtpVerified ? WarnaDesaPay.success.withOpacity(0.1) : WarnaDesaPay.warning.withOpacity(0.1),
+                          color: _kycStatus == "Terverifikasi" ? WarnaDesaPay.success.withOpacity(0.1) : WarnaDesaPay.warning.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          _isKtpVerified ? Icons.verified_user_rounded : Icons.pending_actions_rounded, 
-                          color: _isKtpVerified ? WarnaDesaPay.success : WarnaDesaPay.warning, 
+                          _kycStatus == "Terverifikasi" ? Icons.verified_user_rounded : Icons.pending_actions_rounded, 
+                          color: _kycStatus == "Terverifikasi" ? WarnaDesaPay.success : WarnaDesaPay.warning, 
                           size: 20
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text("Data e-KTP (KYC)", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textMain)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Verifikasi Identitas (KYC)", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textMain)),
+                            Text("Status: $_kycStatus", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _kycStatus == "Terverifikasi" ? WarnaDesaPay.success : WarnaDesaPay.warning)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Demi keamanan akun dari tindak pencurian identitas, perubahan foto e-KTP dan NIK hanya dapat dilakukan melalui validasi Admin.",
-                    style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub, height: 1.5),
-                  ),
                   const SizedBox(height: 16),
-                  CustomBounce(
-                    onTap: _hubungiAdminKtp,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: WarnaDesaPay.primary.withOpacity(0.3), width: 1),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.support_agent_rounded, color: WarnaDesaPay.primary, size: 18),
-                          SizedBox(width: 8),
-                          Text("Hubungi Admin", style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 13)),
-                        ],
-                      ),
+                  
+                  if (_kycStatus == "Belum" || _kycStatus == "Ditolak") ...[
+                    const Text("Upload foto KTP dan Selfie memegang KTP agar Anda bisa menikmati limit saldo yang lebih besar.", style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildUploadBox("Foto e-KTP", _imageKtpBaru, _fotoKtpUrl, () => _pilihGambar('ktp')),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildUploadBox("Selfie + KTP", _imageSelfieBaru, _fotoSelfieUrl, () => _pilihGambar('selfie')),
+                        ),
+                      ],
                     ),
-                  )
+                  ] else if (_kycStatus == "Pending") ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Text("Data dokumen Anda sedang diperiksa oleh Admin. Mohon tunggu.", textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: WarnaDesaPay.textSub)),
+                      ),
+                    )
+                  ] else if (_kycStatus == "Terverifikasi") ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Text("Akun Anda telah Terverifikasi. Identitas Anda aman terlindungi.", textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: WarnaDesaPay.success)),
+                      ),
+                    )
+                  ]
                 ],
               ),
             ),
 
             const SizedBox(height: 36),
 
+            // TOMBOL SIMPAN
             CustomBounce(
               onTap: _simpanPerubahan,
               isDisabled: _isLoading,
@@ -297,56 +352,64 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                 decoration: BoxDecoration(
                   color: _isLoading ? Colors.grey.shade400 : WarnaDesaPay.primary,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: _isLoading 
-                    ? [] 
-                    : [
-                        BoxShadow(color: WarnaDesaPay.primary.withOpacity(0.24), blurRadius: 14, offset: const Offset(0, 6)),
-                      ],
+                  boxShadow: _isLoading ? [] : [BoxShadow(color: WarnaDesaPay.primary.withOpacity(0.24), blurRadius: 14, offset: const Offset(0, 6))],
                 ),
                 alignment: Alignment.center,
                 child: _isLoading
                     ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                    : const Text(
-                        "SIMPAN PERUBAHAN",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.6),
-                      ),
+                    : const Text("SIMPAN PERUBAHAN & UPLOAD", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.5)),
               ),
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
-  // PERBAIKAN: Menghapus argument 'context' yang tidak perlu dan memperbaiki 'hintText'
-  Widget _buildModernTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType type = TextInputType.text,
-  }) {
+  Widget _buildUploadBox(String title, File? newImage, String? oldUrl, VoidCallback onTap) {
+    return CustomBounce(
+      onTap: onTap,
+      child: Container(
+        height: 100,
+        decoration: BoxDecoration(
+          color: WarnaDesaPay.lightBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: WarnaDesaPay.lightField, width: 2),
+          image: newImage != null 
+              ? DecorationImage(image: FileImage(newImage), fit: BoxFit.cover)
+              : (oldUrl != null ? DecorationImage(image: NetworkImage(oldUrl), fit: BoxFit.cover) : null),
+        ),
+        alignment: Alignment.center,
+        child: (newImage == null && oldUrl == null)
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.camera_alt_rounded, color: WarnaDesaPay.textSub, size: 24),
+                  const SizedBox(height: 4),
+                  Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: WarnaDesaPay.textSub)),
+                ],
+              )
+            : Container( // Overlay gelap tipis agar tombol ganti terlihat
+                width: double.infinity, height: double.infinity,
+                decoration: BoxDecoration(color: Colors.black.withOpacity(0.4), borderRadius: BorderRadius.circular(10)),
+                alignment: Alignment.center,
+                child: const Text("Ganti", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildModernTextField({required TextEditingController controller, required String label, required String hint, required IconData icon, TextInputType type = TextInputType.text}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12, 
-            fontWeight: FontWeight.w800, 
-            color: WarnaDesaPay.textSub,
-            letterSpacing: 0.2,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: WarnaDesaPay.textSub, letterSpacing: 0.2)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           keyboardType: type,
-          style: const TextStyle(
-            fontSize: 15, 
-            fontWeight: FontWeight.w700, 
-            color: WarnaDesaPay.textMain
-          ),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: WarnaDesaPay.textMain),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal),
@@ -354,10 +417,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
             filled: true,
             fillColor: WarnaDesaPay.lightBg,
             contentPadding: const EdgeInsets.symmetric(vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
           ),
         ),
       ],
