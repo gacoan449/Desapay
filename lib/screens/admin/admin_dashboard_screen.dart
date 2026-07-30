@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Import Konfigurasi & Widget Modular Utama
 import '../../config/warna.dart';
-import '../../widgets/menu_item.dart'; 
+import '../../widgets/menu_item.dart';
 
-/// Halaman Command Center / Panel Admin DesaPay (100% REAL DATA)
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -67,6 +65,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     ikonController.dispose();
     markupController.dispose();
     super.dispose();
+  }
+
+  // --- FUNGSI UPDATE FIREBASE KONTEN UI & KEUANGAN ---
+
+  Future<void> _simpanPerubahanPromo() async {
+    if (promoController.text.trim().isEmpty || bannerController.text.trim().isEmpty) return;
+    setState(() => _isLoading = true);
+    try {
+      await _firestore.collection("pengaturan").doc("aplikasi").set({
+        "teksPromo": promoController.text.trim(),
+        "teksBanner": bannerController.text.trim(),
+        "updatedAt": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      _tampilkanSnackBar("Konfigurasi UI Berhasil Diperbarui!", isError: false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _simpanMarkupGlobal() async {
+    if (markupController.text.trim().isEmpty) return;
+    setState(() => _isLoading = true);
+    try {
+      await _firestore.collection("pengaturan").doc("finansial").set({
+        "globalMarkup": int.parse(markupController.text.trim()),
+        "updatedAt": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      _tampilkanSnackBar("Markup Global Harga PPOB Disimpan!", isError: false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   // --- FUNGSI BANTUAN UI ---
@@ -151,12 +180,77 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   // ==========================================
-  // TAB 1: KONTEN UI
+  // TAB 1: KONTEN UI (KEMBALI NORMAL & LENGKAP)
   // ==========================================
   Widget _buildPanelKontenUI() {
-    return const Center(child: Text("Bagian Konten UI (Kode Anda Tetap Sama)"));
-    // Gunakan kembali kode _buildPanelKontenUI() Anda di sini. 
-    // Saya persingkat agar fokus pada perbaikan Pengguna & Tiket CS.
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: WarnaDesaPay.shadow.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 6))]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(children: [Icon(Icons.amp_stories_rounded, color: WarnaDesaPay.warning), SizedBox(width: 8), Text("Kampanye & Teks Berjalan", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain))]),
+                const SizedBox(height: 20),
+                _buildModernInput(context: context, controller: bannerController, label: "Teks Pengumuman Header", hint: "Tulis pengumuman..."),
+                const SizedBox(height: 16),
+                _buildModernInput(context: context, controller: promoController, label: "Teks Ticker Beranda", hint: "Tulis promo berjalan..."),
+                const SizedBox(height: 24),
+                CustomBounce(
+                  onTap: _simpanPerubahanPromo,
+                  child: Container(
+                    width: double.infinity, height: 50,
+                    decoration: BoxDecoration(gradient: const LinearGradient(colors: [WarnaDesaPay.warning, Color(0xFFD97706)]), borderRadius: BorderRadius.circular(14)),
+                    alignment: Alignment.center,
+                    child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("UPDATE REALTIME PLATFORM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          const Text("Manajemen Modul Layanan", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain)),
+          const SizedBox(height: 12),
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection("menu_layanan").orderBy("urutan").snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: WarnaDesaPay.primary)));
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) return const Center(child: Text("Belum ada menu custom yang dibuat.", style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 12)));
+              
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final item = docs[index].data() as Map<String, dynamic>;
+                  bool isAktif = item["isAktif"] ?? false;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: WarnaDesaPay.lightField)),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: WarnaDesaPay.primary.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.grid_view_rounded, color: WarnaDesaPay.primary, size: 20)),
+                      title: Text(item["nama"] ?? "-", style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: WarnaDesaPay.textMain)),
+                      subtitle: Text("ID Modul: ${item["id"]}", style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 11)),
+                      trailing: Switch.adaptive(
+                        value: isAktif, activeColor: WarnaDesaPay.success,
+                        onChanged: (val) => _firestore.collection("menu_layanan").doc(item["id"]).update({"isAktif": val}),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   // ==========================================
@@ -178,7 +272,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             final userId = docs[index].id;
             bool isBlocked = user["isBlocked"] ?? false;
             
-            // Variabel Baru untuk KYC & Premium
             String kycStatus = user["kycStatus"] ?? "Belum";
             String tipeAkun = user["tipeAkun"] ?? "Basic"; 
             
@@ -196,8 +289,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     children: [
                       CircleAvatar(
                         backgroundColor: WarnaDesaPay.primary.withOpacity(0.1), 
-                        backgroundImage: user["fotoProfil"] != null ? NetworkImage(user["fotoProfil"]) : null,
-                        child: user["fotoProfil"] == null ? const Icon(Icons.person, color: WarnaDesaPay.primary) : null,
+                        backgroundImage: (user["fotoProfil"] != null && user["fotoProfil"].toString().isNotEmpty) ? NetworkImage(user["fotoProfil"]) : null,
+                        child: (user["fotoProfil"] == null || user["fotoProfil"].toString().isEmpty) ? const Icon(Icons.person, color: WarnaDesaPay.primary) : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -207,13 +300,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             Text(user["nama"] ?? "User Tanpa Nama", style: const TextStyle(fontWeight: FontWeight.bold, color: WarnaDesaPay.textMain)),
                             Text(user["email"] ?? "-", style: const TextStyle(fontSize: 11, color: WarnaDesaPay.textSub)),
                             const SizedBox(height: 4),
-                            // Badge Tipe Akun
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: tipeAkun == "Premium" ? WarnaDesaPay.warning : Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(4)
-                              ),
+                              decoration: BoxDecoration(color: tipeAkun == "Premium" ? WarnaDesaPay.warning : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
                               child: Text(tipeAkun.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: tipeAkun == "Premium" ? Colors.white : Colors.black54)),
                             )
                           ],
@@ -232,7 +321,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                     children: [
                       Text("Saldo: Rp ${_formatCurrency(user["saldo"] ?? 0)}", style: const TextStyle(fontWeight: FontWeight.w900, color: WarnaDesaPay.primary)),
                       
-                      // Tombol Review KYC Muncul Jika Status "Pending"
                       if (kycStatus == "Pending")
                         ElevatedButton.icon(
                           icon: const Icon(Icons.verified_user_rounded, size: 14),
@@ -257,7 +345,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
-  // DIALOG REVIEW KYC UNTUK UPGRADE PREMIUM
   void _tampilkanDialogReviewKYC(String userId, String? nama, String? fotoKtp, String? fotoSelfie) {
     showDialog(context: context, builder: (context) {
       return AlertDialog(
@@ -271,7 +358,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               Container(
                 height: 150, width: double.infinity,
                 decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-                child: fotoKtp != null ? Image.network(fotoKtp, fit: BoxFit.cover) : const Center(child: Text("Tidak ada gambar")),
+                child: (fotoKtp != null && fotoKtp.isNotEmpty) ? Image.network(fotoKtp, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Text("Gagal muat foto"))) : const Center(child: Text("Tidak ada gambar KTP")),
               ),
               const SizedBox(height: 16),
               const Text("Foto Selfie dengan KTP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
@@ -279,7 +366,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               Container(
                 height: 150, width: double.infinity,
                 decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-                child: fotoSelfie != null ? Image.network(fotoSelfie, fit: BoxFit.cover) : const Center(child: Text("Tidak ada gambar")),
+                child: (fotoSelfie != null && fotoSelfie.isNotEmpty) ? Image.network(fotoSelfie, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Text("Gagal muat foto"))) : const Center(child: Text("Tidak ada gambar Selfie")),
               ),
             ],
           ),
@@ -287,7 +374,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         actions: [
           TextButton(
             onPressed: () {
-              // Tolak KYC
               _firestore.collection("users").doc(userId).update({"kycStatus": "Ditolak"});
               Navigator.pop(context);
               _tampilkanSnackBar("Dokumen ditolak.", isError: true);
@@ -297,7 +383,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: WarnaDesaPay.success),
             onPressed: () {
-              // Setujui KYC & Upgrade ke Premium
               _firestore.collection("users").doc(userId).update({
                 "kycStatus": "Terverifikasi",
                 "tipeAkun": "Premium"
@@ -338,13 +423,226 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   // ==========================================
-  // TAB 3: KEUANGAN & TAB 4: SISTEM (Abaikan Sementara, Biarkan Seperti Kode Asli Anda)
+  // TAB 3: KEUANGAN (KEMBALI NORMAL LENGKAP)
   // ==========================================
-  Widget _buildPanelKeuangan() => const Center(child: Text("Kode Keuangan Tetap Sama"));
-  Widget _buildPanelSistem() => const Center(child: Text("Kode Sistem Tetap Sama"));
+  Widget _buildPanelKeuangan() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(24)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Setel Markup Profit Global", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 10),
+                const Text("Sistem otomatis menambahkan nominal ini ke harga dasar dari API.", style: TextStyle(fontSize: 12, color: WarnaDesaPay.textSub)),
+                const SizedBox(height: 16),
+                _buildModernInput(context: context, controller: markupController, label: "Markup Keuntungan (Rp)", hint: "Contoh: 150"),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _simpanMarkupGlobal,
+                  style: ElevatedButton.styleFrom(backgroundColor: WarnaDesaPay.success, minimumSize: const Size(double.infinity, 45)),
+                  child: const Text("SIMPAN PROFIT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          StreamBuilder<DocumentSnapshot>(
+            stream: _firestore.collection("pengaturan").doc("finansial").snapshots(),
+            builder: (context, snapshot) {
+              int saldoDigi = 0;
+              int saldoTri = 0;
+              if (snapshot.hasData && snapshot.data!.exists) {
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                saldoDigi = data["saldoDigiflazz"] ?? 0;
+                saldoTri = data["saldoTriPay"] ?? 0;
+              }
+              return Row(
+                children: [
+                  Expanded(child: _buildInfoCard("Saldo Digiflazz", "Rp ${_formatCurrency(saldoDigi)}", Icons.api_rounded, WarnaDesaPay.primary)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildInfoCard("Saldo TriPay", "Rp ${_formatCurrency(saldoTri)}", Icons.payment_rounded, Colors.orange)),
+                ],
+              );
+            },
+          ),
+          
+          const SizedBox(height: 24),
+          const Text("Live Mutasi Transaksi User", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 10),
+          
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection("transaksi").orderBy("waktu", descending: true).limit(50).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: WarnaDesaPay.primary)));
+              }
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return Center(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Icon(Icons.analytics_outlined, size: 48, color: WarnaDesaPay.textSub.withOpacity(0.3)),
+                      const SizedBox(height: 10),
+                      const Text("Belum ada log transaksi terekam di database.", style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 13)),
+                    ],
+                  ),
+                );
+              }
+              
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final log = docs[index].data() as Map<String, dynamic>;
+                  String status = (log["status"] ?? "PENDING").toString().toUpperCase();
+                  
+                  Color statusColor;
+                  if (status.contains("SUKSES") || status.contains("BERHASIL")) {
+                    statusColor = WarnaDesaPay.success;
+                  } else if (status.contains("GAGAL")) {
+                    statusColor = WarnaDesaPay.danger;
+                  } else {
+                    statusColor = WarnaDesaPay.warning;
+                  }
+                  
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: WarnaDesaPay.lightCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: WarnaDesaPay.lightField)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                              child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                            ),
+                            Text("Rp ${_formatCurrency(log["hargaJual"] ?? log["price"] ?? 0)}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: WarnaDesaPay.textMain)),
+                          ],
+                        ),
+                        const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: WarnaDesaPay.lightField)),
+                        _buildDetailRow("Produk", log["product_name"] ?? log["buyer_sku_code"] ?? "-"),
+                        _buildDetailRow("Tujuan", log["customer_no"] ?? log["tujuan"] ?? "-"),
+                        _buildDetailRow("SN/Reff", log["sn"] ?? log["message"] ?? "-"),
+                        _buildDetailRow("Waktu", _formatDate(log["waktu"] as Timestamp?)),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(height: 12),
+          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: WarnaDesaPay.textMain)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: WarnaDesaPay.textSub, fontSize: 12, fontWeight: FontWeight.w600)),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: WarnaDesaPay.textMain), textAlign: TextAlign.end, maxLines: 1, overflow: TextOverflow.ellipsis)),
+        ],
+      ),
+    );
+  }
 
   // ==========================================
-  // TAB 5: TIKET CS & SISTEM BALASAN (REAL DATA)
+  // TAB 4: SISTEM KEAMANAN & LOG (KEMBALI NORMAL LENGKAP)
+  // ==========================================
+  Widget _buildPanelSistem() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection("system_logs").orderBy("timestamp", descending: true).limit(30).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: WarnaDesaPay.primary));
+        
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.shield_rounded, size: 60, color: WarnaDesaPay.success.withOpacity(0.5)),
+                const SizedBox(height: 16),
+                const Text("Sistem Berjalan Aman", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: WarnaDesaPay.textMain)),
+                const SizedBox(height: 8),
+                const Text("Belum ada log error atau aktivitas mencurigakan yang terekam.", textAlign: TextAlign.center, style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 12)),
+              ],
+            ),
+          );
+        }
+        
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final log = docs[index].data() as Map<String, dynamic>;
+            String tipe = log["tipe"] ?? "INFO";
+            String pesan = log["pesan"] ?? "-";
+            String waktu = _formatDate(log["timestamp"] as Timestamp?);
+            
+            Color color = WarnaDesaPay.success;
+            if (tipe.toUpperCase() == "ERROR" || tipe.toUpperCase() == "CRITICAL") color = WarnaDesaPay.danger;
+            if (tipe.toUpperCase() == "WARNING" || tipe.toUpperCase() == "LOGIN_ATTEMPT") color = WarnaDesaPay.warning;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(border: Border(left: BorderSide(color: color, width: 4)), color: WarnaDesaPay.lightCard),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(tipe, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: color)),
+                      Text(waktu, style: const TextStyle(fontSize: 10, color: WarnaDesaPay.textSub)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(pesan, style: const TextStyle(fontSize: 12, color: WarnaDesaPay.textMain)),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ==========================================
+  // TAB 5: TIKET CS (DENGAN FITUR BALAS)
   // ==========================================
   Widget _buildPanelTiketCS() {
     return StreamBuilder<QuerySnapshot>(
@@ -396,7 +694,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   Text("Kontak: ${tiket["phoneUser"] ?? "-"}", style: const TextStyle(color: WarnaDesaPay.primary, fontSize: 12)),
                   const SizedBox(height: 10),
                   
-                  // Pesan dari Pengguna
                   Container(
                     width: double.infinity, padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(color: WarnaDesaPay.lightField, borderRadius: BorderRadius.circular(10)),
@@ -405,7 +702,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   
                   const SizedBox(height: 10),
 
-                  // Area Balasan Admin
                   if (balasan.isNotEmpty)
                     Container(
                       width: double.infinity, padding: const EdgeInsets.all(10),
@@ -422,7 +718,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
                   const SizedBox(height: 10),
                   
-                  // Tombol untuk Membalas
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
@@ -440,7 +735,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
-  // DIALOG BALAS TIKET CS
   void _tampilkanDialogBalasCS(String tiketId, String balasanLama) {
     TextEditingController balasController = TextEditingController(text: balasanLama);
     showDialog(context: context, builder: (context) {
@@ -462,7 +756,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               if (balasController.text.trim().isEmpty) return;
               _firestore.collection("keluhan_pelanggan").doc(tiketId).update({
                 "balasanAdmin": balasController.text.trim(),
-                "status": "Selesai", // Otomatis ubah status jadi Selesai
+                "status": "Selesai",
               });
               Navigator.pop(context);
               _tampilkanSnackBar("Balasan berhasil dikirim", isError: false);
@@ -472,5 +766,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         ],
       );
     });
+  }
+
+  // --- REUSABLE WIDGETS KONTEN UI ---
+  Widget _buildModernInput({required BuildContext context, required TextEditingController controller, required String label, required String hint, int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: WarnaDesaPay.textSub, letterSpacing: 0.2)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: WarnaDesaPay.textMain),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Colors.black38, fontSize: 13),
+            filled: true,
+            fillColor: WarnaDesaPay.lightBg,
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: WarnaDesaPay.lightField, width: 1.5)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: WarnaDesaPay.primary, width: 2)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
   }
 }
