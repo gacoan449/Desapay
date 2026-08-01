@@ -23,7 +23,7 @@ abstract class IDigiflazzService {
   Future<int> cekSaldoModal();
 }
 
-/// Implementasi Layanan Integrasi API Digiflazz (Data Layer)
+/// Implementasi Layanan Integrasi API Digiflazz (Data Layer - Enterprise Grade)
 class DigiflazzService implements IDigiflazzService {
   static const String _baseUrlPriceList = 'https://api.digiflazz.com/v1/price-list';
   static const String _baseUrlTransaction = 'https://api.digiflazz.com/v1/transaction';
@@ -41,7 +41,35 @@ class DigiflazzService implements IDigiflazzService {
   }
 
   // ===================================================
-  // 1. FUNGSI AMBIL DAFTAR HARGA + MARKUP UNTUNG Rp 1.000
+  // 3. LOGIKA MARGIN DINAMIS BERDASARKAN KATEGORI PRODUK
+  // ===================================================
+  int _hitungMarginBerdasarkanKategori(String category) {
+    final String cat = category.toLowerCase();
+    
+    if (cat.contains('angsuran') || cat.contains('multifinance') || cat.contains('finance')) {
+      return 3800; // Margin Rp3.500 s.d Rp4.000 (diambil tengah Rp3.800)
+    } else if (cat.contains('pln') || cat.contains('pdam') || cat.contains('tagihan')) {
+      return 2200; // Margin Rp2.000 s.d Rp2.500 (diambil tengah Rp2.200)
+    } else if (cat.contains('pulsa') || cat.contains('data')) {
+      return 800;  // Margin Rp500 s.d Rp1.000 (diambil tengah Rp800)
+    } else {
+      return 1500; // Margin Default kategori lainnya
+    }
+  }
+
+  // ===================================================
+  // 4. VALIDASI SAKELAR MAINTENANCE WAKTU LOKAL
+  // ===================================================
+  void _validasiJamMaintenance() {
+    final int jamSekarang = DateTime.now().hour;
+    // Contoh aturan maintenance harian server/operator pukul 23.00 s.d 00.00 WIB
+    if (jamSekarang >= 23 && jamSekarang < 24) {
+      throw Exception("Sistem sedang dalam jadwal pemeliharaan rutin (Maintenance harian pukul 23:00 - 00:00 WIB). Mohon coba beberapa saat lagi.");
+    }
+  }
+
+  // ===================================================
+  // 1 & 2. AMBIL PRODUK, REKONSILIASI, & ASYMMETRIC PRICING
   // ===================================================
   @override
   Future<List<dynamic>> ambilSemuaProduk() async {
@@ -61,15 +89,34 @@ class DigiflazzService implements IDigiflazzService {
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
         
-        // Memeriksa struktur objek data dari respon Digiflazz
         if (data['data'] != null && data['data'] is List) {
           final List<dynamic> produkAsli = data['data'];
-          const int keuntunganKita = 1000;
 
           return produkAsli.map((item) {
             final Map<String, dynamic> itemMap = Map<String, dynamic>.from(item);
-            final int hargaAsli = int.tryParse(itemMap['price'].toString()) ?? 0;
-            itemMap['price'] = hargaAsli + keuntunganKita;
+            
+            // Harga Modal Asli dari Digiflazz
+            final int hargaModal = int.tryParse(itemMap['price'].toString()) ?? 0;
+            
+            // Ambil kategori produk untuk menentukan margin dinamis
+            final String kategori = itemMap['category']?.toString() ?? '';
+            final int marginBersih = _hitungMarginBerdasarkanKategori(kategori);
+
+            // 1. SISTEM TALANGAN REKONSILIASI (Harga Jual Bersih Asli)
+            final int hargaJualAsli = hargaModal + marginBersih;
+
+            // 2. ASYMMETRIC PRICING & PSIKOLOGI PROMO (Harga Coret Display)
+            // Ditambah nominal psikologis Rp4.000 untuk efek dicoret (strikethrough) di UI Flutter
+            final int hargaCoretDisplay = hargaJualAsli + 4000;
+
+            // Inject nilai kalkulasi baru ke model data untuk UI
+            itemMap['harga_modal'] = hargaModal;
+            itemMap['harga_jual_asli'] = hargaJualAsli;
+            itemMap['harga_coret_display'] = hargaCoretDisplay;
+            
+            // Kompatibilitas mundur dengan widget yang memanggil key 'price'
+            itemMap['price'] = hargaJualAsli; 
+
             return itemMap;
           }).toList();
         }
@@ -87,7 +134,7 @@ class DigiflazzService implements IDigiflazzService {
   }
 
   // ===================================================
-  // 2. FUNGSI TEMBAK TRANSAKSI PULSA/TOKEN/E-WALLET/PPOB
+  // 2, 4. TEMBAK TRANSAKSI DENGAN BALANCE GUARD & MAINTENANCE
   // ===================================================
   @override
   Future<Map<String, dynamic>> kirimTransaksi({
@@ -95,6 +142,33 @@ class DigiflazzService implements IDigiflazzService {
     required String customerNo,
   }) async {
     try {
+      // A. Validasi Sakelar Maintenance Waktu Lokal
+      _validasiJamMaintenance();
+
+      // B. Ambil daftar produk untuk mencocokkan harga modal produk yang dipilih
+      final List<dynamic> semuaProduk = await ambilSemuaProduk();
+      final produkDipilih = semuaProduk.firstWhere(
+        (p) => p['buyer_sku_code'] == buyerSkuCode,
+        orElse: () => null,
+      );
+
+      if (produkDipilih == null) {
+        return {'status': 'Gagal', 'message': 'Produk tidak ditemukan atau sudah tidak aktif di server.'};
+      }
+
+      final int hargaModalProduk = int.tryParse(produkDipilih['harga_modal'].toString()) ?? 0;
+
+      // C. Cek Saldo Pancingan (Balance Guard) di Akun Digiflazz
+      final int sisaSaldoModal = await cekSaldoModal();
+      if (sisaSaldoModal < hargaModalProduk) {
+        // Keamanan cash flow: Gagalkan transaksi agar saldo utama tidak minus/bermasalah
+        return {
+          'status': 'Gagal', 
+          'message': 'Stok sedang kosong, mohon coba beberapa saat lagi'
+        };
+      }
+
+      // D. Eksekusi Kirim Transaksi API Digiflazz
       final String refId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
       final String sign = _generateSign(refId);
 
@@ -120,7 +194,7 @@ class DigiflazzService implements IDigiflazzService {
         return {'status': 'Gagal', 'message': 'Server transaksi merespon dengan kode: ${response.statusCode}'};
       }
     } catch (e) {
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan koneksi transaksi: ${e.toString()}'};
+      return {'status': 'Gagal', 'message': 'Terjadi gangguan transaksi: ${e.toString()}'};
     }
   }
 
