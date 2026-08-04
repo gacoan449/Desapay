@@ -11,7 +11,6 @@ class PindaiQrisScreen extends StatefulWidget {
 }
 
 class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
-  // Biarkan widget MobileScanner yang mengatur start/stop otomatis secara natural
   final MobileScannerController _cameraController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
@@ -19,6 +18,7 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
 
   bool _isProcessing = false;
   bool _isFlashOn = false; 
+  bool _hasCameraPermission = true; // Tambahan untuk memantau izin
 
   @override
   void dispose() {
@@ -29,6 +29,9 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
   void _handleQrDetected(String code) {
     if (_isProcessing) return; 
     setState(() => _isProcessing = true);
+    
+    // Hentikan kamera saat dialog muncul demi performa dan baterai
+    _cameraController.stop();
 
     final bool isValidQris = code.startsWith("000201") || code.toUpperCase().contains("NMID");
 
@@ -58,6 +61,8 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
             onPressed: () { 
               Navigator.pop(context); 
               setState(() => _isProcessing = false);
+              // Jalankan kamera kembali untuk memindai ulang
+              _cameraController.start();
             }, 
             child: const Text("Pindai Lagi", style: TextStyle(color: WarnaDesaPay.textSub, fontWeight: FontWeight.bold)),
           ),
@@ -111,8 +116,18 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
                 }
               }
             },
+            // KOREKSI UTAMA: Menangani error/izin ditolak agar tidak crash/muncul teks bawaan
+            errorBuilder: (context, error, child) {
+              return const Center(
+                child: Text(
+                  "Gagal membuka kamera.\nPastikan izin kamera diberikan.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              );
+            },
           ),
-          // Kotak Scanner
+          // Kotak Scanner (Hanya muncul jika kamera aktif/diizinkan)
           Center(
             child: Container(
               width: 260, height: 260,
@@ -136,8 +151,12 @@ class _PindaiQrisScreenState extends State<PindaiQrisScreen> {
                   icon: _isFlashOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
                   color: _isFlashOn ? WarnaDesaPay.warning : Colors.white,
                   onTap: () async {
-                    await _cameraController.toggleTorch();
-                    setState(() => _isFlashOn = !_isFlashOn);
+                    try {
+                      await _cameraController.toggleTorch();
+                      setState(() => _isFlashOn = !_isFlashOn);
+                    } catch (_) {
+                      // Mencegah error jika flash ditekan saat kamera mati/izin ditolak
+                    }
                   },
                 ),
               ],
