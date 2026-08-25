@@ -5,7 +5,6 @@ import '../config/warna.dart';
 
 import '../screens/home/home_screen.dart';
 import '../screens/riwayat/riwayat_screen.dart';
-import '../screens/pindai/pindai_qris_screen.dart';
 import '../screens/ewallet/ewallet_screen.dart';
 import '../screens/profil/profil_screen.dart';
 
@@ -22,7 +21,6 @@ class _BottomNavState extends State<BottomNav> {
   final List<Widget> _pages = const [
     HomeScreen(),
     RiwayatScreen(),
-    SizedBox.shrink(), 
     EwalletScreen(),
     ProfilScreen(),
   ];
@@ -75,50 +73,25 @@ class _BottomNavState extends State<BottomNav> {
                 selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2),
                 unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.2),
                 onTap: (index) {
-                  if (index == 2) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen()));
-                  } else {
-                    setState(() => _currentIndex = index);
-                  }
+                  setState(() => _currentIndex = index);
                 },
-                // PERBAIKAN: Menghapus "const" di depan array [ ] ini
-                items: [
-                  const BottomNavigationBarItem(
+                items: const [
+                  BottomNavigationBarItem(
                     icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_rounded, size: 26)),
                     activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.home_filled, size: 26)),
                     label: "Beranda",
                   ),
-                  const BottomNavigationBarItem(
+                  BottomNavigationBarItem(
                     icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.receipt_long_outlined, size: 26)),
                     activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.receipt_long_rounded, size: 26)),
                     label: "Riwayat",
                   ),
-                  // Item ini TIDAK boleh const karena menggunakan .withOpacity()
                   BottomNavigationBarItem(
-                    icon: Container(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [WarnaDesaPay.primary, WarnaDesaPay.secondary],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: WarnaDesaPay.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))
-                        ]
-                      ),
-                      child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 26),
-                    ), 
-                    label: "Pay"
-                  ),
-                  const BottomNavigationBarItem(
                     icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_rounded, size: 26)),
                     activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.account_balance_wallet_rounded, size: 26)),
                     label: "Dompet",
                   ),
-                  const BottomNavigationBarItem(
+                  BottomNavigationBarItem(
                     icon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_outline_rounded, size: 26)),
                     activeIcon: Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.person_rounded, size: 26)),
                     label: "Profil",
