@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 import '../../services/security_service.dart';
 import 'ubah_password_screen.dart';
+import 'ubah_pin_screen.dart';
 
 class KeamananScreen extends StatefulWidget {
   const KeamananScreen({super.key});
@@ -42,9 +43,6 @@ class _KeamananScreenState extends State<KeamananScreen> {
   Future<void> _toggleBiometric(bool value) async {
     if (_loadingBiometric) return;
 
-    // ==========================================================
-    // AKTIFKAN
-    // ==========================================================
     if (value) {
       setState(() {
         _loadingBiometric = true;
@@ -71,7 +69,8 @@ class _KeamananScreenState extends State<KeamananScreen> {
         return;
       }
 
-      final success = await _securityService.enableBiometric();
+      final success =
+          await _securityService.enableBiometric();
 
       if (!mounted) return;
 
@@ -94,7 +93,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
     }
 
     // ==========================================================
-    // NONAKTIFKAN
+    // NONAKTIFKAN BIOMETRIK
     // ==========================================================
     setState(() {
       _loadingBiometric = true;
@@ -118,6 +117,18 @@ class _KeamananScreenState extends State<KeamananScreen> {
     );
   }
 
+  // ============================================================
+  // BUKA UBAH PIN
+  // ============================================================
+  Future<void> _openPinScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const UbahPinScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,6 +148,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
 
       body: ListView(
         padding: const EdgeInsets.all(20),
+
         children: [
           Container(
             decoration: BoxDecoration(
@@ -180,8 +192,10 @@ class _KeamananScreenState extends State<KeamananScreen> {
                     size: 14,
                   ),
 
-                  // Nanti kita sambungkan ke sistem PIN.
-                  onTap: () {},
+                  // ==================================================
+                  // SUDAH TERHUBUNG KE UBAH PIN
+                  // ==================================================
+                  onTap: _openPinScreen,
                 ),
 
                 const Divider(
@@ -220,14 +234,12 @@ class _KeamananScreenState extends State<KeamananScreen> {
                     size: 14,
                   ),
 
-                  // ==================================================
-                  // SEKARANG SUDAH TERHUBUNG
-                  // ==================================================
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const UbahPasswordScreen(),
+                        builder: (_) =>
+                            const UbahPasswordScreen(),
                       ),
                     );
                   },
