@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/warna.dart';
 import '../../services/security_service.dart';
+import 'ubah_password_screen.dart';
 
 class KeamananScreen extends StatefulWidget {
   const KeamananScreen({super.key});
@@ -110,7 +111,9 @@ class _KeamananScreenState extends State<KeamananScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Login biometrik telah dinonaktifkan.'),
+        content: Text(
+          'Login biometrik telah dinonaktifkan.',
+        ),
       ),
     );
   }
@@ -119,6 +122,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: WarnaDesaPay.lightBg,
+
       appBar: AppBar(
         title: const Text(
           "Keamanan Akun",
@@ -130,6 +134,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
       ),
+
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -141,8 +146,10 @@ class _KeamananScreenState extends State<KeamananScreen> {
                 color: WarnaDesaPay.lightField,
               ),
             ),
+
             child: Column(
               children: [
+
                 // ==================================================
                 // UBAH PIN TRANSAKSI
                 // ==================================================
@@ -151,6 +158,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                     Icons.pin_rounded,
                     color: WarnaDesaPay.primary,
                   ),
+
                   title: const Text(
                     "Ubah PIN Transaksi",
                     style: TextStyle(
@@ -158,6 +166,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                       fontSize: 14,
                     ),
                   ),
+
                   subtitle: const Text(
                     "6 digit angka rahasia",
                     style: TextStyle(
@@ -165,10 +174,13 @@ class _KeamananScreenState extends State<KeamananScreen> {
                       color: WarnaDesaPay.textSub,
                     ),
                   ),
+
                   trailing: const Icon(
                     Icons.arrow_forward_ios_rounded,
                     size: 14,
                   ),
+
+                  // Nanti kita sambungkan ke sistem PIN.
                   onTap: () {},
                 ),
 
@@ -186,6 +198,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                     Icons.lock_rounded,
                     color: WarnaDesaPay.primary,
                   ),
+
                   title: const Text(
                     "Ubah Kata Sandi",
                     style: TextStyle(
@@ -193,6 +206,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                       fontSize: 14,
                     ),
                   ),
+
                   subtitle: const Text(
                     "Untuk login ke aplikasi",
                     style: TextStyle(
@@ -200,11 +214,23 @@ class _KeamananScreenState extends State<KeamananScreen> {
                       color: WarnaDesaPay.textSub,
                     ),
                   ),
+
                   trailing: const Icon(
                     Icons.arrow_forward_ios_rounded,
                     size: 14,
                   ),
-                  onTap: () {},
+
+                  // ==================================================
+                  // SEKARANG SUDAH TERHUBUNG
+                  // ==================================================
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const UbahPasswordScreen(),
+                      ),
+                    );
+                  },
                 ),
 
                 const Divider(
@@ -218,7 +244,9 @@ class _KeamananScreenState extends State<KeamananScreen> {
                 // ==================================================
                 SwitchListTile(
                   value: _biometricEnabled,
+
                   activeColor: WarnaDesaPay.primary,
+
                   secondary: _loadingBiometric
                       ? const SizedBox(
                           width: 24,
@@ -231,6 +259,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                           Icons.fingerprint_rounded,
                           color: WarnaDesaPay.primary,
                         ),
+
                   title: const Text(
                     "Login Biometrik",
                     style: TextStyle(
@@ -238,6 +267,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                       fontSize: 14,
                     ),
                   ),
+
                   subtitle: const Text(
                     "Gunakan Sidik Jari / Face ID",
                     style: TextStyle(
@@ -245,6 +275,7 @@ class _KeamananScreenState extends State<KeamananScreen> {
                       color: WarnaDesaPay.textSub,
                     ),
                   ),
+
                   onChanged: _loadingBiometric
                       ? null
                       : _toggleBiometric,
