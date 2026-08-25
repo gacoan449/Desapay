@@ -5,23 +5,29 @@ import 'package:firebase_auth/firebase_auth.dart';
 abstract class IAuthService {
   User? get currentUser;
   Stream<User?> get authStateChanges;
-  
+
   Future<String?> login({
     required String email,
     required String password,
   });
-  
+
   Future<String?> register({
     required String nama,
     required String email,
     required String phone,
     required String password,
   });
-  
+
   Future<String?> forgotPassword(String email);
-  
+
+  /// Mengubah kata sandi dengan verifikasi kata sandi lama.
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
   Future<void> logout();
-  
+
   Future<void> verifyPhoneNumber({
     required String phoneNumber,
     required Function(PhoneAuthCredential) verificationCompleted,
@@ -29,7 +35,7 @@ abstract class IAuthService {
     required Function(String, int?) codeSent,
     required Function(String) codeAutoRetrievalTimeout,
   });
-  
+
   Future<UserCredential?> signInWithPhoneNumber({
     required String verificationId,
     required String smsCode,
@@ -93,9 +99,11 @@ class AuthService implements IAuthService {
     required String password,
   }) async {
     User? user;
+
     try {
       // Standarisasi format nomor telepon Indonesia (+62)
       String formattedPhone = phone.trim();
+
       if (formattedPhone.startsWith('0')) {
         formattedPhone = '+62${formattedPhone.substring(1)}';
       } else if (!formattedPhone.startsWith('+')) {
@@ -124,34 +132,40 @@ class AuthService implements IAuthService {
           "createdAt": FieldValue.serverTimestamp(),
         });
       }
+
       return null;
     } on FirebaseAuthException catch (e) {
-      // ROLLBACK SAFETY: Jika pembuatan akun di Firestore gagal, hapus akun di Auth
+      // ROLLBACK SAFETY
       if (user != null) {
         await user.delete();
       }
-      
+
       switch (e.code) {
         case "email-already-in-use":
           return "Alamat email tersebut sudah terdaftar.";
+
         case "weak-password":
           return "Keamanan password terlalu lemah (minimal 6 karakter).";
+
         case "invalid-email":
           return "Format alamat email tidak valid.";
+
         case "network-request-failed":
           return "Koneksi internet terputus. Periksa jaringan Anda.";
+
         default:
           return e.message ?? "Terjadi kegagalan saat pendaftaran.";
       }
     } catch (e) {
-      // ROLLBACK SAFETY: Jika terjadi kegagalan umum database, hapus akun di Auth
+      // ROLLBACK SAFETY
       if (user != null) {
         try {
           await user.delete();
         } catch (ignoredError) {
-          // Mengabaikan error internal delete agar tidak mengaburkan pesan utama
+          // Mengabaikan error internal delete
         }
       }
+
       return "Gagal menyimpan data akun. Detail error: ${e.toString()}";
     }
   }
@@ -165,20 +179,101 @@ class AuthService implements IAuthService {
       await _auth.sendPasswordResetEmail(
         email: email.trim(),
       );
+
       return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "user-not-found":
           return "Email tidak terdaftar dalam sistem DesaPay.";
+
         case "invalid-email":
           return "Format alamat email tidak valid.";
+
         case "network-request-failed":
           return "Koneksi internet terputus. Periksa jaringan Anda.";
+
         default:
-          return e.message ?? "Gagal mengirimkan email reset password.";
+          return e.message ??
+              "Gagal mengirimkan email reset password.";
       }
     } catch (e) {
       return "Terjadi kesalahan sistem saat meminta reset password: ${e.toString()}";
+    }
+  }
+
+  // ==========================================
+  // 3B. SISTEM UBAH PASSWORD
+  // ==========================================
+  @override
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final User? user = _auth.currentUser;
+
+      // Pastikan pengguna masih login
+      if (user == null) {
+        return "Sesi akun tidak ditemukan. Silakan login kembali.";
+      }
+
+      // DesaPay menggunakan login email/password.
+      final String? email = user.email;
+
+      if (email == null || email.isEmpty) {
+        return "Email akun tidak tersedia.";
+      }
+
+      // ======================================================
+      // 1. VERIFIKASI ULANG PASSWORD LAMA
+      // ======================================================
+      final AuthCredential credential =
+          EmailAuthProvider.credential(
+        email: email,
+        password: currentPassword,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+
+      // ======================================================
+      // 2. UPDATE PASSWORD BARU DI FIREBASE AUTH
+      // ======================================================
+      await user.updatePassword(newPassword);
+
+      // ======================================================
+      // 3. UPDATE WAKTU PERUBAHAN KEAMANAN DI FIRESTORE
+      // ======================================================
+      await _firestore.collection("users").doc(user.uid).set(
+        {
+          "securityUpdatedAt": FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "wrong-password":
+        case "invalid-credential":
+          return "Kata sandi lama salah.";
+
+        case "weak-password":
+          return "Kata sandi baru terlalu lemah. Gunakan minimal 6 karakter.";
+
+        case "requires-recent-login":
+          return "Sesi keamanan telah kedaluwarsa. Silakan login kembali.";
+
+        case "user-disabled":
+          return "Akun Anda telah dinonaktifkan.";
+
+        case "network-request-failed":
+          return "Koneksi internet terputus. Periksa jaringan Anda.";
+
+        default:
+          return e.message ?? "Gagal mengubah kata sandi.";
+      }
+    } catch (e) {
+      return "Terjadi kesalahan saat mengubah kata sandi.";
     }
   }
 
@@ -191,7 +286,7 @@ class AuthService implements IAuthService {
   }
 
   // ==========================================
-  // 5. FIREBASE PHONE AUTHENTICATION (OTP INTEGRATION)
+  // 5. FIREBASE PHONE AUTHENTICATION (OTP)
   // ==========================================
   @override
   Future<void> verifyPhoneNumber({
@@ -202,6 +297,7 @@ class AuthService implements IAuthService {
     required Function(String) codeAutoRetrievalTimeout,
   }) async {
     String formattedPhone = phoneNumber.trim();
+
     if (formattedPhone.startsWith('0')) {
       formattedPhone = '+62${formattedPhone.substring(1)}';
     } else if (!formattedPhone.startsWith('+')) {
@@ -224,13 +320,16 @@ class AuthService implements IAuthService {
     required String smsCode,
   }) async {
     try {
-      final AuthCredential credential = PhoneAuthProvider.credential(
+      final AuthCredential credential =
+          PhoneAuthProvider.credential(
         verificationId: verificationId,
         smsCode: smsCode.trim(),
       );
+
       return await _auth.signInWithCredential(credential);
     } catch (e) {
-      // Melempar kembali exception agar ditangani oleh presenter/controller UI DesaPay
+      // Melempar kembali exception agar ditangani
+      // oleh presenter/controller UI DesaPay.
       rethrow;
     }
   }
