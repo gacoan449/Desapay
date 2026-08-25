@@ -13,7 +13,6 @@ import '../../services/saldo_service.dart';
 import '../pulsa/pulsa_screen.dart' hide CustomBounce;
 import '../pln/pln_screen.dart' hide CustomBounce;
 import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
-import '../pindai/pindai_qris_screen.dart' hide CustomBounce;
 import '../notifikasi/notifikasi_screen.dart' hide CustomBounce; // <-- PERBAIKAN DI SINI
 
 // Import Layar Sapu Jagat PPOB (Otomatis Nembak API Digiflazz)
@@ -239,12 +238,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         const SizedBox(height: 28),
                         
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             _buildHeaderAction(Icons.add_circle_rounded, "Isi Saldo", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupSaldoScreen()))),
-                            _buildHeaderAction(Icons.arrow_circle_down_rounded, "Minta", () => _bukaLayananGenerik("Terima Dana")),
-                            _buildHeaderAction(Icons.send_rounded, "Kirim", () => _bukaLayananGenerik("Transfer Bank")),
-                            _buildHeaderAction(Icons.qr_code_scanner_rounded, "Pindai", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PindaiQrisScreen()))),
                           ],
                         ),
                         const SizedBox(height: 24),
@@ -411,14 +407,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             title: "Token Hemat", subtitle: "Potongan admin Rp 2.500", 
                             icon: Icons.bolt_rounded, color: WarnaDesaPay.primary, onTap: () {}
                           ),
-                          PromoCard(
-                            title: "Voucher Game", subtitle: "Bonus kuota melimpah", 
-                            icon: Icons.gamepad_rounded, color: const Color(0xFF9333EA), onTap: () {}
-                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 120),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -429,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeaderAction(IconData icon, String label, VoidCallback onTap) {
+  Widget _buildHeaderAction(IconData icon, String title, VoidCallback onTap) {
     return CustomBounce(
       onTap: onTap,
       child: Column(
@@ -437,19 +429,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.2), width: 1), 
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.white, size: 26),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
-          const SizedBox(height: 10),
-          Text(
-            label, 
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.3)
-          ),
+          const SizedBox(height: 8),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
         ],
       ),
+    );
+  }
+}
+
+// CustomBounce untuk Animasi Sentuhan (Dapat dipindah ke file terpisah)
+class CustomBounce extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  const CustomBounce({super.key, required this.child, required this.onTap});
+
+  @override
+  State<CustomBounce> createState() => _CustomBounceState();
+}
+
+class _CustomBounceState extends State<CustomBounce> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(scale: _scaleAnimation, child: widget.child),
     );
   }
 }
