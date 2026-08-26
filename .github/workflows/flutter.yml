@@ -32,98 +32,32 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Cek versi Flutter
+      - name: Cek versi Flutter & Dart
         run: |
           flutter --version
           dart --version
-          flutter doctor -v
 
-      - name: Pastikan Android SDK 36 tersedia
+      - name: Pastikan Android Folder
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
-
-      - name: Cek struktur Android
-        run: |
-          echo "=== android/app/build.gradle ==="
-          if [ -f android/app/build.gradle ]; then
-            cat android/app/build.gradle
+          if [ ! -d "android" ]; then
+            echo "Folder android belum ada, membuat project Android..."
+            flutter create . --platforms=android
+          else
+            echo "Folder android sudah ada, tidak membuat ulang."
           fi
 
-          echo "=== android/app/build.gradle.kts ==="
-          if [ -f android/app/build.gradle.kts ]; then
-            cat android/app/build.gradle.kts
-          fi
-
-          echo "=== android/build.gradle ==="
-          if [ -f android/build.gradle ]; then
-            cat android/build.gradle
-          fi
-
-      - name: Paksa compileSdk aplikasi ke 36
-        shell: bash
+      - name: Force Android compileSdk & targetSdk to 36
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          candidates = [
-              Path("android/app/build.gradle"),
-              Path("android/app/build.gradle.kts"),
-          ]
-
-          found = False
-
-          for path in candidates:
-              if not path.exists():
-                  continue
-
-              found = True
-              text = path.read_text(encoding="utf-8")
-              original = text
-
-              # Groovy
-              text = text.replace(
-                  "compileSdk = flutter.compileSdkVersion",
-                  "compileSdk = 36"
-              )
-
-              text = text.replace(
-                  "compileSdkVersion flutter.compileSdkVersion",
-                  "compileSdkVersion 36"
-              )
-
-              text = text.replace(
-                  "compileSdkVersion 34",
-                  "compileSdkVersion 36"
-              )
-
-              text = text.replace(
-                  "compileSdkVersion 35",
-                  "compileSdkVersion 36"
-              )
-
-              # Kotlin DSL
-              text = text.replace(
-                  "compileSdk = 34",
-                  "compileSdk = 36"
-              )
-
-              text = text.replace(
-                  "compileSdk = 35",
-                  "compileSdk = 36"
-              )
-
-              if text != original:
-                  path.write_text(text, encoding="utf-8")
-                  print(f"Updated: {path}")
-              else:
-                  print(f"No change needed: {path}")
-
-          if not found:
-              raise SystemExit(
-                  "android/app/build.gradle atau build.gradle.kts tidak ditemukan."
-              )
-          PY
+          FILE="android/app/build.gradle"
+          if [ -f "$FILE" ]; then
+            # Replace compileSdk or compileSdkVersion
+            sed -i -E 's/(compileSdk|compileSdkVersion)( =| )([a-zA-Z0-9._]+)/\1\236/g' $FILE
+            # Replace targetSdk or targetSdkVersion
+            sed -i -E 's/(targetSdk|targetSdkVersion)( =| )([a-zA-Z0-9._]+)/\1\236/g' $FILE
+            echo "Berhasil memperbarui versi SDK di $FILE"
+          else
+            echo "File $FILE tidak ditemukan!"
+          fi
 
       - name: Install dependencies
         run: |
@@ -133,25 +67,16 @@ jobs:
         run: |
           dart run flutter_launcher_icons
 
-      - name: Verifikasi compileSdk
-        run: |
-          echo "=== Semua referensi compileSdk di project Android ==="
-          grep -Rni "compileSdk" android \
-            --include="*.gradle" \
-            --include="*.gradle.kts" \
-            || true
-
       - name: Build APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: Cek ukuran APK
+      - name: Cek hasil APK
         run: |
           echo "=== HASIL BUILD ==="
           ls -lh build/app/outputs/flutter-apk/
-
           echo "=== UKURAN APK ==="
           du -h build/app/outputs/flutter-apk/app-release.apk
 
@@ -169,3 +94,4 @@ jobs:
           rm -rf build
           rm -rf .dart_tool
           rm -rf android/.gradle
+          echo "File build sementara sudah dibersihkan."
