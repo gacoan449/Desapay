@@ -32,46 +32,53 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Cek versi Flutter & Dart
+      - name: Cek versi Flutter
         run: |
           flutter --version
           dart --version
+          flutter doctor -v
 
-      # Hanya membuat folder Android jika memang belum ada.
-      # Jika folder android sudah ada, jangan generate ulang karena
-      # flutter create . dapat mengubah konfigurasi Android project.
-      - name: Pastikan Android Folder
+      - name: Pastikan Android SDK 36 tersedia
         run: |
-          if [ ! -d "android" ]; then
-            echo "Folder android belum ada, membuat project Android..."
-            flutter create . --platforms=android
-          else
-            echo "Folder android sudah ada, tidak membuat ulang."
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Cek struktur Android
+        run: |
+          echo "=== android/app/build.gradle ==="
+          if [ -f android/app/build.gradle ]; then
+            cat android/app/build.gradle
           fi
 
-      # Wajib compileSdk 36 karena file_picker / flutter_plugin_android_lifecycle
-      # membutuhkan Android API 36 atau lebih tinggi.
-      - name: Set Android compileSdk 36
+          echo "=== android/app/build.gradle.kts ==="
+          if [ -f android/app/build.gradle.kts ]; then
+            cat android/app/build.gradle.kts
+          fi
+
+          echo "=== android/build.gradle ==="
+          if [ -f android/build.gradle ]; then
+            cat android/build.gradle
+          fi
+
+      - name: Paksa compileSdk aplikasi ke 36
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          android_dir = Path("android")
+          candidates = [
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts"),
+          ]
 
-          if not android_dir.exists():
-              raise SystemExit("Folder android tidak ditemukan.")
+          found = False
 
-          files = list(android_dir.rglob("*.gradle")) + list(android_dir.rglob("*.gradle.kts"))
-
-          changed = []
-
-          for path in files:
-              try:
-                  text = path.read_text(encoding="utf-8")
-              except Exception:
+          for path in candidates:
+              if not path.exists():
                   continue
 
+              found = True
+              text = path.read_text(encoding="utf-8")
               original = text
 
               # Groovy
@@ -108,25 +115,14 @@ jobs:
 
               if text != original:
                   path.write_text(text, encoding="utf-8")
-                  changed.append(str(path))
+                  print(f"Updated: {path}")
+              else:
+                  print(f"No change needed: {path}")
 
-          print("File Android yang diperbaiki:")
-          if changed:
-              for item in changed:
-                  print(" -", item)
-          else:
-              print("Tidak ada file yang perlu diubah.")
-
-          print("\nKonfigurasi compileSdk yang ditemukan:")
-          for path in files:
-              try:
-                  text = path.read_text(encoding="utf-8")
-              except Exception:
-                  continue
-
-              for line in text.splitlines():
-                  if "compileSdk" in line:
-                      print(f"{path}: {line.strip()}")
+          if not found:
+              raise SystemExit(
+                  "android/app/build.gradle atau build.gradle.kts tidak ditemukan."
+              )
           PY
 
       - name: Install dependencies
@@ -137,21 +133,28 @@ jobs:
         run: |
           dart run flutter_launcher_icons
 
-      # Build release APK
+      - name: Verifikasi compileSdk
+        run: |
+          echo "=== Semua referensi compileSdk di project Android ==="
+          grep -Rni "compileSdk" android \
+            --include="*.gradle" \
+            --include="*.gradle.kts" \
+            || true
+
       - name: Build APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: Cek hasil APK
+      - name: Cek ukuran APK
         run: |
           echo "=== HASIL BUILD ==="
           ls -lh build/app/outputs/flutter-apk/
+
           echo "=== UKURAN APK ==="
           du -h build/app/outputs/flutter-apk/app-release.apk
 
-      # Artifact hanya disimpan 1 hari
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -160,11 +163,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      # Bersihkan file build besar sebelum job selesai
       - name: Bersihkan file build
         if: always()
         run: |
           rm -rf build
           rm -rf .dart_tool
           rm -rf android/.gradle
-          echo "File build sementara sudah dibersihkan."
