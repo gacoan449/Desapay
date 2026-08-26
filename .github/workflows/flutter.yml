@@ -46,17 +46,36 @@ jobs:
             echo "Folder android sudah ada, tidak membuat ulang."
           fi
 
-      - name: Force Android compileSdk & targetSdk to 36
+      - name: Force App compileSdk & targetSdk to 36
         run: |
           FILE="android/app/build.gradle"
           if [ -f "$FILE" ]; then
-            # Replace compileSdk or compileSdkVersion
             sed -i -E 's/(compileSdk|compileSdkVersion)( =| )([a-zA-Z0-9._]+)/\1\236/g' $FILE
-            # Replace targetSdk or targetSdkVersion
             sed -i -E 's/(targetSdk|targetSdkVersion)( =| )([a-zA-Z0-9._]+)/\1\236/g' $FILE
-            echo "Berhasil memperbarui versi SDK di $FILE"
+            echo "Berhasil memperbarui versi SDK aplikasi di $FILE"
           else
             echo "File $FILE tidak ditemukan!"
+          fi
+
+      - name: Force All Plugins (Subprojects) to compileSdk 36
+        run: |
+          BUILD_FILE="android/build.gradle"
+          if [ -f "$BUILD_FILE" ]; then
+            cat <<'EOF' >> android/build.gradle
+
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                compileSdkVersion 36
+            }
+        }
+    }
+}
+EOF
+            echo "Berhasil memaksa seluruh plugin menggunakan compileSdkVersion 36"
+          else
+            echo "File $BUILD_FILE tidak ditemukan!"
           fi
 
       - name: Install dependencies
