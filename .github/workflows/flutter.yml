@@ -1,70 +1,170 @@
 name: Flutter Build APK
 
-# ✅ TAMBAHAN 1: Hemat penyimpanan, batasi proses berjalan
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 on:
   push:
-    branches: [ "main" ]
-  # Bisa juga jalankan manual dari halaman GitHub
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    # ✅ TAMBAHAN 2: Atur agar file hasil otomatis terhapus setelah 1 hari
-    permissions: write-all
+    permissions:
+      contents: read
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Atur versi Node agar sesuai
-      env:
-        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-      run: echo "Node versi disesuaikan"
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
-    - name: Set up Java JDK
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        channel: 'stable'
-        cache: true # ✅ Tambah: Mempercepat proses berikutnya
+      - name: Cek versi Flutter & Dart
+        run: |
+          flutter --version
+          dart --version
 
-    - name: Cek versi Flutter & Pub
-      run: |
-        flutter --version
-        dart --version
+      # Hanya membuat folder Android jika memang belum ada.
+      # Jika folder android sudah ada, jangan generate ulang karena
+      # flutter create . dapat mengubah konfigurasi Android project.
+      - name: Pastikan Android Folder
+        run: |
+          if [ ! -d "android" ]; then
+            echo "Folder android belum ada, membuat project Android..."
+            flutter create . --platforms=android
+          else
+            echo "Folder android sudah ada, tidak membuat ulang."
+          fi
 
-    # Otomatis membuat folder android yang hilang sebelum build
-    - name: Auto Generate Android Folder
-      run: flutter create . --platforms=android
+      # Wajib compileSdk 36 karena file_picker / flutter_plugin_android_lifecycle
+      # membutuhkan Android API 36 atau lebih tinggi.
+      - name: Set Android compileSdk 36
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
 
-    - name: Install dependencies
-      run: flutter pub get
+          android_dir = Path("android")
 
-    # Menjalankan generator ikon khusus untuk platform Android saja
-    - name: Generate Launcher Icons
-      run: dart run flutter_launcher_icons
+          if not android_dir.exists():
+              raise SystemExit("Folder android tidak ditemukan.")
 
-    # Mengubah build ke --release agar aplikasi lebih ringan dan siap pakai
-    - name: Build APK
-      run: flutter build apk --release --no-tree-shake-icons
+          files = list(android_dir.rglob("*.gradle")) + list(android_dir.rglob("*.gradle.kts"))
 
-    - name: Cek ukuran file hasil
-      run: ls -lh build/app/outputs/flutter-apk/
+          changed = []
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: flutter-app-release
-        path: build/app/outputs/flutter-apk/app-release.apk
-        retention-days: 1 # ✅ TAMBAHAN PENTING: File otomatis hilang setelah 1 hari, tidak penuhi penyimpanan
+          for path in files:
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except Exception:
+                  continue
+
+              original = text
+
+              # Groovy
+              text = text.replace(
+                  "compileSdk = flutter.compileSdkVersion",
+                  "compileSdk = 36"
+              )
+
+              text = text.replace(
+                  "compileSdkVersion flutter.compileSdkVersion",
+                  "compileSdkVersion 36"
+              )
+
+              text = text.replace(
+                  "compileSdkVersion 34",
+                  "compileSdkVersion 36"
+              )
+
+              text = text.replace(
+                  "compileSdkVersion 35",
+                  "compileSdkVersion 36"
+              )
+
+              # Kotlin DSL
+              text = text.replace(
+                  "compileSdk = 34",
+                  "compileSdk = 36"
+              )
+
+              text = text.replace(
+                  "compileSdk = 35",
+                  "compileSdk = 36"
+              )
+
+              if text != original:
+                  path.write_text(text, encoding="utf-8")
+                  changed.append(str(path))
+
+          print("File Android yang diperbaiki:")
+          if changed:
+              for item in changed:
+                  print(" -", item)
+          else:
+              print("Tidak ada file yang perlu diubah.")
+
+          print("\nKonfigurasi compileSdk yang ditemukan:")
+          for path in files:
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except Exception:
+                  continue
+
+              for line in text.splitlines():
+                  if "compileSdk" in line:
+                      print(f"{path}: {line.strip()}")
+          PY
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+
+      - name: Generate Launcher Icons
+        run: |
+          dart run flutter_launcher_icons
+
+      # Build release APK
+      - name: Build APK
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+
+      - name: Cek hasil APK
+        run: |
+          echo "=== HASIL BUILD ==="
+          ls -lh build/app/outputs/flutter-apk/
+          echo "=== UKURAN APK ==="
+          du -h build/app/outputs/flutter-apk/app-release.apk
+
+      # Artifact hanya disimpan 1 hari
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 1
+
+      # Bersihkan file build besar sebelum job selesai
+      - name: Bersihkan file build
+        if: always()
+        run: |
+          rm -rf build
+          rm -rf .dart_tool
+          rm -rf android/.gradle
+          echo "File build sementara sudah dibersihkan."
