@@ -52,12 +52,13 @@ class SecurityService {
         return false;
       }
 
+      // ✅ PERBAIKAN: Menyesuaikan parameter local_auth v3.0.0+
+      // 'stickyAuth' diganti menjadi 'persistAcrossBackgrounding'
+      // 'useErrorDialogs' dihapus karena penanganan error UI sekarang otomatis dikelola sistem
       return await _localAuth.authenticate(
         localizedReason: 'Verifikasi identitas untuk mengakses keamanan DesaPay',
-        biometricOnly: false,
-        stickyAuth: true,
-        useErrorDialogs: true,
-        sensitiveTransaction: true,
+        biometricOnly: false, 
+        persistAcrossBackgrounding: true, 
       );
     } catch (_) {
       return false;
