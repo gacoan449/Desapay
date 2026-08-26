@@ -61,18 +61,7 @@ jobs:
         run: |
           BUILD_FILE="android/build.gradle"
           if [ -f "$BUILD_FILE" ]; then
-            cat <<'EOF' >> android/build.gradle
-
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
-            project.android {
-                compileSdkVersion 36
-            }
-        }
-    }
-}
-EOF
+            echo -e "\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty('android')) {\n            project.android {\n                compileSdkVersion 36\n            }\n        }\n    }\n}" >> android/build.gradle
             echo "Berhasil memaksa seluruh plugin menggunakan compileSdkVersion 36"
           else
             echo "File $BUILD_FILE tidak ditemukan!"
