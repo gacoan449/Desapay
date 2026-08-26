@@ -3,65 +3,52 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as excel_lib;
 
 import '../../config/warna.dart';
-import '../../widgets/menu_item.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  State<AdminDashboardScreen> createState() =>
-      _AdminDashboardScreenState();
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   late TabController _adminTabController;
 
   // ============================================================
-  // CONTROLLER KONTEN UI
+  // CONTROLLER UI
   // ============================================================
-
-  final TextEditingController promoController =
-      TextEditingController();
-
-  final TextEditingController bannerController =
-      TextEditingController();
-
-  final TextEditingController namaMenuController =
-      TextEditingController();
-
-  final TextEditingController ikonController =
-      TextEditingController();
+  final TextEditingController promoController = TextEditingController();
+  final TextEditingController bannerController = TextEditingController();
+  final TextEditingController namaMenuController = TextEditingController();
+  final TextEditingController ikonController = TextEditingController();
 
   // ============================================================
   // CONTROLLER MARKUP
   // ============================================================
-
   final TextEditingController markupPulsaController =
       TextEditingController();
-
   final TextEditingController markupKuotaController =
       TextEditingController();
-
   final TextEditingController markupAngsuranController =
       TextEditingController();
-
   final TextEditingController markupLainnyaController =
       TextEditingController();
 
   bool _isLoading = false;
+  bool _isMaintenance = false;
 
-  // Progress Excel
+  // ============================================================
+  // PROGRESS
+  // ============================================================
   int _excelProgress = 0;
   int _excelTotal = 0;
 
-  // Progress sinkronisasi harga
   int _syncProgress = 0;
   int _syncTotal = 0;
 
@@ -78,63 +65,331 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // LOAD KONFIGURASI
+  // HELPER FIRESTORE / TYPE SAFETY
+  // ============================================================
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return <String, dynamic>{};
+  }
+
+  String _toStringValue(
+    dynamic value, {
+    String fallback = "",
+  }) {
+    if (value == null) return fallback;
+
+    final String result = value.toString().trim();
+
+    if (result.isEmpty) return fallback;
+
+    return result;
+  }
+
+  bool _toBool(
+    dynamic value, {
+    bool fallback = false,
+  }) {
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is num) {
+      return value != 0;
+    }
+
+    final String text = value?.toString().trim().toLowerCase() ?? "";
+
+    if (text == "true" ||
+        text == "1" ||
+        text == "yes" ||
+        text == "ya" ||
+        text == "aktif") {
+      return true;
+    }
+
+    if (text == "false" ||
+        text == "0" ||
+        text == "no" ||
+        text == "tidak" ||
+        text == "nonaktif") {
+      return false;
+    }
+
+    return fallback;
+  }
+
+  int _toInt(dynamic value) {
+    if (value == null) {
+      return 0;
+    }
+
+    if (value is int) {
+      return value;
+    }
+
+    if (value is double) {
+      return value.round();
+    }
+
+    if (value is num) {
+      return value.round();
+    }
+
+    String text = value.toString().trim();
+
+    if (text.isEmpty) {
+      return 0;
+    }
+
+    text = text
+        .replaceAll(RegExp(r'(?i)rp'), '')
+        .replaceAll(RegExp(r'\s+'), '');
+
+    if (text.isEmpty) {
+      return 0;
+    }
+
+    // Format Indonesia:
+    // 10.000
+    // 10.000,50
+    // 1.500.000
+    //
+    // Format umum:
+    // 10,000
+    // 1,500,000
+    //
+    // Jika ada titik DAN koma:
+    // titik dianggap pemisah ribuan,
+    // koma dianggap desimal.
+    if (text.contains('.') && text.contains(',')) {
+      final int lastDot = text.lastIndexOf('.');
+      final int lastComma = text.lastIndexOf(',');
+
+      if (lastComma > lastDot) {
+        text = text.replaceAll('.', '').replaceAll(',', '.');
+
+        final double? decimalValue = double.tryParse(text);
+
+        if (decimalValue != null) {
+          return decimalValue.round();
+        }
+      } else {
+        text = text.replaceAll(',', '');
+
+        final double? decimalValue = double.tryParse(text);
+
+        if (decimalValue != null) {
+          return decimalValue.round();
+        }
+      }
+    } else if (text.contains(',')) {
+      final int commaCount = ','.allMatches(text).length;
+
+      if (commaCount > 1) {
+        text = text.replaceAll(',', '');
+
+        final int? intValue = int.tryParse(text);
+
+        if (intValue != null) {
+          return intValue;
+        }
+      } else {
+        final List<String> parts = text.split(',');
+
+        if (parts.length == 2 && parts[1].length <= 2) {
+          final double? decimalValue = double.tryParse(
+            text.replaceAll(',', '.'),
+          );
+
+          if (decimalValue != null) {
+            return decimalValue.round();
+          }
+        } else {
+          text = text.replaceAll(',', '');
+
+          final int? intValue = int.tryParse(text);
+
+          if (intValue != null) {
+            return intValue;
+          }
+        }
+      }
+    } else if (text.contains('.')) {
+      final List<String> parts = text.split('.');
+
+      // 10.000 / 100.000 / 1.500.000
+      if (parts.length > 2 ||
+          (parts.length == 2 && parts[1].length == 3)) {
+        text = text.replaceAll('.', '');
+
+        final int? intValue = int.tryParse(text);
+
+        if (intValue != null) {
+          return intValue;
+        }
+      }
+    }
+
+    final int? directInt = int.tryParse(text);
+
+    if (directInt != null) {
+      return directInt;
+    }
+
+    final double? directDouble = double.tryParse(text);
+
+    if (directDouble != null) {
+      return directDouble.round();
+    }
+
+    // Ambil hanya angka jika string mengandung simbol lain.
+    final String cleaned = text.replaceAll(RegExp(r'[^0-9\-]'), '');
+
+    return int.tryParse(cleaned) ?? 0;
+  }
+
+  Timestamp? _toTimestamp(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is Timestamp) {
+      return value;
+    }
+
+    if (value is DateTime) {
+      return Timestamp.fromDate(value);
+    }
+
+    if (value is int) {
+      try {
+        // Milliseconds sejak epoch.
+        return Timestamp.fromMillisecondsSinceEpoch(value);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (value is double) {
+      try {
+        return Timestamp.fromMillisecondsSinceEpoch(value.round());
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (value is String) {
+      final DateTime? parsed = DateTime.tryParse(value);
+
+      if (parsed != null) {
+        return Timestamp.fromDate(parsed);
+      }
+    }
+
+    return null;
+  }
+
+  String _formatDate(dynamic value) {
+    final Timestamp? timestamp = _toTimestamp(value);
+
+    if (timestamp == null) {
+      return "-";
+    }
+
+    try {
+      final DateTime dt = timestamp.toDate();
+
+      return "${dt.day.toString().padLeft(2, '0')}/"
+          "${dt.month.toString().padLeft(2, '0')}/"
+          "${dt.year} "
+          "${dt.hour.toString().padLeft(2, '0')}:"
+          "${dt.minute.toString().padLeft(2, '0')}";
+    } catch (_) {
+      return "-";
+    }
+  }
+
+  String _formatCurrency(dynamic value) {
+    final int parsed = _toInt(value);
+
+    final bool negative = parsed < 0;
+    final String digits = parsed.abs().toString();
+
+    final String formatted = digits.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match match) => '${match[1]}.',
+    );
+
+    return negative ? "-$formatted" : formatted;
+  }
+
+  // ============================================================
+  // INITIAL CONFIGURATION
   // ============================================================
 
   Future<void> _loadInitialConfiguration() async {
     try {
-      final DocumentSnapshot docApp = await _firestore
-          .collection("pengaturan")
-          .doc("aplikasi")
-          .get();
+      final DocumentSnapshot<Map<String, dynamic>> docApp =
+          await _firestore
+              .collection("pengaturan")
+              .doc("aplikasi")
+              .get();
 
-      if (docApp.exists && mounted) {
-        final data =
-            docApp.data() as Map<String, dynamic>;
+      if (docApp.exists) {
+        final Map<String, dynamic> data = _asMap(docApp.data());
+
+        if (!mounted) return;
 
         setState(() {
           bannerController.text =
-              data["teksBanner"] ?? "";
+              _toStringValue(data["teksBanner"]);
 
           promoController.text =
-              data["teksPromo"] ?? "";
+              _toStringValue(data["teksPromo"]);
+
+          _isMaintenance = _toBool(
+            data["isMaintenance"],
+            fallback: false,
+          );
         });
       }
 
-      final DocumentSnapshot docFin = await _firestore
-          .collection("pengaturan")
-          .doc("finansial")
-          .get();
+      final DocumentSnapshot<Map<String, dynamic>> docFin =
+          await _firestore
+              .collection("pengaturan")
+              .doc("finansial")
+              .get();
 
-      if (docFin.exists && mounted) {
-        final data =
-            docFin.data() as Map<String, dynamic>;
+      if (docFin.exists) {
+        final Map<String, dynamic> data = _asMap(docFin.data());
+
+        if (!mounted) return;
 
         setState(() {
           markupPulsaController.text =
-              _toInt(
-                data["markupPulsa"] ?? 0,
-              ).toString();
+              _toInt(data["markupPulsa"]).toString();
 
           markupKuotaController.text =
-              _toInt(
-                data["markupKuota"] ?? 0,
-              ).toString();
+              _toInt(data["markupKuota"]).toString();
 
           markupAngsuranController.text =
-              _toInt(
-                data["markupAngsuran"] ?? 0,
-              ).toString();
+              _toInt(data["markupAngsuran"]).toString();
 
           markupLainnyaController.text =
-              _toInt(
-                data["markupLainnya"] ?? 0,
-              ).toString();
+              _toInt(data["markupLainnya"]).toString();
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint(
-        "Gagal memuat konfigurasi admin: $e",
+        "Gagal memuat konfigurasi admin: $e\n$stackTrace",
       );
     }
   }
@@ -157,20 +412,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // SIMPAN KONTEN UI
+  // SNACKBAR
   // ============================================================
 
-  Future<void> _simpanPerubahanPromo() async {
-    if (promoController.text.trim().isEmpty ||
-        bannerController.text.trim().isEmpty) {
-      _tampilkanSnackBar(
-        "Teks banner dan promo tidak boleh kosong.",
-        isError: true,
-      );
-      return;
-    }
+  void _tampilkanSnackBar(
+    String pesan, {
+    required bool isError,
+  }) {
+    if (!mounted) return;
 
-    setState(() => _isLoading = true);
+    final ScaffoldMessengerState messenger =
+        ScaffoldMessenger.of(context);
+
+    messenger.hideCurrentSnackBar();
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          pesan,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: Colors.white,
+          ),
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        backgroundColor: isError
+            ? WarnaDesaPay.danger
+            : WarnaDesaPay.success,
+      ),
+    );
+  }
+
+  // ============================================================
+  // MAINTENANCE
+  // ============================================================
+
+  Future<void> _toggleMaintenance(bool value) async {
+    if (!mounted) return;
+
+    final bool oldValue = _isMaintenance;
+
+    setState(() {
+      _isMaintenance = value;
+    });
 
     try {
       await _firestore
@@ -178,12 +466,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           .doc("aplikasi")
           .set(
         {
-          "teksPromo":
-              promoController.text.trim(),
-          "teksBanner":
-              bannerController.text.trim(),
-          "updatedAt":
-              FieldValue.serverTimestamp(),
+          "isMaintenance": value,
+          "updatedAt": FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      _tampilkanSnackBar(
+        value
+            ? "Mode Maintenance AKTIF! User tidak bisa masuk."
+            : "Mode Maintenance DIMATIKAN! Aplikasi normal.",
+        isError: value,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isMaintenance = oldValue;
+        });
+      }
+
+      _tampilkanSnackBar(
+        "Gagal mengubah status maintenance: $e",
+        isError: true,
+      );
+    }
+  }
+
+  // ============================================================
+  // KONTEN UI
+  // ============================================================
+
+  Future<void> _simpanPerubahanPromo() async {
+    final String promo = promoController.text.trim();
+    final String banner = bannerController.text.trim();
+
+    if (promo.isEmpty || banner.isEmpty) {
+      _tampilkanSnackBar(
+        "Teks banner dan promo tidak boleh kosong.",
+        isError: true,
+      );
+      return;
+    }
+
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _firestore
+          .collection("pengaturan")
+          .doc("aplikasi")
+          .set(
+        {
+          "teksPromo": promo,
+          "teksBanner": banner,
+          "updatedAt": FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
@@ -199,74 +538,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       );
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
   // ============================================================
-  // AMBIL SEMUA MARKUP
+  // MARKUP
   // ============================================================
 
   Future<Map<String, int>> _ambilSemuaMarkup() async {
-    final DocumentSnapshot doc =
-        await _firestore
-            .collection("pengaturan")
-            .doc("finansial")
-            .get();
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> doc =
+          await _firestore
+              .collection("pengaturan")
+              .doc("finansial")
+              .get();
 
-    if (!doc.exists) {
+      if (!doc.exists) {
+        return {
+          "pulsa": 0,
+          "kuota": 0,
+          "angsuran": 0,
+          "lainnya": 0,
+        };
+      }
+
+      final Map<String, dynamic> data = _asMap(doc.data());
+
       return {
-        "pulsa": 0,
-        "kuota": 0,
-        "angsuran": 0,
-        "lainnya": 0,
+        "pulsa": _toInt(data["markupPulsa"]),
+        "kuota": _toInt(data["markupKuota"]),
+        "angsuran": _toInt(data["markupAngsuran"]),
+        "lainnya": _toInt(data["markupLainnya"]),
       };
+    } catch (e) {
+      debugPrint("Gagal mengambil markup: $e");
+
+      rethrow;
     }
-
-    final data =
-        doc.data() as Map<String, dynamic>;
-
-    return {
-      "pulsa": _toInt(
-        data["markupPulsa"],
-      ),
-      "kuota": _toInt(
-        data["markupKuota"],
-      ),
-      "angsuran": _toInt(
-        data["markupAngsuran"],
-      ),
-      "lainnya": _toInt(
-        data["markupLainnya"],
-      ),
-    };
   }
 
-  // ============================================================
-  // SIMPAN MARKUP PER KATEGORI
-  // ============================================================
-
   Future<void> _simpanSemuaMarkup() async {
+    if (_isLoading) return;
+
     final int? pulsa =
-        int.tryParse(
-      markupPulsaController.text.trim(),
-    );
+        int.tryParse(markupPulsaController.text.trim());
 
     final int? kuota =
-        int.tryParse(
-      markupKuotaController.text.trim(),
-    );
+        int.tryParse(markupKuotaController.text.trim());
 
     final int? angsuran =
-        int.tryParse(
-      markupAngsuranController.text.trim(),
-    );
+        int.tryParse(markupAngsuranController.text.trim());
 
     final int? lainnya =
-        int.tryParse(
-      markupLainnyaController.text.trim(),
-    );
+        int.tryParse(markupLainnyaController.text.trim());
 
     if (pulsa == null ||
         kuota == null ||
@@ -283,7 +611,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       await _firestore
@@ -295,9 +625,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           "markupKuota": kuota,
           "markupAngsuran": angsuran,
           "markupLainnya": lainnya,
-
-          "updatedAt":
-              FieldValue.serverTimestamp(),
+          "updatedAt": FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
@@ -313,95 +641,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       );
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
-  // ============================================================
-  // TENTUKAN KATEGORI PRODUK
-  // ============================================================
-
   String _tentukanKategoriProduk(
     Map<String, dynamic> produk,
   ) {
-    final String kategori =
-        (produk["category"] ??
-                produk["kategori"] ??
-                "")
-            .toString()
-            .toLowerCase();
+    final String kategori = _toStringValue(
+      produk["category"] ?? produk["kategori"],
+    ).toLowerCase();
 
-    final String nama =
-        (produk["product_name"] ??
-                produk["nama_produk"] ??
-                produk["produk"] ??
-                "")
-            .toString()
-            .toLowerCase();
+    final String nama = _toStringValue(
+      produk["product_name"] ??
+          produk["nama_produk"] ??
+          produk["produk"] ??
+          produk["nama"],
+    ).toLowerCase();
 
-    final String brand =
-        (produk["brand"] ?? "")
-            .toString()
-            .toLowerCase();
+    final String brand = _toStringValue(
+      produk["brand"] ??
+          produk["provider"] ??
+          produk["operator"],
+    ).toLowerCase();
 
-    final String sku =
-        (produk["buyer_sku_code"] ??
-                produk["sku"] ??
-                "")
-            .toString()
-            .toLowerCase();
+    final String sku = _toStringValue(
+      produk["buyer_sku_code"] ??
+          produk["sku"] ??
+          produk["kode_produk"] ??
+          produk["kode_sku"],
+    ).toLowerCase();
 
     final String gabungan =
         "$kategori $nama $brand $sku";
-
-    // ==========================================================
-    // ANGSURAN
-    // ==========================================================
 
     if (gabungan.contains("angsuran") ||
         gabungan.contains("cicilan") ||
         gabungan.contains("kredit") ||
         gabungan.contains("finance") ||
         gabungan.contains("multifinance") ||
-        gabungan.contains("leasing")) {
+        gabungan.contains("leasing") ||
+        gabungan.contains("angs")) {
       return "angsuran";
     }
 
-    // ==========================================================
-    // KUOTA / DATA
-    // ==========================================================
-
     if (gabungan.contains("kuota") ||
+        gabungan.contains("quota") ||
         gabungan.contains("data") ||
         gabungan.contains("internet") ||
         gabungan.contains("paket data") ||
         gabungan.contains("combo") ||
-        gabungan.contains("internet")) {
+        gabungan.contains("internetan")) {
       return "kuota";
     }
-
-    // ==========================================================
-    // PULSA
-    // ==========================================================
 
     if (gabungan.contains("pulsa") ||
         gabungan.contains("voucher pulsa") ||
         gabungan.contains("pulsa reguler") ||
-        gabungan.contains("regular")) {
+        gabungan.contains("regular") ||
+        gabungan.contains("reguler")) {
       return "pulsa";
     }
 
-    // ==========================================================
-    // LAINNYA
-    // ==========================================================
-
     return "lainnya";
   }
-
-  // ============================================================
-  // AMBIL MARKUP BERDASARKAN KATEGORI
-  // ============================================================
 
   int _markupUntukKategori(
     String kategori,
@@ -423,40 +729,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // UPLOAD EXCEL PRODUK
+  // EXCEL
   // ============================================================
 
   Future<void> _uploadExcelProduk() async {
     if (_isLoading) return;
 
-    try {
-      setState(() {
-        _isLoading = true;
-        _excelProgress = 0;
-        _excelTotal = 0;
-      });
+    setState(() {
+      _isLoading = true;
+      _excelProgress = 0;
+      _excelTotal = 0;
+    });
 
+    try {
       final FilePickerResult? result =
           await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: [
-          "xlsx",
-          "xls",
-        ],
+        allowedExtensions: ["xlsx", "xls"],
         withData: true,
       );
 
       if (result == null) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
         return;
       }
 
-      final PlatformFile file =
-          result.files.single;
+      final PlatformFile file = result.files.single;
 
       if (file.bytes == null) {
         throw Exception(
@@ -464,11 +761,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         );
       }
 
-      final Uint8List bytes =
-          file.bytes!;
+      final Uint8List bytes = file.bytes!;
 
-      final Excel excel =
-          Excel.decodeBytes(bytes);
+      late excel_lib.Excel excel;
+
+      try {
+        excel = excel_lib.Excel.decodeBytes(bytes);
+      } catch (e) {
+        throw Exception(
+          "File Excel tidak dapat dibaca. Pastikan file XLS/XLSX valid. Detail: $e",
+        );
+      }
 
       if (excel.tables.isEmpty) {
         throw Exception(
@@ -476,10 +779,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         );
       }
 
-      final String sheetName =
-          excel.tables.keys.first;
+      final String sheetName = excel.tables.keys.first;
 
-      final Sheet? sheet =
+      final excel_lib.Sheet? sheet =
           excel.tables[sheetName];
 
       if (sheet == null) {
@@ -494,63 +796,51 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         );
       }
 
-      // ========================================================
-      // HEADER
-      // ========================================================
-
       final List<dynamic> headerRow =
-          sheet.rows.first;
+          sheet.rows.isNotEmpty
+              ? sheet.rows.first
+              : <dynamic>[];
 
-      final List<String> headers =
-          headerRow.map((cell) {
-        return _normalisasiHeader(
-          cell?.value?.toString() ?? "",
-        );
-      }).toList();
+      final List<String> headers = headerRow
+          .map(
+            (cell) => _normalisasiHeader(
+              cell?.value?.toString() ?? "",
+            ),
+          )
+          .toList();
 
-      if (headers.isEmpty) {
+      if (headers.isEmpty ||
+          headers.every((header) => header.isEmpty)) {
         throw Exception(
           "Header Excel tidak ditemukan.",
         );
       }
 
-      // ========================================================
-      // MARKUP TERBARU
-      // ========================================================
-
       final Map<String, int> semuaMarkup =
           await _ambilSemuaMarkup();
 
-      // ========================================================
-      // LOOP PRODUK
-      // ========================================================
-
-      final List<Map<String, dynamic>>
-          produkList = [];
+      final List<Map<String, dynamic>> produkList =
+          <Map<String, dynamic>>[];
 
       int jumlahGagal = 0;
 
-      for (
-        int rowIndex = 1;
-        rowIndex < sheet.maxRows;
-        rowIndex++
-      ) {
-        final row =
-            sheet.rows[rowIndex];
-
-        if (_barisKosong(row)) {
-          continue;
-        }
-
+      for (int rowIndex = 1;
+          rowIndex < sheet.maxRows;
+          rowIndex++) {
         try {
-          final Map<String, dynamic>
-              produk = {};
+          final List<dynamic> row =
+              sheet.rows[rowIndex];
 
-          for (
-            int columnIndex = 0;
-            columnIndex < headers.length;
-            columnIndex++
-          ) {
+          if (_barisKosong(row)) {
+            continue;
+          }
+
+          final Map<String, dynamic> produk =
+              <String, dynamic>{};
+
+          for (int columnIndex = 0;
+              columnIndex < headers.length;
+              columnIndex++) {
             if (columnIndex >= row.length) {
               continue;
             }
@@ -562,15 +852,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               continue;
             }
 
-            final cell =
+            final dynamic cell =
                 row[columnIndex];
-
-            final dynamic value =
-                cell?.value;
 
             final dynamic cleaned =
                 _bersihkanNilaiExcel(
-              value,
+              cell?.value,
             );
 
             if (cleaned != null) {
@@ -583,10 +870,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             continue;
           }
 
-          // ====================================================
-          // SKU
-          // ====================================================
-
           final String sku =
               _ambilSKU(produk);
 
@@ -595,39 +878,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             continue;
           }
 
-          produk["buyer_sku_code"] =
-              sku;
-
-          // ====================================================
-          // HARGA BELI
-          // ====================================================
-
           final int hargaBeli =
               _ambilHargaProduk(produk);
 
-          produk["hargaBeli"] =
-              hargaBeli;
-
-          if (!produk.containsKey("price")) {
-            produk["price"] =
-                hargaBeli;
+          if (hargaBeli <= 0) {
+            jumlahGagal++;
+            continue;
           }
 
-          // ====================================================
-          // TENTUKAN KATEGORI
-          // ====================================================
+          produk["buyer_sku_code"] = sku;
+          produk["hargaBeli"] = hargaBeli;
+
+          if (!produk.containsKey("price") ||
+              _toInt(produk["price"]) <= 0) {
+            produk["price"] = hargaBeli;
+          }
 
           final String kategori =
-              _tentukanKategoriProduk(
-            produk,
-          );
-
-          produk["jenisLayanan"] =
-              kategori;
-
-          // ====================================================
-          // MARKUP SESUAI JENIS
-          // ====================================================
+              _tentukanKategoriProduk(produk);
 
           final int markup =
               _markupUntukKategori(
@@ -635,46 +903,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             semuaMarkup,
           );
 
-          produk["markup"] =
-              markup;
-
-          // ====================================================
-          // HARGA JUAL
-          // ====================================================
-
-          produk["hargaJual"] =
+          final int hargaJual =
               hargaBeli + markup;
 
-          // ====================================================
-          // STATUS
-          // ====================================================
+          produk["jenisLayanan"] = kategori;
+          produk["markup"] = markup;
+          produk["hargaJual"] = hargaJual;
 
           if (!produk.containsKey("isAktif")) {
             produk["isAktif"] = true;
+          } else {
+            produk["isAktif"] =
+                _toBool(
+              produk["isAktif"],
+              fallback: true,
+            );
           }
 
-          if (!produk.containsKey("status")) {
+          if (!produk.containsKey("status") ||
+              _toStringValue(
+                produk["status"],
+              ).isEmpty) {
             produk["status"] = "aktif";
           }
 
-          // ====================================================
-          // INFORMASI IMPORT
-          // ====================================================
-
-          produk["source"] =
-              "excel";
-
+          produk["source"] = "excel";
           produk["importedAt"] =
               FieldValue.serverTimestamp();
-
           produk["updatedAt"] =
               FieldValue.serverTimestamp();
 
           produkList.add(produk);
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint(
-            "Gagal membaca baris Excel "
-            "$rowIndex: $e",
+            "Gagal membaca baris Excel $rowIndex: "
+            "$e\n$stackTrace",
           );
 
           jumlahGagal++;
@@ -687,353 +950,142 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         );
       }
 
-      // ========================================================
-      // PROGRESS
-      // ========================================================
-
       if (mounted) {
         setState(() {
-          _excelTotal =
-              produkList.length;
-
+          _excelTotal = produkList.length;
           _excelProgress = 0;
         });
       }
 
-      // ========================================================
-      // FIRESTORE BATCH
-      // ========================================================
-
+      // Di bawah 500 operasi Firestore.
       const int batchSize = 450;
 
       int totalTersimpan = 0;
 
-      for (
-        int i = 0;
-        i < produkList.length;
-        i += batchSize
-      ) {
+      for (int i = 0;
+          i < produkList.length;
+          i += batchSize) {
         final int end =
-            (i + batchSize <
-                    produkList.length)
+            (i + batchSize < produkList.length)
                 ? i + batchSize
                 : produkList.length;
 
-        final List<Map<String, dynamic>>
-            batchData =
-            produkList.sublist(
-          i,
-          end,
-        );
+        final List<Map<String, dynamic>> batchData =
+            produkList.sublist(i, end);
 
         final WriteBatch batch =
             _firestore.batch();
 
-        for (final produk
+        for (final Map<String, dynamic> produk
             in batchData) {
           final String sku =
-              produk["buyer_sku_code"]
-                  .toString()
-                  .trim();
+              _toStringValue(
+            produk["buyer_sku_code"],
+          ).trim();
 
-          final DocumentReference ref =
-              _firestore
+          if (sku.isEmpty) {
+            continue;
+          }
+
+          final DocumentReference<Map<String, dynamic>>
+              ref = _firestore
                   .collection("produk")
                   .doc(sku);
 
           batch.set(
             ref,
             produk,
-            SetOptions(
-              merge: true,
-            ),
+            SetOptions(merge: true),
           );
         }
 
         await batch.commit();
 
-        totalTersimpan +=
-            batchData.length;
+        totalTersimpan += batchData.length;
 
         if (mounted) {
           setState(() {
-            _excelProgress =
-                totalTersimpan;
+            _excelProgress = totalTersimpan;
           });
         }
       }
 
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
       _tampilkanSnackBar(
-        "Upload selesai! "
-        "$totalTersimpan produk berhasil disimpan. "
+        "Upload selesai! $totalTersimpan produk berhasil disimpan. "
         "$jumlahGagal baris dilewati.",
         isError: false,
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint(
-        "UPLOAD EXCEL ERROR: $e",
+        "UPLOAD EXCEL ERROR: $e\n$stackTrace",
       );
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
 
       _tampilkanSnackBar(
         "Gagal upload Excel: $e",
         isError: true,
       );
-    }
-  }
-
-  // ============================================================
-  // TERAPKAN MARKUP KE SEMUA PRODUK
-  //
-  // Jadi kalau nanti:
-  //
-  // Pulsa  = 500
-  // Kuota  = 1500
-  // Angsuran = 2500
-  //
-  // produk lama juga ikut berubah.
-  // ============================================================
-
-  Future<void> _terapkanMarkupKeSemuaProduk() async {
-    if (_isLoading) return;
-
-    final bool? konfirmasi =
-        await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text(
-            "Terapkan Markup?",
-          ),
-          content: const Text(
-            "Semua produk di Firestore akan "
-            "dihitung ulang berdasarkan jenis layanan. "
-            "\n\n"
-            "Pulsa, Kuota, Angsuran dan Lainnya "
-            "akan menggunakan markup masing-masing.",
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(
-                context,
-                false,
-              ),
-              child:
-                  const Text("Batal"),
-            ),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.pop(
-                context,
-                true,
-              ),
-              child:
-                  const Text(
-                "TERAPKAN",
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (konfirmasi != true) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _syncProgress = 0;
-      _syncTotal = 0;
-    });
-
-    try {
-      final Map<String, int>
-          semuaMarkup =
-          await _ambilSemuaMarkup();
-
-      final QuerySnapshot snapshot =
-          await _firestore
-              .collection("produk")
-              .get();
-
-      final docs =
-          snapshot.docs;
-
+    } finally {
       if (mounted) {
         setState(() {
-          _syncTotal =
-              docs.length;
+          _isLoading = false;
         });
       }
-
-      const int batchSize = 450;
-
-      int totalUpdate = 0;
-
-      for (
-        int i = 0;
-        i < docs.length;
-        i += batchSize
-      ) {
-        final int end =
-            (i + batchSize <
-                    docs.length)
-                ? i + batchSize
-                : docs.length;
-
-        final WriteBatch batch =
-            _firestore.batch();
-
-        for (
-          int j = i;
-          j < end;
-          j++
-        ) {
-          final doc =
-              docs[j];
-
-          final data =
-              doc.data()
-                  as Map<String,
-                      dynamic>;
-
-          final String kategori =
-              _tentukanKategoriProduk(
-            data,
-          );
-
-          final int hargaBeli =
-              _toInt(
-            data["hargaBeli"] ??
-                data["price"] ??
-                0,
-          );
-
-          final int markup =
-              _markupUntukKategori(
-            kategori,
-            semuaMarkup,
-          );
-
-          final int hargaJual =
-              hargaBeli + markup;
-
-          batch.update(
-            doc.reference,
-            {
-              "jenisLayanan":
-                  kategori,
-              "markup":
-                  markup,
-              "hargaJual":
-                  hargaJual,
-              "updatedAt":
-                  FieldValue
-                      .serverTimestamp(),
-            },
-          );
-        }
-
-        await batch.commit();
-
-        totalUpdate +=
-            end - i;
-
-        if (mounted) {
-          setState(() {
-            _syncProgress =
-                totalUpdate;
-          });
-        }
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      _tampilkanSnackBar(
-        "$totalUpdate produk berhasil "
-        "diperbarui dengan markup terbaru.",
-        isError: false,
-      );
-    } catch (e) {
-      debugPrint(
-        "SYNC MARKUP ERROR: $e",
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      _tampilkanSnackBar(
-        "Gagal menerapkan markup: $e",
-        isError: true,
-      );
     }
   }
 
-  // ============================================================
-  // AMBIL SKU
-  // ============================================================
-
   String _ambilSKU(
-      Map<String, dynamic> produk) {
-    final kandidat = [
+    Map<String, dynamic> produk,
+  ) {
+    final List<dynamic> kandidat = [
       produk["buyer_sku_code"],
       produk["sku"],
       produk["kode_produk"],
       produk["kode_sku"],
       produk["product_code"],
+      produk["kode"],
     ];
 
-    for (final item in kandidat) {
-      if (item != null &&
-          item.toString().trim().isNotEmpty) {
-        return item
-            .toString()
-            .trim();
+    for (final dynamic item in kandidat) {
+      final String value =
+          _toStringValue(item).trim();
+
+      if (value.isNotEmpty) {
+        return value;
       }
     }
 
     return "";
   }
 
-  // ============================================================
-  // AMBIL HARGA PRODUK
-  // ============================================================
-
   int _ambilHargaProduk(
-      Map<String, dynamic> produk) {
-    final kandidat = [
-      produk["price"],
+    Map<String, dynamic> produk,
+  ) {
+    // Prioritas hargaBeli harus paling tinggi.
+    final List<dynamic> kandidatHargaBeli = [
       produk["hargaBeli"],
-      produk["harga"],
       produk["harga_beli"],
+      produk["buy_price"],
+      produk["purchase_price"],
+      produk["cost_price"],
+    ];
+
+    for (final dynamic item in kandidatHargaBeli) {
+      final int value = _toInt(item);
+
+      if (value > 0) {
+        return value;
+      }
+    }
+
+    // Hanya gunakan price jika hargaBeli memang tidak tersedia.
+    final List<dynamic> kandidatHargaLain = [
+      produk["price"],
+      produk["harga"],
       produk["selling_price"],
     ];
 
-    for (final item in kandidat) {
-      if (item == null) continue;
-
-      final int value =
-          _toInt(item);
+    for (final dynamic item in kandidatHargaLain) {
+      final int value = _toInt(item);
 
       if (value > 0) {
         return value;
@@ -1043,96 +1095,116 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return 0;
   }
 
-  // ============================================================
-  // NORMALISASI HEADER
-  // ============================================================
-
-  String _normalisasiHeader(
-      String value) {
+  String _normalisasiHeader(String value) {
     String hasil =
         value.trim().toLowerCase();
 
-    hasil = hasil.replaceAll(
-      RegExp(r'[^a-z0-9]+'),
-      '_',
-    );
-
-    hasil = hasil.replaceAll(
-      RegExp(r'_+'),
-      '_',
-    );
-
-    hasil = hasil.replaceAll(
-      RegExp(r'^_|_$'),
-      '',
-    );
+    hasil = hasil
+        .replaceAll(
+          RegExp(r'[^a-z0-9]+'),
+          '_',
+        )
+        .replaceAll(
+          RegExp(r'_+'),
+          '_',
+        )
+        .replaceAll(
+          RegExp(r'^_|_$'),
+          '',
+        );
 
     switch (hasil) {
       case "nama_produk":
-        return "product_name";
-
+      case "nama_product":
       case "nama":
+      case "produk":
+      case "product":
+      case "product_name":
         return "product_name";
 
       case "deskripsi":
-        return "description";
-
       case "deskripsi_produk":
+      case "description":
         return "description";
 
       case "harga":
+      case "price":
+      case "harga_jual":
+      case "harga_produk":
         return "price";
 
       case "harga_beli":
+      case "harga_modal":
+      case "modal":
+      case "buy_price":
+      case "purchase_price":
         return "hargaBeli";
 
       case "kode_produk":
-        return "buyer_sku_code";
-
       case "kode_sku":
-        return "buyer_sku_code";
-
       case "sku":
+      case "buyer_sku":
+      case "buyer_sku_code":
+      case "product_code":
         return "buyer_sku_code";
 
       case "kategori":
-        return "category";
-
       case "nama_kategori":
+      case "category":
         return "category";
 
       case "status_produk":
+      case "status":
         return "status";
 
       case "nomor":
+      case "nomor_tujuan":
+      case "customer_no":
+      case "customer_number":
         return "customer_no";
 
-      case "produk":
-        return "product_name";
-
       case "provider":
+      case "operator":
+      case "brand":
         return "brand";
 
-      case "operator":
-        return "brand";
+      case "aktif":
+      case "is_aktif":
+      case "isaktif":
+      case "active":
+        return "isAktif";
 
       default:
         return hasil;
     }
   }
 
-  // ============================================================
-  // BERSIHKAN EXCEL
-  // ============================================================
-
   dynamic _bersihkanNilaiExcel(
-      dynamic value) {
+    dynamic value,
+  ) {
     if (value == null) {
       return null;
     }
 
-    final String text =
-        value.toString().trim();
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is int) {
+      return value;
+    }
+
+    if (value is double) {
+      // Nilai numerik dari Excel dipertahankan sebagai num.
+      // Jika nanti digunakan sebagai harga, _toInt akan membulatkan.
+      return value;
+    }
+
+    if (value is num) {
+      return value;
+    }
+
+    String text = value.toString().trim();
 
     if (text.isEmpty) {
       return null;
@@ -1143,31 +1215,105 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     if (lower == "true" ||
         lower == "yes" ||
-        lower == "ya") {
+        lower == "ya" ||
+        lower == "aktif") {
       return true;
     }
 
     if (lower == "false" ||
         lower == "no" ||
-        lower == "tidak") {
+        lower == "tidak" ||
+        lower == "nonaktif") {
       return false;
     }
 
-    String angka =
-        text.replaceAll(
-      RegExp(r'(?i)rp'),
-      '',
-    );
+    String angka = text
+        .replaceAll(
+          RegExp(r'(?i)rp'),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'\s+'),
+          '',
+        );
 
-    angka = angka.replaceAll(
-      '.',
-      '',
-    );
+    if (angka.isEmpty) {
+      return null;
+    }
 
-    angka = angka.replaceAll(
-      ',',
-      '',
-    );
+    // Format Indonesia:
+    // 10.000
+    // 10.000,50
+    if (angka.contains('.') &&
+        angka.contains(',')) {
+      final int lastDot =
+          angka.lastIndexOf('.');
+
+      final int lastComma =
+          angka.lastIndexOf(',');
+
+      if (lastComma > lastDot) {
+        angka = angka
+            .replaceAll('.', '')
+            .replaceAll(',', '.');
+
+        final double? valueDouble =
+            double.tryParse(angka);
+
+        if (valueDouble != null) {
+          return valueDouble;
+        }
+      } else {
+        angka = angka.replaceAll(',', '');
+
+        final double? valueDouble =
+            double.tryParse(angka);
+
+        if (valueDouble != null) {
+          return valueDouble;
+        }
+      }
+    } else if (angka.contains(',')) {
+      final List<String> parts =
+          angka.split(',');
+
+      if (parts.length == 2 &&
+          parts[1].length <= 2) {
+        final double? valueDouble =
+            double.tryParse(
+          angka.replaceAll(',', '.'),
+        );
+
+        if (valueDouble != null) {
+          return valueDouble;
+        }
+      }
+
+      final int? valueInt =
+          int.tryParse(
+        angka.replaceAll(',', ''),
+      );
+
+      if (valueInt != null) {
+        return valueInt;
+      }
+    } else if (angka.contains('.')) {
+      final List<String> parts =
+          angka.split('.');
+
+      if (parts.length > 2 ||
+          (parts.length == 2 &&
+              parts[1].length == 3)) {
+        final int? valueInt =
+            int.tryParse(
+          angka.replaceAll('.', ''),
+        );
+
+        if (valueInt != null) {
+          return valueInt;
+        }
+      }
+    }
 
     final int? intValue =
         int.tryParse(angka);
@@ -1177,7 +1323,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
 
     final double? doubleValue =
-        double.tryParse(text);
+        double.tryParse(angka);
 
     if (doubleValue != null) {
       return doubleValue;
@@ -1186,44 +1332,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return text;
   }
 
-  // ============================================================
-  // TO INT
-  // ============================================================
-
-  int _toInt(dynamic value) {
-    if (value == null) {
-      return 0;
-    }
-
-    if (value is int) {
-      return value;
-    }
-
-    if (value is double) {
-      return value.round();
-    }
-
-    String text =
-        value.toString().trim();
-
-    text = text
-        .replaceAll(
-          RegExp(r'(?i)rp'),
-          '',
-        )
-        .replaceAll('.', '')
-        .replaceAll(',', '');
-
-    return int.tryParse(text) ?? 0;
-  }
-
-  // ============================================================
-  // BARIS KOSONG
-  // ============================================================
-
   bool _barisKosong(
-      List<dynamic> row) {
-    for (final cell in row) {
+    List<dynamic> row,
+  ) {
+    for (final dynamic cell in row) {
       final dynamic value =
           cell?.value;
 
@@ -1237,104 +1349,195 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // SNACKBAR
+  // TERAPKAN MARKUP KE SEMUA PRODUK
   // ============================================================
 
-  void _tampilkanSnackBar(
-    String pesan, {
-    required bool isError,
-  }) {
-    if (!mounted) return;
+  Future<void> _terapkanMarkupKeSemuaProduk() async {
+    if (_isLoading) return;
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      SnackBar(
-        content: Text(
-          pesan,
-          style:
-              const TextStyle(
-            fontWeight:
-                FontWeight.bold,
-            fontSize: 13,
-            color:
-                Colors.white,
+    final bool? konfirmasi =
+        await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            "Terapkan Markup?",
           ),
-        ),
-        behavior:
-            SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.circular(
-            14,
+          content: const Text(
+            "Semua produk di Firestore akan dihitung ulang "
+            "berdasarkan jenis layanan.\n\n"
+            "Pulsa, Kuota, Angsuran dan Lainnya akan "
+            "menggunakan markup masing-masing.",
           ),
-        ),
-        backgroundColor:
-            isError
-                ? WarnaDesaPay.danger
-                : WarnaDesaPay.success,
-      ),
-    );
-  }
-
-  // ============================================================
-  // FORMAT CURRENCY
-  // ============================================================
-
-  String _formatCurrency(
-      dynamic value) {
-    final int parsed =
-        _toInt(value);
-
-    return parsed
-        .toString()
-        .replaceAllMapped(
-          RegExp(
-            r'(\d{1,3})(?=(\d{3})+(?!\d))',
-          ),
-          (Match m) =>
-              '${m[1]}.',
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(
+                dialogContext,
+                false,
+              ),
+              child: const Text("Batal"),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.pop(
+                dialogContext,
+                true,
+              ),
+              child: const Text("TERAPKAN"),
+            ),
+          ],
         );
-  }
+      },
+    );
 
-  // ============================================================
-  // FORMAT DATE
-  // ============================================================
-
-  String _formatDate(
-      Timestamp? timestamp) {
-    if (timestamp == null) {
-      return "-";
+    if (konfirmasi != true) {
+      return;
     }
 
-    final DateTime dt =
-        timestamp.toDate();
+    if (!mounted) return;
 
-    return "${dt.day}/"
-        "${dt.month}/"
-        "${dt.year} "
-        "${dt.hour}:"
-        "${dt.minute.toString().padLeft(2, '0')}";
+    setState(() {
+      _isLoading = true;
+      _syncProgress = 0;
+      _syncTotal = 0;
+    });
+
+    try {
+      final Map<String, int> semuaMarkup =
+          await _ambilSemuaMarkup();
+
+      final QuerySnapshot<Map<String, dynamic>>
+          snapshot =
+          await _firestore
+              .collection("produk")
+              .get();
+
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>>
+          docs = snapshot.docs;
+
+      if (mounted) {
+        setState(() {
+          _syncTotal = docs.length;
+        });
+      }
+
+      const int batchSize = 450;
+
+      int totalUpdate = 0;
+
+      for (int i = 0;
+          i < docs.length;
+          i += batchSize) {
+        final int end =
+            (i + batchSize < docs.length)
+                ? i + batchSize
+                : docs.length;
+
+        final WriteBatch batch =
+            _firestore.batch();
+
+        for (int j = i;
+            j < end;
+            j++) {
+          final QueryDocumentSnapshot<Map<String, dynamic>>
+              doc = docs[j];
+
+          final Map<String, dynamic> data =
+              _asMap(doc.data());
+
+          final String kategori =
+              _tentukanKategoriProduk(data);
+
+          int hargaBeli =
+              _toInt(data["hargaBeli"]);
+
+          if (hargaBeli <= 0) {
+            hargaBeli = _toInt(
+              data["harga_beli"],
+            );
+          }
+
+          if (hargaBeli <= 0) {
+            hargaBeli = _toInt(
+              data["buy_price"],
+            );
+          }
+
+          if (hargaBeli <= 0) {
+            hargaBeli = _toInt(
+              data["price"],
+            );
+          }
+
+          final int markup =
+              _markupUntukKategori(
+            kategori,
+            semuaMarkup,
+          );
+
+          final int hargaJual =
+              hargaBeli + markup;
+
+          batch.update(
+            doc.reference,
+            {
+              "hargaBeli": hargaBeli,
+              "jenisLayanan": kategori,
+              "markup": markup,
+              "hargaJual": hargaJual,
+              "updatedAt":
+                  FieldValue.serverTimestamp(),
+            },
+          );
+        }
+
+        await batch.commit();
+
+        totalUpdate += end - i;
+
+        if (mounted) {
+          setState(() {
+            _syncProgress = totalUpdate;
+          });
+        }
+      }
+
+      _tampilkanSnackBar(
+        "$totalUpdate produk berhasil diperbarui "
+        "dengan markup terbaru.",
+        isError: false,
+      );
+    } catch (e, stackTrace) {
+      debugPrint(
+        "SYNC MARKUP ERROR: $e\n$stackTrace",
+      );
+
+      _tampilkanSnackBar(
+        "Gagal menerapkan markup: $e",
+        isError: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   // ============================================================
-  // BUILD
+  // BUILD UTAMA
   // ============================================================
 
   @override
-  Widget build(
-      BuildContext context) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          WarnaDesaPay.lightBg,
-
+      backgroundColor: WarnaDesaPay.lightBg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor:
-            WarnaDesaPay.darkCard,
-        foregroundColor:
-            Colors.white,
-
+        backgroundColor: WarnaDesaPay.darkCard,
+        foregroundColor: Colors.white,
         title: const Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
@@ -1342,8 +1545,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Text(
               "HQ Command Center",
               style: TextStyle(
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
                 fontSize: 16,
                 letterSpacing: 0.5,
               ),
@@ -1352,34 +1554,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               "DesaPay Administrator Mode",
               style: TextStyle(
                 fontSize: 11,
-                color:
-                    WarnaDesaPay.warning,
-                fontWeight:
-                    FontWeight.w600,
+                color: WarnaDesaPay.warning,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-
         leading: IconButton(
           icon: const Icon(
-            Icons
-                .arrow_back_ios_new_rounded,
+            Icons.arrow_back_ios_new_rounded,
             size: 20,
           ),
           onPressed: () =>
               Navigator.pop(context),
         ),
-
-        bottom:
-            PreferredSize(
+        bottom: PreferredSize(
           preferredSize:
-              const Size.fromHeight(
-            48,
-          ),
+              const Size.fromHeight(48),
           child: Container(
-            color:
-                WarnaDesaPay.darkBg,
+            color: WarnaDesaPay.darkBg,
             child: TabBar(
               controller:
                   _adminTabController,
@@ -1439,7 +1632,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         ),
       ),
-
       body: TabBarView(
         controller:
             _adminTabController,
@@ -1457,40 +1649,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // TAB 1 — KONTEN UI
+  // PANEL KONTEN UI
   // ============================================================
 
   Widget _buildPanelKontenUI() {
     return SingleChildScrollView(
       physics:
           const BouncingScrollPhysics(),
-      padding:
-          const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
-
-          // ====================================================
-          // KAMPANYE
-          // ====================================================
-
           Container(
             padding:
                 const EdgeInsets.all(20),
-            decoration:
-                BoxDecoration(
+            decoration: BoxDecoration(
               color:
                   WarnaDesaPay.lightCard,
               borderRadius:
                   BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color:
-                      WarnaDesaPay.shadow
-                          .withOpacity(
-                    0.05,
-                  ),
+                  color: WarnaDesaPay.shadow
+                      .withOpacity(0.05),
                   blurRadius: 14,
                   offset:
                       const Offset(0, 6),
@@ -1509,28 +1691,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       color:
                           WarnaDesaPay.warning,
                     ),
-                    SizedBox(
-                      width: 8,
-                    ),
+                    SizedBox(width: 8),
                     Text(
                       "Kampanye & Teks Berjalan",
-                      style:
-                          TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight:
                             FontWeight.w800,
                         color:
-                            WarnaDesaPay
-                                .textMain,
+                            WarnaDesaPay.textMain,
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(
                   height: 20,
                 ),
-
                 _buildModernInput(
                   context: context,
                   controller:
@@ -1540,11 +1716,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   hint:
                       "Tulis pengumuman...",
                 ),
-
                 const SizedBox(
                   height: 16,
                 ),
-
                 _buildModernInput(
                   context: context,
                   controller:
@@ -1554,16 +1728,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   hint:
                       "Tulis promo berjalan...",
                 ),
-
                 const SizedBox(
                   height: 24,
                 ),
-
-                CustomBounce(
-                  onTap:
-                      _simpanPerubahanPromo,
-                  child:
-                      Container(
+                GestureDetector(
+                  onTap: _isLoading
+                      ? null
+                      : _simpanPerubahanPromo,
+                  child: Container(
                     width:
                         double.infinity,
                     height: 50,
@@ -1581,9 +1753,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                       borderRadius:
                           BorderRadius
-                              .circular(
-                        14,
-                      ),
+                              .circular(14),
                     ),
                     alignment:
                         Alignment.center,
@@ -1594,14 +1764,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           )
                         : const Text(
                             "UPDATE REALTIME PLATFORM",
-                            style:
-                                TextStyle(
+                            style: TextStyle(
                               color:
                                   Colors.white,
                               fontWeight:
-                                  FontWeight.w900,
-                              fontSize:
-                                  13,
+                                  FontWeight
+                                      .w900,
+                              fontSize: 13,
                             ),
                           ),
                   ),
@@ -1609,15 +1778,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ],
             ),
           ),
-
           const SizedBox(
             height: 20,
           ),
-
-          // ====================================================
-          // IMPORT EXCEL
-          // ====================================================
-
           Container(
             padding:
                 const EdgeInsets.all(20),
@@ -1627,20 +1790,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   WarnaDesaPay.lightCard,
               borderRadius:
                   BorderRadius.circular(24),
-              border:
-                  Border.all(
-                color:
-                    WarnaDesaPay.primary
-                        .withOpacity(
-                  0.15,
-                ),
+              border: Border.all(
+                color: WarnaDesaPay.primary
+                    .withOpacity(0.15),
               ),
             ),
             child: Column(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-
                 const Row(
                   children: [
                     Icon(
@@ -1649,13 +1807,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       color:
                           WarnaDesaPay.primary,
                     ),
-                    SizedBox(
-                      width: 8,
-                    ),
+                    SizedBox(width: 8),
                     Text(
                       "Import Produk Excel",
-                      style:
-                          TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight:
                             FontWeight.w800,
@@ -1663,47 +1818,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ),
                   ],
                 ),
-
                 const SizedBox(
                   height: 10,
                 ),
-
                 const Text(
                   "Upload produk Digiflazz atau format DesaPay. "
                   "Harga jual otomatis mengikuti markup Pulsa, "
                   "Kuota, Angsuran atau Lainnya.",
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color:
                         WarnaDesaPay.textSub,
                     height: 1.4,
                   ),
                 ),
-
                 const SizedBox(
                   height: 16,
                 ),
-
                 Container(
                   padding:
-                      const EdgeInsets.all(
-                    12,
-                  ),
+                      const EdgeInsets.all(12),
                   decoration:
                       BoxDecoration(
                     color:
                         WarnaDesaPay.primary
                             .withOpacity(
-                      0.06,
-                    ),
+                                0.06),
                     borderRadius:
-                        BorderRadius.circular(
-                      12,
-                    ),
+                        BorderRadius
+                            .circular(12),
                   ),
-                  child:
-                      const Row(
+                  child: const Row(
                     crossAxisAlignment:
                         CrossAxisAlignment
                             .start,
@@ -1723,8 +1868,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           "SKU digunakan sebagai ID dokumen. "
                           "Sistem akan mendeteksi jenis layanan "
                           "dan menghitung harga jual otomatis.",
-                          style:
-                              TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color:
                                 WarnaDesaPay
@@ -1735,26 +1879,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ],
                   ),
                 ),
-
                 const SizedBox(
                   height: 16,
                 ),
-
                 if (_isLoading &&
                     _excelTotal > 0)
                   Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       LinearProgressIndicator(
-                        value:
-                            _excelProgress /
-                                _excelTotal,
+                        value: _excelTotal >
+                                0
+                            ? (_excelProgress /
+                                    _excelTotal)
+                                .clamp(
+                                    0.0,
+                                    1.0)
+                            : 0,
                         minHeight: 7,
                         borderRadius:
-                            BorderRadius.circular(
-                          10,
-                        ),
+                            BorderRadius
+                                .circular(
+                                    10),
                       ),
                       const SizedBox(
                         height: 8,
@@ -1767,9 +1915,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             const TextStyle(
                           fontSize: 11,
                           fontWeight:
-                              FontWeight.bold,
+                              FontWeight
+                                  .bold,
                           color:
-                              WarnaDesaPay.primary,
+                              WarnaDesaPay
+                                  .primary,
                         ),
                       ),
                       const SizedBox(
@@ -1777,7 +1927,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                     ],
                   ),
-
                 SizedBox(
                   width:
                       double.infinity,
@@ -1788,47 +1937,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         _isLoading
                             ? null
                             : _uploadExcelProduk,
-                    icon:
-                        _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(
-                                  strokeWidth:
-                                      2,
-                                  color:
-                                      Colors.white,
-                                ),
-                              )
-                            : const Icon(
-                                Icons
-                                    .file_upload_rounded,
-                              ),
-                    label:
-                        Text(
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child:
+                                CircularProgressIndicator(
+                              strokeWidth:
+                                  2,
+                              color:
+                                  Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons
+                                .file_upload_rounded,
+                          ),
+                    label: Text(
                       _isLoading
                           ? "MEMPROSES EXCEL..."
                           : "UPLOAD EXCEL PRODUK",
                       style:
                           const TextStyle(
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight
+                                .w900,
                         fontSize: 13,
                       ),
                     ),
                     style:
-                        ElevatedButton.styleFrom(
+                        ElevatedButton
+                            .styleFrom(
                       backgroundColor:
-                          WarnaDesaPay.primary,
+                          WarnaDesaPay
+                              .primary,
                       foregroundColor:
                           Colors.white,
                       shape:
                           RoundedRectangleBorder(
                         borderRadius:
-                            BorderRadius.circular(
-                          14,
-                        ),
+                            BorderRadius
+                                .circular(
+                                    14),
                       ),
                     ),
                   ),
@@ -1836,15 +1986,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ],
             ),
           ),
-
           const SizedBox(
             height: 32,
           ),
-
           const Text(
             "Manajemen Modul Layanan",
-            style:
-                TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight:
                   FontWeight.w800,
@@ -1852,12 +1999,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   WarnaDesaPay.textMain,
             ),
           ),
-
           const SizedBox(
             height: 12,
           ),
-
-          StreamBuilder<QuerySnapshot>(
+          StreamBuilder<
+              QuerySnapshot<
+                  Map<String, dynamic>>>(
             stream: _firestore
                 .collection(
                     "menu_layanan")
@@ -1869,31 +2016,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       .connectionState ==
                   ConnectionState.waiting) {
                 return const Center(
-                  child:
-                      Padding(
+                  child: Padding(
                     padding:
                         EdgeInsets.all(
-                      20,
-                    ),
+                            20),
                     child:
                         CircularProgressIndicator(
                       color:
-                          WarnaDesaPay.primary,
+                          WarnaDesaPay
+                              .primary,
                     ),
                   ),
                 );
               }
 
-              final docs =
-                  snapshot.data
-                          ?.docs ??
+              if (snapshot.hasError) {
+                return _buildErrorMessage(
+                  "Gagal memuat menu layanan: "
+                  "${snapshot.error}",
+                );
+              }
+
+              final List<
+                      QueryDocumentSnapshot<
+                          Map<String, dynamic>>>
+                  docs =
+                  snapshot.data?.docs ??
                       [];
 
               if (docs.isEmpty) {
                 return const Center(
-                  child:
-                      Text(
-                    "Belum ada menu custom yang dibuat.",
+                  child: Padding(
+                    padding:
+                        EdgeInsets.all(
+                            20),
+                    child: Text(
+                      "Belum ada menu custom yang dibuat.",
+                    ),
                   ),
                 );
               }
@@ -1906,56 +2065,82 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     docs.length,
                 itemBuilder:
                     (context, index) {
-                  final item =
-                      docs[index].data()
-                          as Map<String,
-                              dynamic>;
+                  final QueryDocumentSnapshot<
+                          Map<String, dynamic>>
+                      doc =
+                      docs[index];
+
+                  final Map<String,
+                          dynamic>
+                      item =
+                      _asMap(
+                    doc.data(),
+                  );
+
+                  final String id =
+                      _toStringValue(
+                    item["id"],
+                    fallback:
+                        doc.id,
+                  );
+
+                  final String nama =
+                      _toStringValue(
+                    item["nama"],
+                    fallback:
+                        "Menu Tanpa Nama",
+                  );
 
                   final bool isAktif =
-                      item["isAktif"] ??
-                          false;
+                      _toBool(
+                    item["isAktif"],
+                    fallback:
+                        false,
+                  );
 
                   return Container(
                     margin:
-                        const EdgeInsets.only(
+                        const EdgeInsets
+                            .only(
                       bottom: 12,
                     ),
                     decoration:
                         BoxDecoration(
                       color:
-                          WarnaDesaPay.lightCard,
+                          WarnaDesaPay
+                              .lightCard,
                       borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
+                          BorderRadius
+                              .circular(
+                                  16),
                       border:
                           Border.all(
                         color:
-                            WarnaDesaPay.lightField,
+                            WarnaDesaPay
+                                .lightField,
                       ),
                     ),
-                    child:
-                        ListTile(
+                    child: ListTile(
                       leading:
                           const Icon(
                         Icons
                             .grid_view_rounded,
                         color:
-                            WarnaDesaPay.primary,
+                            WarnaDesaPay
+                                .primary,
                       ),
-                      title:
-                          Text(
-                        item["nama"] ??
-                            "-",
+                      title: Text(
+                        nama,
                         style:
                             const TextStyle(
                           fontWeight:
-                              FontWeight.w700,
+                              FontWeight
+                                  .w700,
                         ),
                       ),
                       subtitle:
                           Text(
-                        "ID Modul: ${item["id"]}",
+                        "ID Modul: $id",
                         style:
                             const TextStyle(
                           fontSize: 11,
@@ -1966,18 +2151,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         value:
                             isAktif,
                         activeColor:
-                            WarnaDesaPay.success,
+                            WarnaDesaPay
+                                .success,
                         onChanged:
-                            (val) {
-                          _firestore
-                              .collection(
-                                  "menu_layanan")
-                              .doc(
-                                  item["id"])
-                              .update({
-                            "isAktif":
-                                val,
-                          });
+                            (bool val) async {
+                          try {
+                            await _firestore
+                                .collection(
+                                    "menu_layanan")
+                                .doc(
+                                    doc.id)
+                                .update({
+                              "isAktif":
+                                  val,
+                              "updatedAt":
+                                  FieldValue
+                                      .serverTimestamp(),
+                            });
+                          } catch (e) {
+                            _tampilkanSnackBar(
+                              "Gagal mengubah status menu: $e",
+                              isError:
+                                  true,
+                            );
+                          }
                         },
                       ),
                     ),
@@ -1992,11 +2189,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // TAB 2 — PENGGUNA
+  // PANEL PENGGUNA
   // ============================================================
 
   Widget _buildPanelPengguna() {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<
+        QuerySnapshot<Map<String, dynamic>>>(
       stream: _firestore
           .collection("users")
           .orderBy(
@@ -2004,8 +2202,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             descending: true,
           )
           .snapshots(),
-      builder:
-          (context, snapshot) {
+      builder: (context, snapshot) {
         if (snapshot
                 .connectionState ==
             ConnectionState.waiting) {
@@ -2018,14 +2215,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           );
         }
 
-        final docs =
-            snapshot.data?.docs ??
-                [];
+        if (snapshot.hasError) {
+          return _buildErrorMessage(
+            "Gagal memuat pengguna: "
+            "${snapshot.error}",
+          );
+        }
+
+        final List<
+                QueryDocumentSnapshot<
+                    Map<String, dynamic>>>
+            docs =
+            snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
           return const Center(
-            child:
-                Text(
+            child: Text(
               "Belum ada pengguna terdaftar.",
             ),
           );
@@ -2034,29 +2239,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         return ListView.builder(
           padding:
               const EdgeInsets.all(20),
-          itemCount:
-              docs.length,
+          itemCount: docs.length,
           itemBuilder:
               (context, index) {
-            final user =
-                docs[index].data()
-                    as Map<String,
-                        dynamic>;
+            final QueryDocumentSnapshot<
+                    Map<String, dynamic>>
+                doc =
+                docs[index];
 
-            final userId =
-                docs[index].id;
+            final Map<String, dynamic>
+                user =
+                _asMap(doc.data());
+
+            final String userId =
+                doc.id;
 
             final bool isBlocked =
-                user["isBlocked"] ??
-                    false;
+                _toBool(
+              user["isBlocked"],
+              fallback:
+                  false,
+            );
 
             final String kycStatus =
-                user["kycStatus"] ??
-                    "Belum";
+                _toStringValue(
+              user["kycStatus"],
+              fallback:
+                  "Belum",
+            );
 
             final String tipeAkun =
-                user["tipeAkun"] ??
-                    "Basic";
+                _toStringValue(
+              user["tipeAkun"],
+              fallback:
+                  "Basic",
+            );
+
+            final String nama =
+                _toStringValue(
+              user["nama"],
+              fallback:
+                  "User Tanpa Nama",
+            );
+
+            final String email =
+                _toStringValue(
+              user["email"],
+              fallback: "-",
+            );
+
+            final String fotoProfil =
+                _toStringValue(
+              user["fotoProfil"],
+            );
 
             return Container(
               margin:
@@ -2065,26 +2300,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
               padding:
                   const EdgeInsets.all(
-                16,
-              ),
+                      16),
               decoration:
                   BoxDecoration(
-                color:
-                    isBlocked
-                        ? WarnaDesaPay
-                            .danger
-                            .withOpacity(
-                            0.05,
-                          )
-                        : WarnaDesaPay
-                            .lightCard,
+                color: isBlocked
+                    ? WarnaDesaPay
+                        .danger
+                        .withOpacity(
+                            0.05)
+                    : WarnaDesaPay
+                        .lightCard,
                 borderRadius:
                     BorderRadius.circular(
-                  16,
-                ),
+                        16),
               ),
-              child:
-                  Column(
+              child: Column(
                 children: [
                   Row(
                     children: [
@@ -2093,60 +2323,51 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             WarnaDesaPay
                                 .primary
                                 .withOpacity(
-                          0.1,
-                        ),
+                                    0.1),
                         backgroundImage:
-                            (user["fotoProfil"] !=
-                                        null &&
-                                    user["fotoProfil"]
-                                        .toString()
-                                        .isNotEmpty)
+                            fotoProfil
+                                    .isNotEmpty
                                 ? NetworkImage(
-                                    user[
-                                        "fotoProfil"],
-                                  )
+                                    fotoProfil)
                                 : null,
-                        child:
-                            (user["fotoProfil"] ==
-                                        null ||
-                                    user["fotoProfil"]
-                                        .toString()
-                                        .isEmpty)
-                                ? const Icon(
-                                    Icons.person,
-                                    color:
-                                        WarnaDesaPay.primary,
-                                  )
-                                : null,
+                        child: fotoProfil
+                                .isEmpty
+                            ? const Icon(
+                                Icons
+                                    .person,
+                                color:
+                                    WarnaDesaPay
+                                        .primary,
+                              )
+                            : null,
                       ),
-
                       const SizedBox(
                         width: 12,
                       ),
-
                       Expanded(
-                        child:
-                            Column(
+                        child: Column(
                           crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              CrossAxisAlignment
+                                  .start,
                           children: [
                             Text(
-                              user["nama"] ??
-                                  "User Tanpa Nama",
+                              nama,
                               style:
                                   const TextStyle(
                                 fontWeight:
-                                    FontWeight.bold,
+                                    FontWeight
+                                        .bold,
                               ),
                             ),
                             Text(
-                              user["email"] ??
-                                  "-",
+                              email,
                               style:
                                   const TextStyle(
-                                fontSize: 11,
+                                fontSize:
+                                    11,
                                 color:
-                                    WarnaDesaPay.textSub,
+                                    WarnaDesaPay
+                                        .textSub,
                               ),
                             ),
                             const SizedBox(
@@ -2157,64 +2378,83 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   .toUpperCase(),
                               style:
                                   TextStyle(
-                                fontSize: 9,
+                                fontSize:
+                                    9,
                                 fontWeight:
-                                    FontWeight.bold,
-                                color:
-                                    tipeAkun ==
-                                            "Premium"
-                                        ? WarnaDesaPay
-                                            .warning
-                                        : Colors
-                                            .grey,
+                                    FontWeight
+                                        .bold,
+                                color: tipeAkun
+                                            .toLowerCase() ==
+                                        "premium"
+                                    ? WarnaDesaPay
+                                        .warning
+                                    : Colors
+                                        .grey,
                               ),
                             ),
                           ],
                         ),
                       ),
-
                       Switch.adaptive(
                         value:
                             !isBlocked,
                         activeColor:
-                            WarnaDesaPay.success,
+                            WarnaDesaPay
+                                .success,
                         onChanged:
-                            (val) {
-                          _firestore
-                              .collection(
-                                  "users")
-                              .doc(
-                                  userId)
-                              .update({
-                            "isBlocked":
-                                !val,
-                          });
+                            (bool val) async {
+                          try {
+                            await _firestore
+                                .collection(
+                                    "users")
+                                .doc(
+                                    userId)
+                                .update({
+                              "isBlocked":
+                                  !val,
+                              "updatedAt":
+                                  FieldValue
+                                      .serverTimestamp(),
+                            });
+                          } catch (e) {
+                            _tampilkanSnackBar(
+                              "Gagal mengubah status akun: $e",
+                              isError:
+                                  true,
+                            );
+                          }
                         },
                       ),
                     ],
                   ),
-
                   const Divider(
                     height: 24,
                   ),
-
                   Row(
                     mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                        MainAxisAlignment
+                            .spaceBetween,
                     children: [
-                      Text(
-                        "Saldo: Rp ${_formatCurrency(user["saldo"] ?? 0)}",
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.w900,
-                          color:
-                              WarnaDesaPay.primary,
+                      Flexible(
+                        child: Text(
+                          "Saldo: Rp ${_formatCurrency(user["saldo"])}",
+                          style:
+                              const TextStyle(
+                            fontWeight:
+                                FontWeight
+                                    .w900,
+                            color:
+                                WarnaDesaPay
+                                    .primary,
+                          ),
                         ),
                       ),
-
-                      if (kycStatus ==
-                          "Pending")
+                      const SizedBox(
+                        width: 8,
+                      ),
+                      if (kycStatus
+                              .toLowerCase() ==
+                          "pending")
                         ElevatedButton.icon(
                           icon:
                               const Icon(
@@ -2227,16 +2467,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             "Cek KYC",
                             style:
                                 TextStyle(
-                              fontSize: 11,
+                              fontSize:
+                                  11,
                             ),
                           ),
-                          onPressed:
-                              () =>
-                                  _tampilkanDialogReviewKYC(
+                          onPressed: () =>
+                              _tampilkanDialogReviewKYC(
                             userId,
-                            user["nama"],
-                            user["fotoKtp"],
-                            user["fotoSelfie"],
+                            nama,
+                            _toStringValue(
+                              user[
+                                  "fotoKtp"],
+                            ),
+                            _toStringValue(
+                              user[
+                                  "fotoSelfie"],
+                            ),
                           ),
                         )
                       else
@@ -2251,12 +2497,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               const Text(
                             "Edit Saldo",
                           ),
-                          onPressed:
-                              () =>
-                                  _tampilkanDialogEditSaldo(
+                          onPressed: () =>
+                              _tampilkanDialogEditSaldo(
                             userId,
                             _toInt(
-                              user["saldo"],
+                              user[
+                                  "saldo"],
                             ),
                           ),
                         ),
@@ -2272,18 +2518,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // REVIEW KYC
+  // KYC
   // ============================================================
 
-  void _tampilkanDialogReviewKYC(
+  Future<void> _tampilkanDialogReviewKYC(
     String userId,
-    String? nama,
-    String? fotoKtp,
-    String? fotoSelfie,
-  ) {
-    showDialog(
+    String nama,
+    String fotoKtp,
+    String fotoSelfie,
+  ) async {
+    if (!mounted) return;
+
+    await showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text(
             "Review Dokumen KYC\n$nama",
@@ -2298,8 +2546,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               children: [
                 const Text(
                   "Foto KTP",
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     fontWeight:
                         FontWeight.bold,
                   ),
@@ -2313,59 +2560,72 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       double.infinity,
                   color:
                       Colors.grey.shade200,
-                  child:
-                      fotoKtp != null &&
-                              fotoKtp.isNotEmpty
-                          ? Image.network(
-                              fotoKtp,
-                              fit:
-                                  BoxFit.cover,
-                            )
-                          : const Center(
-                              child:
-                                  Text(
-                                "Tidak ada gambar KTP",
+                  child: fotoKtp
+                          .isNotEmpty
+                      ? Image.network(
+                          fotoKtp,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return const Center(
+                              child: Text(
+                                "Gambar KTP tidak dapat dimuat",
                               ),
-                            ),
+                            );
+                          },
+                        )
+                      : const Center(
+                          child: Text(
+                            "Tidak ada gambar KTP",
+                          ),
+                        ),
                 ),
-
                 const SizedBox(
                   height: 16,
                 ),
-
                 const Text(
                   "Foto Selfie dengan KTP",
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     fontWeight:
                         FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(
                   height: 8,
                 ),
-
                 Container(
                   height: 150,
                   width:
                       double.infinity,
                   color:
                       Colors.grey.shade200,
-                  child:
-                      fotoSelfie != null &&
-                              fotoSelfie.isNotEmpty
-                          ? Image.network(
-                              fotoSelfie,
-                              fit:
-                                  BoxFit.cover,
-                            )
-                          : const Center(
-                              child:
-                                  Text(
-                                "Tidak ada gambar selfie",
+                  child: fotoSelfie
+                          .isNotEmpty
+                      ? Image.network(
+                          fotoSelfie,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return const Center(
+                              child: Text(
+                                "Gambar selfie tidak dapat dimuat",
                               ),
-                            ),
+                            );
+                          },
+                        )
+                      : const Center(
+                          child: Text(
+                            "Tidak ada gambar selfie",
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -2373,63 +2633,79 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           actions: [
             TextButton(
               onPressed: () async {
-                await _firestore
-                    .collection(
-                        "users")
-                    .doc(userId)
-                    .update({
-                  "kycStatus":
-                      "Ditolak",
-                });
+                try {
+                  await _firestore
+                      .collection("users")
+                      .doc(userId)
+                      .update({
+                    "kycStatus":
+                        "Ditolak",
+                    "updatedAt":
+                        FieldValue
+                            .serverTimestamp(),
+                  });
 
-                if (context.mounted) {
-                  Navigator.pop(
-                    context,
+                  if (dialogContext
+                      .mounted) {
+                    Navigator.pop(
+                      dialogContext,
+                    );
+                  }
+
+                  _tampilkanSnackBar(
+                    "Dokumen ditolak.",
+                    isError: true,
+                  );
+                } catch (e) {
+                  _tampilkanSnackBar(
+                    "Gagal menolak KYC: $e",
+                    isError: true,
                   );
                 }
-
-                _tampilkanSnackBar(
-                  "Dokumen ditolak.",
-                  isError: true,
-                );
               },
-              child:
-                  const Text(
+              child: const Text(
                 "Tolak",
-                style:
-                    TextStyle(
+                style: TextStyle(
                   color:
                       WarnaDesaPay.danger,
                 ),
               ),
             ),
-
             ElevatedButton(
               onPressed: () async {
-                await _firestore
-                    .collection(
-                        "users")
-                    .doc(userId)
-                    .update({
-                  "kycStatus":
-                      "Terverifikasi",
-                  "tipeAkun":
-                      "Premium",
-                });
+                try {
+                  await _firestore
+                      .collection("users")
+                      .doc(userId)
+                      .update({
+                    "kycStatus":
+                        "Terverifikasi",
+                    "tipeAkun":
+                        "Premium",
+                    "updatedAt":
+                        FieldValue
+                            .serverTimestamp(),
+                  });
 
-                if (context.mounted) {
-                  Navigator.pop(
-                    context,
+                  if (dialogContext
+                      .mounted) {
+                    Navigator.pop(
+                      dialogContext,
+                    );
+                  }
+
+                  _tampilkanSnackBar(
+                    "Akun berhasil diupgrade ke PREMIUM!",
+                    isError: false,
+                  );
+                } catch (e) {
+                  _tampilkanSnackBar(
+                    "Gagal menyetujui KYC: $e",
+                    isError: true,
                   );
                 }
-
-                _tampilkanSnackBar(
-                  "Akun berhasil diupgrade ke PREMIUM!",
-                  isError: false,
-                );
               },
-              child:
-                  const Text(
+              child: const Text(
                 "Setujui & Upgrade",
               ),
             ),
@@ -2443,94 +2719,105 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // EDIT SALDO
   // ============================================================
 
-  void _tampilkanDialogEditSaldo(
+  Future<void> _tampilkanDialogEditSaldo(
     String userId,
     int saldoSaatIni,
-  ) {
-    final controller =
+  ) async {
+    final TextEditingController controller =
         TextEditingController(
-      text:
-          saldoSaatIni.toString(),
+      text: saldoSaatIni.toString(),
     );
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title:
-              const Text(
-            "Adjustment Saldo Manual",
-          ),
-          content:
-              TextField(
-            controller:
-                controller,
-            keyboardType:
-                TextInputType.number,
-            decoration:
-                const InputDecoration(
-              labelText:
-                  "Nominal Baru",
+    try {
+      await showDialog<void>(
+        context: context,
+        builder:
+            (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text(
+              "Adjustment Saldo Manual",
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(
-                context,
-              ),
-              child:
-                  const Text("Batal"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final int? saldo =
-                    int.tryParse(
-                  controller.text.trim(),
-                );
-
-                if (saldo == null ||
-                    saldo < 0) {
-                  _tampilkanSnackBar(
-                    "Saldo tidak valid.",
-                    isError: true,
-                  );
-                  return;
-                }
-
-                await _firestore
-                    .collection(
-                        "users")
-                    .doc(userId)
-                    .update({
-                  "saldo":
-                      saldo,
-                });
-
-                if (context.mounted) {
-                  Navigator.pop(
-                    context,
-                  );
-                }
-
-                _tampilkanSnackBar(
-                  "Saldo berhasil diubah.",
-                  isError: false,
-                );
-              },
-              child:
-                  const Text(
-                "Simpan",
+            content: TextField(
+              controller: controller,
+              keyboardType:
+                  TextInputType.number,
+              decoration:
+                  const InputDecoration(
+                labelText:
+                    "Nominal Baru",
               ),
             ),
-          ],
-        );
-      },
-    );
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(
+                  dialogContext,
+                ),
+                child:
+                    const Text("Batal"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final String raw =
+                      controller.text
+                          .trim();
+
+                  final int? saldo =
+                      int.tryParse(raw);
+
+                  if (saldo == null ||
+                      saldo < 0) {
+                    _tampilkanSnackBar(
+                      "Saldo tidak valid.",
+                      isError: true,
+                    );
+                    return;
+                  }
+
+                  try {
+                    await _firestore
+                        .collection(
+                            "users")
+                        .doc(userId)
+                        .update({
+                      "saldo": saldo,
+                      "updatedAt":
+                          FieldValue
+                              .serverTimestamp(),
+                    });
+
+                    if (dialogContext
+                        .mounted) {
+                      Navigator.pop(
+                        dialogContext,
+                      );
+                    }
+
+                    _tampilkanSnackBar(
+                      "Saldo berhasil diubah.",
+                      isError: false,
+                    );
+                  } catch (e) {
+                    _tampilkanSnackBar(
+                      "Gagal mengubah saldo: $e",
+                      isError: true,
+                    );
+                  }
+                },
+                child:
+                    const Text("Simpan"),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   // ============================================================
-  // TAB 3 — KEUANGAN
+  // PANEL KEUANGAN
   // ============================================================
 
   Widget _buildPanelKeuangan() {
@@ -2541,9 +2828,83 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
+          FutureBuilder<
+              QuerySnapshot<
+                  Map<String, dynamic>>>(
+            future: _firestore
+                .collection("transaksi")
+                .get(),
+            builder:
+                (context, snapshot) {
+              int totalOmset = 0;
+
+              if (snapshot.hasData) {
+                for (final QueryDocumentSnapshot<
+                        Map<String, dynamic>>
+                    doc
+                    in snapshot.data!.docs) {
+                  final Map<String,
+                          dynamic>
+                      log =
+                      _asMap(doc.data());
+
+                  final String status =
+                      _toStringValue(
+                    log["status"],
+                  ).toUpperCase();
+
+                  if (status
+                          .contains(
+                              "SUKSES") ||
+                      status.contains(
+                          "BERHASIL")) {
+                    totalOmset += _toInt(
+                      log["hargaJual"] ??
+                          log["price"] ??
+                          0,
+                    );
+                  }
+                }
+              }
+
+              if (snapshot.hasError) {
+                return Container(
+                  margin:
+                      const EdgeInsets.only(
+                    bottom: 20,
+                  ),
+                  child:
+                      _buildInfoCard(
+                    "Total Omset Bersih",
+                    "Gagal memuat",
+                    Icons
+                        .error_outline_rounded,
+                    WarnaDesaPay.danger,
+                  ),
+                );
+              }
+
+              return Container(
+                margin:
+                    const EdgeInsets.only(
+                  bottom: 20,
+                ),
+                width:
+                    double.infinity,
+                child:
+                    _buildInfoCard(
+                  "Total Omset Bersih (Sukses)",
+                  "Rp ${_formatCurrency(totalOmset)}",
+                  Icons
+                      .trending_up_rounded,
+                  WarnaDesaPay.success,
+                ),
+              );
+            },
+          ),
 
           // ====================================================
-          // MARKUP PER JENIS
+          // MARKUP
           // ====================================================
 
           Container(
@@ -2554,70 +2915,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               color:
                   WarnaDesaPay.lightCard,
               borderRadius:
-                  BorderRadius.circular(24),
+                  BorderRadius.circular(
+                      24),
             ),
             child: Column(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-
                 const Row(
                   children: [
                     Icon(
                       Icons
                           .price_change_rounded,
                       color:
-                          WarnaDesaPay.success,
+                          WarnaDesaPay
+                              .success,
                     ),
-                    SizedBox(
-                      width: 8,
-                    ),
+                    SizedBox(width: 8),
                     Text(
                       "Markup Harga Layanan",
-                      style:
-                          TextStyle(
+                      style: TextStyle(
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight
+                                .w900,
                         fontSize: 16,
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(
                   height: 8,
                 ),
-
                 const Text(
                   "Atur keuntungan berdasarkan jenis layanan. "
                   "Tidak perlu mengubah SKU satu per satu.",
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color:
-                        WarnaDesaPay.textSub,
+                        WarnaDesaPay
+                            .textSub,
                   ),
                 ),
-
                 const SizedBox(
                   height: 20,
                 ),
-
                 _buildMarkupInput(
                   icon:
                       Icons.phone_android_rounded,
-                  title:
-                      "Pulsa",
+                  title: "Pulsa",
                   subtitle:
                       "Pulsa reguler / isi ulang",
                   controller:
                       markupPulsaController,
                 ),
-
                 const SizedBox(
                   height: 12,
                 ),
-
                 _buildMarkupInput(
                   icon:
                       Icons.language_rounded,
@@ -2628,11 +2981,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   controller:
                       markupKuotaController,
                 ),
-
                 const SizedBox(
                   height: 12,
                 ),
-
                 _buildMarkupInput(
                   icon:
                       Icons.credit_card_rounded,
@@ -2643,26 +2994,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   controller:
                       markupAngsuranController,
                 ),
-
                 const SizedBox(
                   height: 12,
                 ),
-
                 _buildMarkupInput(
                   icon:
                       Icons.category_rounded,
-                  title:
-                      "Lainnya",
+                  title: "Lainnya",
                   subtitle:
                       "Produk yang tidak terdeteksi",
                   controller:
                       markupLainnyaController,
                 ),
-
                 const SizedBox(
                   height: 20,
                 ),
-
                 SizedBox(
                   width:
                       double.infinity,
@@ -2673,8 +3019,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         _isLoading
                             ? null
                             : _simpanSemuaMarkup,
-                    icon:
-                        const Icon(
+                    icon: const Icon(
                       Icons.save_rounded,
                     ),
                     label:
@@ -2683,21 +3028,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       style:
                           TextStyle(
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight
+                                .w900,
                       ),
                     ),
                     style:
-                        ElevatedButton.styleFrom(
+                        ElevatedButton
+                            .styleFrom(
                       backgroundColor:
-                          WarnaDesaPay.success,
+                          WarnaDesaPay
+                              .success,
                       foregroundColor:
                           Colors.white,
                       shape:
                           RoundedRectangleBorder(
                         borderRadius:
-                            BorderRadius.circular(
-                          14,
-                        ),
+                            BorderRadius
+                                .circular(
+                                    14),
                       ),
                     ),
                   ),
@@ -2711,7 +3059,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
 
           // ====================================================
-          // TERAPKAN KE PRODUK LAMA
+          // SYNC MARKUP
           // ====================================================
 
           Container(
@@ -2719,98 +3067,94 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 const EdgeInsets.all(18),
             decoration:
                 BoxDecoration(
-              color:
-                  WarnaDesaPay.warning
-                      .withOpacity(
-                0.08,
-              ),
+              color: WarnaDesaPay
+                  .warning
+                  .withOpacity(
+                      0.08),
               borderRadius:
-                  BorderRadius.circular(20),
-              border:
-                  Border.all(
-                color:
-                    WarnaDesaPay.warning
-                        .withOpacity(
-                  0.25,
-                ),
+                  BorderRadius.circular(
+                      20),
+              border: Border.all(
+                color: WarnaDesaPay
+                    .warning
+                    .withOpacity(
+                        0.25),
               ),
             ),
             child: Column(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-
                 const Row(
                   children: [
                     Icon(
-                      Icons
-                          .sync_rounded,
+                      Icons.sync_rounded,
                       color:
-                          WarnaDesaPay.warning,
+                          WarnaDesaPay
+                              .warning,
                     ),
-                    SizedBox(
-                      width: 8,
-                    ),
+                    SizedBox(width: 8),
                     Text(
                       "Sinkronisasi Harga Produk",
-                      style:
-                          TextStyle(
+                      style: TextStyle(
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight
+                                .w900,
                         fontSize: 14,
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(
                   height: 8,
                 ),
-
                 const Text(
                   "Jika markup baru sudah disimpan, tombol ini "
                   "menghitung ulang harga jual seluruh produk "
                   "yang sudah ada.",
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color:
-                        WarnaDesaPay.textSub,
+                        WarnaDesaPay
+                            .textSub,
                   ),
                 ),
-
                 const SizedBox(
                   height: 14,
                 ),
-
                 if (_isLoading &&
                     _syncTotal > 0)
                   Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       LinearProgressIndicator(
-                        value:
-                            _syncProgress /
-                                _syncTotal,
+                        value: _syncTotal >
+                                0
+                            ? (_syncProgress /
+                                    _syncTotal)
+                                .clamp(
+                                    0.0,
+                                    1.0)
+                            : 0,
                         minHeight: 7,
                         borderRadius:
-                            BorderRadius.circular(
-                          10,
-                        ),
+                            BorderRadius
+                                .circular(
+                                    10),
                       ),
                       const SizedBox(
                         height: 8,
                       ),
                       Text(
-                        "Update "
-                        "$_syncProgress / "
-                        "$_syncTotal produk...",
+                        "Update $_syncProgress / $_syncTotal produk...",
                         style:
                             const TextStyle(
                           fontSize: 11,
                           fontWeight:
-                              FontWeight.bold,
+                              FontWeight
+                                  .bold,
                         ),
                       ),
                       const SizedBox(
@@ -2818,7 +3162,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                     ],
                   ),
-
                 SizedBox(
                   width:
                       double.infinity,
@@ -2829,8 +3172,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         _isLoading
                             ? null
                             : _terapkanMarkupKeSemuaProduk,
-                    icon:
-                        const Icon(
+                    icon: const Icon(
                       Icons.sync_rounded,
                     ),
                     label:
@@ -2839,21 +3181,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       style:
                           TextStyle(
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight
+                                .w900,
                       ),
                     ),
                     style:
-                        ElevatedButton.styleFrom(
+                        ElevatedButton
+                            .styleFrom(
                       backgroundColor:
-                          WarnaDesaPay.warning,
+                          WarnaDesaPay
+                              .warning,
                       foregroundColor:
                           Colors.white,
                       shape:
                           RoundedRectangleBorder(
                         borderRadius:
-                            BorderRadius.circular(
-                          14,
-                        ),
+                            BorderRadius
+                                .circular(
+                                    14),
                       ),
                     ),
                   ),
@@ -2871,12 +3216,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           // ====================================================
 
           StreamBuilder<
-              DocumentSnapshot>(
+              DocumentSnapshot<
+                  Map<String, dynamic>>>(
             stream: _firestore
                 .collection(
                     "pengaturan")
-                .doc(
-                    "finansial")
+                .doc("finansial")
                 .snapshots(),
             builder:
                 (context, snapshot) {
@@ -2885,21 +3230,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
               if (snapshot.hasData &&
                   snapshot.data!.exists) {
-                final data =
-                    snapshot.data!.data()
-                        as Map<String,
-                            dynamic>;
-
-                saldoDigi =
-                    _toInt(
-                  data[
-                      "saldoDigiflazz"],
+                final Map<String,
+                        dynamic>
+                    data =
+                    _asMap(
+                  snapshot.data!.data(),
                 );
 
-                saldoTri =
-                    _toInt(
-                  data[
-                      "saldoTriPay"],
+                saldoDigi = _toInt(
+                  data["saldoDigiflazz"],
+                );
+
+                saldoTri = _toInt(
+                  data["saldoTriPay"],
                 );
               }
 
@@ -2911,7 +3254,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       "Saldo Digiflazz",
                       "Rp ${_formatCurrency(saldoDigi)}",
                       Icons.api_rounded,
-                      WarnaDesaPay.primary,
+                      WarnaDesaPay
+                          .primary,
                     ),
                   ),
                   const SizedBox(
@@ -2922,7 +3266,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         _buildInfoCard(
                       "Saldo TriPay",
                       "Rp ${_formatCurrency(saldoTri)}",
-                      Icons.payment_rounded,
+                      Icons
+                          .payment_rounded,
                       Colors.orange,
                     ),
                   ),
@@ -2937,8 +3282,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
           const Text(
             "Live Mutasi Transaksi User",
-            style:
-                TextStyle(
+            style: TextStyle(
               fontWeight:
                   FontWeight.bold,
               fontSize: 16,
@@ -2956,14 +3300,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // INPUT MARKUP
+  // MARKUP INPUT
   // ============================================================
 
   Widget _buildMarkupInput({
     required IconData icon,
     required String title,
     required String subtitle,
-    required TextEditingController controller,
+    required TextEditingController
+        controller,
   }) {
     return Container(
       padding:
@@ -2973,56 +3318,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         color:
             WarnaDesaPay.lightBg,
         borderRadius:
-            BorderRadius.circular(16),
-        border:
-            Border.all(
+            BorderRadius.circular(
+                16),
+        border: Border.all(
           color:
               WarnaDesaPay.lightField,
         ),
       ),
       child: Row(
         children: [
-
           Container(
             width: 42,
             height: 42,
             decoration:
                 BoxDecoration(
-              color:
-                  WarnaDesaPay.primary
-                      .withOpacity(
-                0.1,
-              ),
+              color: WarnaDesaPay
+                  .primary
+                  .withOpacity(
+                      0.1),
               borderRadius:
-                  BorderRadius.circular(
-                12,
-              ),
+                  BorderRadius
+                      .circular(
+                          12),
             ),
-            child:
-                Icon(
+            child: Icon(
               icon,
               color:
-                  WarnaDesaPay.primary,
+                  WarnaDesaPay
+                      .primary,
               size: 21,
             ),
           ),
-
           const SizedBox(
             width: 12,
           ),
-
           Expanded(
-            child:
-                Column(
+            child: Column(
               crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
               children: [
                 Text(
                   title,
                   style:
                       const TextStyle(
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight
+                            .w900,
                     fontSize: 13,
                   ),
                 ),
@@ -3032,27 +3374,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       const TextStyle(
                     fontSize: 10,
                     color:
-                        WarnaDesaPay.textSub,
+                        WarnaDesaPay
+                            .textSub,
                   ),
                 ),
               ],
             ),
           ),
-
           SizedBox(
             width: 110,
-            child:
-                TextField(
+            child: TextField(
               controller:
                   controller,
               keyboardType:
-                  TextInputType.number,
+                  TextInputType
+                      .number,
               textAlign:
                   TextAlign.right,
               style:
                   const TextStyle(
                 fontWeight:
-                    FontWeight.w900,
+                    FontWeight
+                        .w900,
               ),
               decoration:
                   InputDecoration(
@@ -3061,7 +3404,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 prefixStyle:
                     const TextStyle(
                   fontWeight:
-                      FontWeight.bold,
+                      FontWeight
+                          .bold,
                 ),
                 contentPadding:
                     const EdgeInsets
@@ -3069,18 +3413,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   horizontal: 10,
                   vertical: 10,
                 ),
-                filled:
-                    true,
+                filled: true,
                 fillColor:
                     Colors.white,
                 border:
                     OutlineInputBorder(
                   borderRadius:
-                      BorderRadius.circular(
-                    10,
-                  ),
+                      BorderRadius
+                          .circular(
+                              10),
                   borderSide:
-                      BorderSide.none,
+                      BorderSide
+                          .none,
                 ),
               ),
             ),
@@ -3091,11 +3435,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // TRANSAKSI
+  // TRANSAKSI STREAM
   // ============================================================
 
   Widget _buildTransaksiStream() {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<
+        QuerySnapshot<Map<String, dynamic>>>(
       stream: _firestore
           .collection("transaksi")
           .orderBy(
@@ -3104,8 +3449,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           )
           .limit(50)
           .snapshots(),
-      builder:
-          (context, snapshot) {
+      builder: (context, snapshot) {
         if (snapshot
                 .connectionState ==
             ConnectionState.waiting) {
@@ -3115,53 +3459,96 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           );
         }
 
-        final docs =
-            snapshot.data?.docs ??
-                [];
+        if (snapshot.hasError) {
+          return _buildErrorMessage(
+            "Gagal memuat transaksi: "
+            "${snapshot.error}",
+          );
+        }
+
+        final List<
+                QueryDocumentSnapshot<
+                    Map<String, dynamic>>>
+            docs =
+            snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
           return const Center(
-            child:
-                Text(
-              "Belum ada log transaksi.",
+            child: Padding(
+              padding:
+                  EdgeInsets.all(20),
+              child: Text(
+                "Belum ada log transaksi.",
+              ),
             ),
           );
         }
 
         return ListView.builder(
-          shrinkWrap:
-              true,
+          shrinkWrap: true,
           physics:
               const NeverScrollableScrollPhysics(),
-          itemCount:
-              docs.length,
+          itemCount: docs.length,
           itemBuilder:
               (context, index) {
-            final log =
-                docs[index].data()
-                    as Map<String,
-                        dynamic>;
+            final Map<String,
+                    dynamic>
+                log =
+                _asMap(
+              docs[index].data(),
+            );
 
             final String status =
-                (log["status"] ??
-                        "PENDING")
-                    .toString()
-                    .toUpperCase();
+                _toStringValue(
+              log["status"],
+              fallback:
+                  "PENDING",
+            ).toUpperCase();
 
             Color statusColor =
                 WarnaDesaPay.warning;
 
-            if (status.contains(
-                    "SUKSES") ||
+            if (status
+                    .contains(
+                        "SUKSES") ||
                 status.contains(
                     "BERHASIL")) {
               statusColor =
-                  WarnaDesaPay.success;
+                  WarnaDesaPay
+                      .success;
             } else if (status
                 .contains("GAGAL")) {
               statusColor =
-                  WarnaDesaPay.danger;
+                  WarnaDesaPay
+                      .danger;
             }
+
+            final String produk =
+                _toStringValue(
+              log["product_name"] ??
+                  log["buyer_sku_code"],
+              fallback: "-",
+            );
+
+            final String jenis =
+                _toStringValue(
+              log["jenisLayanan"],
+              fallback: "-",
+            );
+
+            final String tujuan =
+                _toStringValue(
+              log["customer_no"] ??
+                  log["tujuan"],
+              fallback: "-",
+            );
+
+            final String sn =
+                _toStringValue(
+              log["sn"] ??
+                  log["message"],
+              fallback: "-",
+            );
 
             return Container(
               margin:
@@ -3170,21 +3557,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
               padding:
                   const EdgeInsets.all(
-                16,
-              ),
+                      16),
               decoration:
                   BoxDecoration(
                 color:
-                    WarnaDesaPay.lightCard,
+                    WarnaDesaPay
+                        .lightCard,
                 borderRadius:
                     BorderRadius.circular(
-                  18,
-                ),
+                        18),
               ),
-              child:
-                  Column(
+              child: Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    CrossAxisAlignment
+                        .start,
                 children: [
                   Row(
                     mainAxisAlignment:
@@ -3198,9 +3584,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           color:
                               statusColor,
                           fontWeight:
-                              FontWeight.w900,
-                          fontSize:
-                              10,
+                              FontWeight
+                                  .w900,
+                          fontSize: 10,
                         ),
                       ),
                       Text(
@@ -3208,48 +3594,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         style:
                             const TextStyle(
                           fontWeight:
-                              FontWeight.w900,
-                          fontSize:
-                              14,
+                              FontWeight
+                                  .w900,
+                          fontSize: 14,
                         ),
                       ),
                     ],
                   ),
-
                   const Divider(),
-
                   _buildDetailRow(
                     "Produk",
-                    log["product_name"] ??
-                        log["buyer_sku_code"] ??
-                        "-",
+                    produk,
                   ),
-
                   _buildDetailRow(
                     "Jenis",
-                    log["jenisLayanan"] ??
-                        "-",
+                    jenis,
                   ),
-
                   _buildDetailRow(
                     "Tujuan",
-                    log["customer_no"] ??
-                        log["tujuan"] ??
-                        "-",
+                    tujuan,
                   ),
-
                   _buildDetailRow(
                     "SN/Reff",
-                    log["sn"] ??
-                        log["message"] ??
-                        "-",
+                    sn,
                   ),
-
                   _buildDetailRow(
                     "Waktu",
                     _formatDate(
-                      log["waktu"]
-                          as Timestamp?,
+                      log["waktu"],
                     ),
                   ),
                 ],
@@ -3276,39 +3648,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const EdgeInsets.all(16),
       decoration:
           BoxDecoration(
-        color:
-            color.withOpacity(0.1),
+        color: color.withOpacity(
+            0.1),
         borderRadius:
-            BorderRadius.circular(16),
-        border:
-            Border.all(
+            BorderRadius.circular(
+                16),
+        border: Border.all(
           color:
-              color.withOpacity(0.3),
+              color.withOpacity(
+                  0.3),
         ),
       ),
-      child:
-          Column(
+      child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
-            color:
-                color,
+            color: color,
           ),
           const SizedBox(
             height: 12,
           ),
           Text(
             title,
-            style:
-                TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight:
                   FontWeight.bold,
-              color:
-                  color,
+              color: color,
             ),
+          ),
+          const SizedBox(
+            height: 3,
           ),
           Text(
             value,
@@ -3324,10 +3696,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ============================================================
-  // DETAIL ROW
-  // ============================================================
-
   Widget _buildDetailRow(
     String label,
     String value,
@@ -3337,35 +3705,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const EdgeInsets.symmetric(
         vertical: 4,
       ),
-      child:
-          Row(
+      child: Row(
         mainAxisAlignment:
-            MainAxisAlignment.spaceBetween,
+            MainAxisAlignment
+                .spaceBetween,
         children: [
           Text(
             label,
             style:
                 const TextStyle(
               color:
-                  WarnaDesaPay.textSub,
+                  WarnaDesaPay
+                      .textSub,
               fontSize: 12,
               fontWeight:
                   FontWeight.w600,
             ),
           ),
+          const SizedBox(
+            width: 12,
+          ),
           Expanded(
-            child:
-                Text(
+            child: Text(
               value,
               textAlign:
                   TextAlign.end,
               maxLines: 1,
               overflow:
-                  TextOverflow.ellipsis,
+                  TextOverflow
+                      .ellipsis,
               style:
                   const TextStyle(
                 fontWeight:
-                    FontWeight.w700,
+                    FontWeight
+                        .w700,
                 fontSize: 12,
               ),
             ),
@@ -3376,128 +3749,262 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   // ============================================================
-  // TAB 4 — SISTEM
+  // PANEL SISTEM
   // ============================================================
 
   Widget _buildPanelSistem() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection("system_logs")
-          .orderBy(
-            "timestamp",
-            descending: true,
-          )
-          .limit(30)
-          .snapshots(),
-      builder:
-          (context, snapshot) {
-        if (snapshot
-                .connectionState ==
-            ConnectionState.waiting) {
-          return const Center(
-            child:
-                CircularProgressIndicator(),
-          );
-        }
-
-        final docs =
-            snapshot.data?.docs ??
-                [];
-
-        if (docs.isEmpty) {
-          return const Center(
-            child:
-                Text(
-              "Sistem Berjalan Aman",
-              style:
-                  TextStyle(
-                fontWeight:
-                    FontWeight.bold,
+    return SingleChildScrollView(
+      physics:
+          const BouncingScrollPhysics(),
+      padding:
+          const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.all(16),
+            margin:
+                const EdgeInsets.only(
+              bottom: 24,
+            ),
+            decoration:
+                BoxDecoration(
+              color: _isMaintenance
+                  ? WarnaDesaPay
+                      .danger
+                      .withOpacity(
+                          0.1)
+                  : WarnaDesaPay
+                      .lightCard,
+              borderRadius:
+                  BorderRadius.circular(
+                      16),
+              border: Border.all(
+                color: _isMaintenance
+                    ? WarnaDesaPay
+                        .danger
+                    : WarnaDesaPay
+                        .lightField,
               ),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding:
-              const EdgeInsets.all(20),
-          itemCount:
-              docs.length,
-          itemBuilder:
-              (context, index) {
-            final log =
-                docs[index].data()
-                    as Map<String,
-                        dynamic>;
-
-            final String tipe =
-                log["tipe"] ??
-                    "INFO";
-
-            final String pesan =
-                log["pesan"] ??
-                    "-";
-
-            return Container(
-              margin:
-                  const EdgeInsets.only(
-                bottom: 12,
-              ),
-              padding:
-                  const EdgeInsets.all(
-                12,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    WarnaDesaPay.lightCard,
-                borderRadius:
-                    BorderRadius.circular(
-                  12,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.build_rounded,
+                  color: _isMaintenance
+                      ? WarnaDesaPay
+                          .danger
+                      : WarnaDesaPay
+                          .textSub,
                 ),
-              ),
-              child:
-                  Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tipe,
-                    style:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
-                      fontSize:
-                          10,
+                const SizedBox(
+                  width: 12,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
+                    children: [
+                      Text(
+                        "Mode Maintenance",
+                        style:
+                            TextStyle(
+                          fontWeight:
+                              FontWeight
+                                  .bold,
+                          color: _isMaintenance
+                              ? WarnaDesaPay
+                                  .danger
+                              : WarnaDesaPay
+                                  .textMain,
+                        ),
+                      ),
+                      const Text(
+                        "Matikan server: 'Harap menunggu dan coba nanti'",
+                        style:
+                            TextStyle(
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value:
+                      _isMaintenance,
+                  activeColor:
+                      WarnaDesaPay
+                          .danger,
+                  onChanged:
+                      _toggleMaintenance,
+                ),
+              ],
+            ),
+          ),
+          const Text(
+            "Live System Logs",
+            style: TextStyle(
+              fontWeight:
+                  FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(
+            height: 12,
+          ),
+          StreamBuilder<
+              QuerySnapshot<
+                  Map<String, dynamic>>>(
+            stream: _firestore
+                .collection(
+                    "system_logs")
+                .orderBy(
+                  "timestamp",
+                  descending: true,
+                )
+                .limit(30)
+                .snapshots(),
+            builder:
+                (context, snapshot) {
+              if (snapshot
+                      .connectionState ==
+                  ConnectionState.waiting) {
+                return const Center(
+                  child:
+                      CircularProgressIndicator(),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return _buildErrorMessage(
+                  "Gagal memuat system logs: "
+                  "${snapshot.error}",
+                );
+              }
+
+              final List<
+                      QueryDocumentSnapshot<
+                          Map<String, dynamic>>>
+                  docs =
+                  snapshot.data?.docs ??
+                      [];
+
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding:
+                        EdgeInsets.all(
+                            20),
+                    child: Text(
+                      "Sistem Berjalan Aman",
+                      style:
+                          TextStyle(
+                        fontWeight:
+                            FontWeight
+                                .bold,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics:
+                    const NeverScrollableScrollPhysics(),
+                itemCount:
+                    docs.length,
+                itemBuilder:
+                    (context, index) {
+                  final Map<String,
+                          dynamic>
+                      log =
+                      _asMap(
+                    docs[index].data(),
+                  );
+
+                  final String tipe =
+                      _toStringValue(
+                    log["tipe"],
+                    fallback:
+                        "INFO",
+                  );
+
+                  final String pesan =
+                      _toStringValue(
+                    log["pesan"],
+                    fallback: "-",
+                  );
+
+                  return Container(
+                    margin:
+                        const EdgeInsets
+                            .only(
+                      bottom: 12,
+                    ),
+                    padding:
+                        const EdgeInsets
+                            .all(12),
+                    decoration:
+                        BoxDecoration(
                       color:
-                          WarnaDesaPay.primary,
+                          WarnaDesaPay
+                              .lightCard,
+                      borderRadius:
+                          BorderRadius
+                              .circular(
+                                  12),
                     ),
-                  ),
-                  const SizedBox(
-                    height: 6,
-                  ),
-                  Text(
-                    pesan,
-                    style:
-                        const TextStyle(
-                      fontSize: 12,
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment
+                              .start,
+                      children: [
+                        Text(
+                          tipe,
+                          style:
+                              const TextStyle(
+                            fontWeight:
+                                FontWeight
+                                    .bold,
+                            fontSize: 10,
+                            color:
+                                WarnaDesaPay
+                                    .primary,
+                          ),
+                        ),
+                        const SizedBox(
+                          height: 6,
+                        ),
+                        Text(
+                          pesan,
+                          style:
+                              const TextStyle(
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
   // ============================================================
-  // TAB 5 — TIKET CS
+  // PANEL TIKET CS
   // ============================================================
 
   Widget _buildPanelTiketCS() {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<
+        QuerySnapshot<Map<String, dynamic>>>(
       stream: _firestore
           .collection(
               "keluhan_pelanggan")
@@ -3506,8 +4013,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             descending: true,
           )
           .snapshots(),
-      builder:
-          (context, snapshot) {
+      builder: (context, snapshot) {
         if (snapshot
                 .connectionState ==
             ConnectionState.waiting) {
@@ -3517,14 +4023,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           );
         }
 
-        final docs =
-            snapshot.data?.docs ??
-                [];
+        if (snapshot.hasError) {
+          return _buildErrorMessage(
+            "Gagal memuat tiket CS: "
+            "${snapshot.error}",
+          );
+        }
+
+        final List<
+                QueryDocumentSnapshot<
+                    Map<String, dynamic>>>
+            docs =
+            snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
           return const Center(
-            child:
-                Text(
+            child: Text(
               "Inbox Bersih!",
             ),
           );
@@ -3533,25 +4047,66 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         return ListView.builder(
           padding:
               const EdgeInsets.all(20),
-          itemCount:
-              docs.length,
+          itemCount: docs.length,
           itemBuilder:
               (context, index) {
-            final tiket =
-                docs[index].data()
-                    as Map<String,
-                        dynamic>;
+            final QueryDocumentSnapshot<
+                    Map<String, dynamic>>
+                doc =
+                docs[index];
 
-            final tiketId =
-                docs[index].id;
+            final Map<String,
+                    dynamic>
+                tiket =
+                _asMap(
+              doc.data(),
+            );
 
-            final String status =
-                tiket["status"] ??
-                    "Pending";
+            final String tiketId =
+                doc.id;
+
+            final String namaUser =
+                _toStringValue(
+              tiket["namaUser"],
+              fallback:
+                  "Anonymous",
+            );
+
+            final String phoneUser =
+                _toStringValue(
+              tiket["phoneUser"],
+              fallback: "-",
+            );
+
+            final String pesan =
+                _toStringValue(
+              tiket["pesan"],
+              fallback: "-",
+            );
+
+            String status =
+                _toStringValue(
+              tiket["status"],
+              fallback:
+                  "Pending",
+            );
+
+            const List<String>
+                statusValid = [
+              "Pending",
+              "Proses",
+              "Selesai",
+            ];
+
+            if (!statusValid
+                .contains(status)) {
+              status = "Pending";
+            }
 
             final String balasan =
-                tiket["balasanAdmin"] ??
-                    "";
+                _toStringValue(
+              tiket["balasanAdmin"],
+            );
 
             return Container(
               margin:
@@ -3560,64 +4115,71 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
               padding:
                   const EdgeInsets.all(
-                16,
-              ),
+                      16),
               decoration:
                   BoxDecoration(
                 color:
-                    WarnaDesaPay.lightCard,
+                    WarnaDesaPay
+                        .lightCard,
                 borderRadius:
                     BorderRadius.circular(
-                  16,
-                ),
+                        16),
               ),
-              child:
-                  Column(
+              child: Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    CrossAxisAlignment
+                        .start,
                 children: [
-
                   Row(
                     mainAxisAlignment:
                         MainAxisAlignment
                             .spaceBetween,
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
                     children: [
-                      Text(
-                        tiket["namaUser"] ??
-                            "Anonymous",
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.w800,
+                      Expanded(
+                        child: Text(
+                          namaUser,
+                          style:
+                              const TextStyle(
+                            fontWeight:
+                                FontWeight
+                                    .w800,
+                          ),
                         ),
                       ),
-
+                      const SizedBox(
+                        width: 8,
+                      ),
                       DropdownButton<
                           String>(
-                        value:
-                            status,
-                        items: [
-                          "Pending",
-                          "Proses",
-                          "Selesai",
-                        ].map(
-                          (value) {
-                            return DropdownMenuItem<
-                                String>(
-                              value:
+                        value: status,
+                        items: statusValid
+                            .map(
+                              (
+                                String value,
+                              ) =>
+                                  DropdownMenuItem<
+                                      String>(
+                                value:
+                                    value,
+                                child:
+                                    Text(
                                   value,
-                              child:
-                                  Text(
-                                value,
+                                ),
                               ),
-                            );
-                          },
-                        ).toList(),
+                            )
+                            .toList(),
                         onChanged:
-                            (value) {
-                          if (value !=
+                            (String? value) async {
+                          if (value ==
                               null) {
-                            _firestore
+                            return;
+                          }
+
+                          try {
+                            await _firestore
                                 .collection(
                                     "keluhan_pelanggan")
                                 .doc(
@@ -3625,95 +4187,97 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                 .update({
                               "status":
                                   value,
+                              "updatedAt":
+                                  FieldValue
+                                      .serverTimestamp(),
                             });
+                          } catch (e) {
+                            _tampilkanSnackBar(
+                              "Gagal mengubah status tiket: $e",
+                              isError:
+                                  true,
+                            );
                           }
                         },
                       ),
                     ],
                   ),
-
                   Text(
-                    "Kontak: ${tiket["phoneUser"] ?? "-"}",
+                    "Kontak: $phoneUser",
                     style:
                         const TextStyle(
                       color:
-                          WarnaDesaPay.primary,
-                      fontSize:
-                          12,
+                          WarnaDesaPay
+                              .primary,
+                      fontSize: 12,
                     ),
                   ),
-
                   const SizedBox(
                     height: 10,
                   ),
-
                   Container(
                     width:
                         double.infinity,
                     padding:
-                        const EdgeInsets.all(
-                      10,
-                    ),
+                        const EdgeInsets
+                            .all(10),
                     decoration:
                         BoxDecoration(
                       color:
-                          WarnaDesaPay.lightField,
+                          WarnaDesaPay
+                              .lightField,
                       borderRadius:
-                          BorderRadius.circular(
-                        10,
-                      ),
+                          BorderRadius
+                              .circular(
+                                  10),
                     ),
-                    child:
-                        Text(
-                      "\"${tiket["pesan"] ?? "-"}\"",
+                    child: Text(
+                      "\"$pesan\"",
                       style:
                           const TextStyle(
-                        fontSize:
-                            12,
+                        fontSize: 12,
                         fontStyle:
-                            FontStyle.italic,
+                            FontStyle
+                                .italic,
                       ),
                     ),
                   ),
-
                   const SizedBox(
                     height: 10,
                   ),
-
                   if (balasan.isNotEmpty)
                     Text(
                       "Balasan Admin: $balasan",
                       style:
                           const TextStyle(
                         color:
-                            WarnaDesaPay.success,
-                        fontSize:
-                            12,
+                            WarnaDesaPay
+                                .success,
+                        fontSize: 12,
                         fontWeight:
-                            FontWeight.bold,
+                            FontWeight
+                                .bold,
                       ),
                     ),
-
                   Align(
                     alignment:
-                        Alignment.centerRight,
+                        Alignment
+                            .centerRight,
                     child:
                         TextButton.icon(
                       icon:
                           const Icon(
-                        Icons.reply_rounded,
-                        size:
-                            16,
+                        Icons
+                            .reply_rounded,
+                        size: 16,
                       ),
-                      label:
-                          Text(
+                      label: Text(
                         balasan.isEmpty
                             ? "Balas Pesan"
                             : "Edit Balasan",
                       ),
-                      onPressed:
-                          () =>
-                              _tampilkanDialogBalasCS(
+                      onPressed: () =>
+                          _tampilkanDialogBalasCS(
                         tiketId,
                         balasan,
                       ),
@@ -3732,93 +4296,108 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // BALAS CS
   // ============================================================
 
-  void _tampilkanDialogBalasCS(
+  Future<void> _tampilkanDialogBalasCS(
     String tiketId,
     String balasanLama,
-  ) {
-    final controller =
+  ) async {
+    final TextEditingController
+        controller =
         TextEditingController(
-      text:
-          balasanLama,
+      text: balasanLama,
     );
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title:
-              const Text(
-            "Balas Tiket Pengguna",
-          ),
-          content:
-              TextField(
-            controller:
-                controller,
-            maxLines:
-                4,
-            decoration:
-                const InputDecoration(
-              hintText:
-                  "Ketik balasan...",
-              border:
-                  OutlineInputBorder(),
+    try {
+      await showDialog<void>(
+        context: context,
+        builder:
+            (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text(
+              "Balas Tiket Pengguna",
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(
-                context,
-              ),
-              child:
-                  const Text(
-                "Batal",
+            content: TextField(
+              controller:
+                  controller,
+              maxLines: 4,
+              decoration:
+                  const InputDecoration(
+                hintText:
+                    "Ketik balasan...",
+                border:
+                    OutlineInputBorder(),
               ),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                final String balasan =
-                    controller.text
-                        .trim();
-
-                if (balasan.isEmpty) {
-                  return;
-                }
-
-                await _firestore
-                    .collection(
-                        "keluhan_pelanggan")
-                    .doc(tiketId)
-                    .update({
-                  "balasanAdmin":
-                      balasan,
-                  "status":
-                      "Selesai",
-                  "waktuBalasan":
-                      FieldValue
-                          .serverTimestamp(),
-                });
-
-                if (context.mounted) {
-                  Navigator.pop(
-                    context,
-                  );
-                }
-
-                _tampilkanSnackBar(
-                  "Balasan berhasil dikirim.",
-                  isError: false,
-                );
-              },
-              child:
-                  const Text(
-                "Kirim Balasan",
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(
+                  dialogContext,
+                ),
+                child:
+                    const Text("Batal"),
               ),
-            ),
-          ],
-        );
-      },
-    );
+              ElevatedButton(
+                onPressed: () async {
+                  final String
+                      balasan =
+                      controller.text
+                          .trim();
+
+                  if (balasan.isEmpty) {
+                    _tampilkanSnackBar(
+                      "Balasan tidak boleh kosong.",
+                      isError: true,
+                    );
+                    return;
+                  }
+
+                  try {
+                    await _firestore
+                        .collection(
+                            "keluhan_pelanggan")
+                        .doc(tiketId)
+                        .update({
+                      "balasanAdmin":
+                          balasan,
+                      "status":
+                          "Selesai",
+                      "waktuBalasan":
+                          FieldValue
+                              .serverTimestamp(),
+                      "updatedAt":
+                          FieldValue
+                              .serverTimestamp(),
+                    });
+
+                    if (dialogContext
+                        .mounted) {
+                      Navigator.pop(
+                        dialogContext,
+                      );
+                    }
+
+                    _tampilkanSnackBar(
+                      "Balasan berhasil dikirim.",
+                      isError: false,
+                    );
+                  } catch (e) {
+                    _tampilkanSnackBar(
+                      "Gagal mengirim balasan: $e",
+                      isError: true,
+                    );
+                  }
+                },
+                child: const Text(
+                  "Kirim Balasan",
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   // ============================================================
@@ -3827,7 +4406,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Widget _buildModernInput({
     required BuildContext context,
-    required TextEditingController controller,
+    required TextEditingController
+        controller,
     required String label,
     required String hint,
     int maxLines = 1,
@@ -3851,10 +4431,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           height: 8,
         ),
         TextField(
-          controller:
-              controller,
-          maxLines:
-              maxLines,
+          controller: controller,
+          maxLines: maxLines,
           style:
               const TextStyle(
             fontSize: 14,
@@ -3863,18 +4441,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
           decoration:
               InputDecoration(
-            hintText:
-                hint,
-            filled:
-                true,
+            hintText: hint,
+            filled: true,
             fillColor:
                 WarnaDesaPay.lightBg,
             border:
                 OutlineInputBorder(
               borderRadius:
-                  BorderRadius.circular(
-                14,
-              ),
+                  BorderRadius
+                      .circular(
+                          14),
               borderSide:
                   BorderSide.none,
             ),
@@ -3887,6 +4463,77 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         ),
       ],
+    );
+  }
+
+  // ============================================================
+  // ERROR MESSAGE
+  // ============================================================
+
+  Widget _buildErrorMessage(
+    String message,
+  ) {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(
+                20),
+        child: Container(
+          width:
+              double.infinity,
+          padding:
+              const EdgeInsets.all(
+                  16),
+          decoration:
+              BoxDecoration(
+            color: WarnaDesaPay
+                .danger
+                .withOpacity(
+                    0.08),
+            borderRadius:
+                BorderRadius.circular(
+                    14),
+            border: Border.all(
+              color: WarnaDesaPay
+                  .danger
+                  .withOpacity(
+                      0.25),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              const Icon(
+                Icons
+                    .error_outline_rounded,
+                color:
+                    WarnaDesaPay
+                        .danger,
+              ),
+              const SizedBox(
+                width: 10,
+              ),
+              Expanded(
+                child: Text(
+                  message,
+                  style:
+                      const TextStyle(
+                    fontSize: 12,
+                    color:
+                        WarnaDesaPay
+                            .danger,
+                    fontWeight:
+                        FontWeight
+                            .w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
