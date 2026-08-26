@@ -46,22 +46,40 @@ jobs:
             echo "Folder android sudah ada, tidak membuat ulang."
           fi
 
-      - name: Generate Launcher Icons
+      - name: Install Dependencies & Generate Icons
         run: |
           flutter pub get
           dart run flutter_launcher_icons
 
-      - name: Patch Android SDK 36 (Global Force)
+      - name: Patch Android SDK & Force compileSdk / compileOptions
         run: |
-          # Memaksa semua sub-project/plugin menggunakan compileSdk 36 via root build.gradle
-          if [ -f "android/build.gradle" ]; then
-            echo -e "\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty('android')) {\n            project.android {\n                compileSdkVersion 36\n            }\n        }\n    }\n}" >> android/build.gradle
-            echo "Berhasil menambahkan global force compileSdkVersion 36 ke android/build.gradle"
+          BUILD_GRADLE="android/build.gradle"
+          if [ -f "$BUILD_GRADLE" ]; then
+            cat << 'EOF' >> $BUILD_GRADLE
+
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                compileSdkVersion 34
+                buildToolsVersion "34.0.0"
+                
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+        }
+    }
+}
+EOF
+            echo "Patch root build.gradle berhasil dipasang."
           fi
 
       - name: Build APK
         run: |
-          flutter clean
+          rm -rf android/.gradle build .dart_tool
+          flutter pub upgrade file_picker mobile_scanner
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
