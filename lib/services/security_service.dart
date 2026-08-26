@@ -53,14 +53,11 @@ class SecurityService {
       }
 
       return await _localAuth.authenticate(
-        localizedReason:
-            'Verifikasi identitas untuk mengakses keamanan DesaPay',
-        options: const AuthenticationOptions(
-          biometricOnly: false,
-          stickyAuth: true,
-          useErrorDialogs: true,
-          sensitiveTransaction: true,
-        ),
+        localizedReason: 'Verifikasi identitas untuk mengakses keamanan DesaPay',
+        biometricOnly: false,
+        stickyAuth: true,
+        useErrorDialogs: true,
+        sensitiveTransaction: true,
       );
     } catch (_) {
       return false;
