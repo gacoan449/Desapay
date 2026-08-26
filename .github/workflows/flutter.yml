@@ -46,39 +46,37 @@ jobs:
             echo "Folder android sudah ada, tidak membuat ulang."
           fi
 
-      - name: Force App compileSdk & targetSdk to 36
-        run: |
-          FILE="android/app/build.gradle"
-          if [ -f "$FILE" ]; then
-            sed -i -E 's/(compileSdk|compileSdkVersion)( =| )([a-zA-Z0-9._]+)/\1\236/g' $FILE
-            sed -i -E 's/(targetSdk|targetSdkVersion)( =| )([a-zA-Z0-9._]+)/\1\236/g' $FILE
-            echo "Berhasil memperbarui versi SDK aplikasi di $FILE"
-          else
-            echo "File $FILE tidak ditemukan!"
-          fi
-
-      - name: Force All Plugins (Subprojects) to compileSdk 36
-        run: |
-          BUILD_FILE="android/build.gradle"
-          if [ -f "$BUILD_FILE" ]; then
-            echo -e "\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty('android')) {\n            project.android {\n                compileSdkVersion 36\n            }\n        }\n    }\n}" >> android/build.gradle
-            echo "Berhasil memaksa seluruh plugin menggunakan compileSdkVersion 36"
-          else
-            echo "File $BUILD_FILE tidak ditemukan!"
-          fi
-
-      - name: Install dependencies
-        run: |
-          flutter pub get
-
       - name: Generate Launcher Icons
         run: |
+          flutter pub get
           dart run flutter_launcher_icons
 
-      - name: Build APK
+      - name: Build APK & Patch compileSdk 36
         run: |
           flutter clean
           flutter pub get
+          python3 -c "
+          import os, re
+          search_dirs = ['android', os.path.expanduser('~/.pub-cache')]
+          for s_dir in search_dirs:
+              for root, dirs, files in os.walk(s_dir):
+                  for file in files:
+                      if file.endswith('.gradle') or file.endswith('.gradle.kts'):
+                          p = os.path.join(root, file)
+                          try:
+                              with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+                                  content = f.read()
+                              new_content = re.sub(r'(compileSdk\s*=\s*|compileSdkVersion\s+)[0-9]+', r'\1 36', content)
+                              new_content = re.sub(r'(targetSdk\s*=\s*|targetSdkVersion\s+)[0-9]+', r'\1 36', new_content)
+                              new_content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', new_content)
+                              new_content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', new_content)
+                              if new_content != content:
+                                  with open(p, 'w', encoding='utf-8') as f:
+                                      f.write(new_content)
+                                  print(f'Patched: {p}')
+                          except Exception as e:
+                              print(f'Error patching {p}: {e}')
+          "
           flutter build apk --release --no-tree-shake-icons
 
       - name: Cek hasil APK
