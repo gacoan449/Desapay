@@ -6,7 +6,9 @@ import '../../config/warna.dart';
 
 // ✅ PERBAIKAN 1: Import BottomNav & Layar Admin
 import '../../widgets/bottom_nav.dart'; 
-import '../admin/admin_dashboard_screen.dart'; // Sesuaikan path ini jika posisi file Anda berbeda
+// PERBAIKAN PATH: Pastikan file 'admin_dashboard_screen.dart' berada di folder ini.
+// Jika posisi foldernya sejajar dengan splash, ganti menjadi: import '../admin/admin_dashboard_screen.dart';
+import '../admin/admin_dashboard_screen.dart'; 
 import '../welcome_screen.dart'; 
 
 class SplashScreen extends StatefulWidget {
@@ -35,7 +37,8 @@ class _SplashScreenState extends State<SplashScreen> {
           // JIKA ADMIN: Lempar langsung ke Command Center / Dashboard Admin
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+            // ✅ PERBAIKAN FATAAL: Menghapus kata 'const' karena memicu error 'Not a constant expression'
+            MaterialPageRoute(builder: (_) => AdminDashboardScreen()),
           );
         } else {
           // JIKA USER BIASA: Lempar ke BottomNav (agar menu bawah muncul)
