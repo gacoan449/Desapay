@@ -45,25 +45,6 @@ jobs:
             flutter create . --platforms=android
           fi
 
-      # ✅ LANGKAH BARU: Paksa naikkan versi Kotlin agar Firebase v6 terbaru mau di-compile
-      - name: Force Update Kotlin Version for Firebase
-        run: |
-          SETTINGS_GRADLE="android/settings.gradle"
-          BUILD_GRADLE="android/build.gradle"
-          
-          # Cek jika proyek menggunakan struktur settings.gradle baru (Flutter 3.x ke atas)
-          if [ -f "$SETTINGS_GRADLE" ]; then
-            echo "Mengubah versi Kotlin di settings.gradle..."
-            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' "$SETTINGS_GRADLE"
-          fi
-          
-          # Cek jika proyek menggunakan struktur build.gradle lama
-          if [ -f "$BUILD_GRADLE" ]; then
-            echo "Mengubah versi Kotlin di build.gradle..."
-            sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '1.9.24'/g" "$BUILD_GRADLE"
-            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "1.9.24"/g' "$BUILD_GRADLE"
-          fi
-
       # Langkah 2: Ambil semua library/dependencies dari pubspec.yaml
       - name: Install Dependencies
         run: flutter pub get
@@ -72,10 +53,39 @@ jobs:
       - name: Generate Launcher Icons
         run: dart run flutter_launcher_icons
 
-      # Langkah 4: Jalankan proses kompilasi rilis APK dengan bersih
-      - name: Build APK Clean
+      # Langkah 4: Jalankan Pembersihan Sebelum Injeksi Gradle
+      - name: Pre-Build Clean
+        run: flutter clean
+
+      # ✅ LANGKAH UTAMA: Paksa Naikkan Kotlin ke Versi 2.0.20 & Atasi Error CheckerFramework Firebase
+      - name: Force Fix Firebase Kotlin Compiler Issue
         run: |
-          flutter clean
+          SETTINGS_GRADLE="android/settings.gradle"
+          BUILD_GRADLE="android/build.gradle"
+          APP_BUILD_GRADLE="android/app/build.gradle"
+          
+          # 1. Paksa ganti versi Kotlin ke 2.0.20 di settings.gradle (Struktur Flutter Baru)
+          if [ -f "$SETTINGS_GRADLE" ]; then
+            echo "Mengubah versi Kotlin di settings.gradle..."
+            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "2.0.20"/' "$SETTINGS_GRADLE"
+          fi
+          
+          # 2. Paksa ganti versi Kotlin ke 2.0.20 di build.gradle (Struktur Flutter Lama)
+          if [ -f "$BUILD_GRADLE" ]; then
+            echo "Mengubah versi Kotlin di build.gradle..."
+            sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '2.0.20'/g" "$BUILD_GRADLE"
+            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "2.0.20"/g' "$BUILD_GRADLE"
+          fi
+          
+          # 3. Suntikkan resolusi dependensi untuk memperbaiki kelas 'UnknownInitialization' yang hilang di Firebase Auth
+          if [ -f "$APP_BUILD_GRADLE" ]; then
+            echo "Menambahkan resolusi konfigurasi checker-qual ke app/build.gradle..."
+            printf "\nandroid {\n    configurations.all {\n        resolutionStrategy {\n            forcedModules = ['org.checkerframework:checker-qual:3.42.0']\n        }\n    }\n}\n" >> "$APP_BUILD_GRADLE"
+          fi
+
+      # Langkah 5: Ambil ulang dependensi dan langsung kompilasi tanpa men-clean lagi
+      - name: Build APK Final
+        run: |
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
