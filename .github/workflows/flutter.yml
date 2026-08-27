@@ -32,11 +32,6 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Cek versi Flutter & Dart
-        run: |
-          flutter --version
-          dart --version
-
       # Langkah 1: Buat folder android bersih otomatis dari nol
       - name: Generate Android Platform Folder
         run: |
@@ -51,18 +46,17 @@ jobs:
 
       # Langkah 3: Generate launcher icons setelah folder android dipastikan siap
       - name: Generate Launcher Icons
-        run: dart run flutter_launcher_icons
+        run: dart run flutter_launcher_icons || echo "Launcher icons skip jika tidak dikonfigurasi"
 
       # Langkah 4: Jalankan Pembersihan Sebelum Injeksi Gradle Modern
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA: Suntik Resolusi ke Struktur Gradle Baru & Atasi Error Firebase Kotlin
-      - name: Force Fix Firebase Kotlin Compiler Issue Modern
+      # ✅ LANGKAH UTAMA: Suntik Resolusi via Root Gradle untuk Memaksa Versi checker-qual
+      - name: Force Fix Firebase Kotlin Compiler Issue
         run: |
           SETTINGS_GRADLE="android/settings.gradle"
           BUILD_GRADLE="android/build.gradle"
-          APP_BUILD_GRADLE="android/app/build.gradle"
           
           # 1. Paksa ganti versi Kotlin ke 2.0.20 di settings.gradle (Struktur Flutter Baru)
           if [ -f "$SETTINGS_GRADLE" ]; then
@@ -74,16 +68,21 @@ jobs:
           if [ -f "$BUILD_GRADLE" ]; then
             echo "Mengubah versi Kotlin di build.gradle..."
             sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '2.0.20'/g" "$BUILD_GRADLE"
-            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "2.0.20"/g' "$BUILD_GRADLE"
+            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = '2.0.20'/g' "$BUILD_GRADLE"
           fi
           
-          # 3. SUNTIKAN STRUKTUR BARU: Memaksa kompilator memuat kelas checker-qual yang dibutuhkan Firebase Auth
-          if [ -f "$APP_BUILD_GRADLE" ]; then
-            echo "Menyuntikkan resolusi strategi checker-qual ke struktur gradle tingkat aplikasi..."
-            # Memasang di bagian paling atas berkas agar terbaca oleh seluruh classpath sub-dependency Kotlin
-            sed -i '1i\
-            configurations.all {\n    resolutionStrategy {\n        forcedModules = ["org.checkerframework:checker-qual:3.42.0"]\n    }\n}\n' "$APP_BUILD_GRADLE"
-          fi
+          # 3. SOLUSI FIX: Suntik strategi resolusi subprojects ke root build.gradle agar berdampak ke modul firebase_auth
+          echo "Menyuntikkan konfigurasi resolusi dependensi ke root build.gradle..."
+          cat << 'EOF' >> "$BUILD_GRADLE"
+
+          subprojects {
+              project.configurations.all {
+                  resolutionStrategy {
+                      forcedModules = ['org.checkerframework:checker-qual:3.43.0']
+                  }
+              }
+          }
+          EOF
 
       # Langkah 5: Ambil ulang dependensi dan langsung kompilasi rilis tanpa men-clean lagi
       - name: Build APK Final
