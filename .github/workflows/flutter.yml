@@ -37,32 +37,14 @@ jobs:
           flutter --version
           dart --version
 
-      - name: Pastikan Android Folder
-        run: |
-          if [ ! -d "android" ]; then
-            echo "Folder android belum ada, membuat project Android..."
-            flutter create . --platforms=android
-          else
-            echo "Folder android sudah ada, tidak membuat ulang."
-          fi
-
       - name: Install Dependencies & Generate Icons
         run: |
           flutter pub get
           dart run flutter_launcher_icons
 
-      - name: Patch Android SDK & Force compileSdk / compileOptions
+      - name: Build APK Clean
         run: |
-          BUILD_GRADLE="android/build.gradle"
-          if [ -f "$BUILD_GRADLE" ]; then
-            printf "\nsubprojects {\n    afterEvaluate { project ->\n        if (project.hasProperty('android')) {\n            project.android {\n                compileSdkVersion 34\n                buildToolsVersion '34.0.0'\n                compileOptions {\n                    sourceCompatibility JavaVersion.VERSION_17\n                    targetCompatibility JavaVersion.VERSION_17\n                }\n            }\n        }\n    }\n}\n" >> "$BUILD_GRADLE"
-            echo "Patch root build.gradle berhasil dipasang."
-          fi
-
-      - name: Build APK
-        run: |
-          rm -rf android/.gradle build .dart_tool
-          flutter pub upgrade file_picker mobile_scanner
+          flutter clean
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
@@ -80,11 +62,3 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 1
-
-      - name: Bersihkan file build
-        if: always()
-        run: |
-          rm -rf build
-          rm -rf .dart_tool
-          rm -rf android/.gradle
-          echo "File build sementara sudah dibersihkan."
