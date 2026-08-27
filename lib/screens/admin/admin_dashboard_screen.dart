@@ -4,7 +4,9 @@ import '../../services/firestore_service.dart';
 import '../../services/digiflazz_service.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
-  const AdminDashboardScreen({super.key});
+  const AdminDashboardScreen({
+    super.key,
+  });
 
   @override
   State<AdminDashboardScreen> createState() =>
@@ -13,6 +15,10 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState
     extends State<AdminDashboardScreen> {
+  // =========================================================
+  // STATE
+  // =========================================================
+
   int menu = 0;
 
   double saldo = 0;
@@ -20,6 +26,7 @@ class _AdminDashboardScreenState
   bool loadingSaldo = false;
   bool syncing = false;
   bool loadingProducts = false;
+  bool loadingTransactions = false;
 
   DateTime? lastSync;
 
@@ -41,16 +48,54 @@ class _AdminDashboardScreenState
 
   final List<Map<String, dynamic>> apiLogs = [];
 
+  // =========================================================
+  // INIT
+  // =========================================================
+
   @override
   void initState() {
     super.initState();
 
     loadSaldo();
     _muatProdukDariFirestore();
+    _muatTransaksiDariFirestore();
   }
 
   // =========================================================
-  // LOAD PRODUK DARI FIRESTORE
+  // HELPER ANGKA
+  // =========================================================
+
+  double _parseDouble(dynamic value) {
+    if (value == null) {
+      return 0;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    final text =
+        value.toString().trim();
+
+    if (text.isEmpty) {
+      return 0;
+    }
+
+    final direct =
+        double.tryParse(text);
+
+    if (direct != null) {
+      return direct;
+    }
+
+    return double.tryParse(
+          text.replaceAll('.', ''),
+        ) ??
+        0;
+  }
+
+  // =========================================================
+  // LOAD PRODUK FIRESTORE
   // =========================================================
 
   Future<void> _muatProdukDariFirestore() async {
@@ -61,31 +106,51 @@ class _AdminDashboardScreenState
     });
 
     try {
+      // Ambil SEMUA produk.
+      //
+      // Jangan gunakan query active == true di Admin,
+      // karena produk nonaktif juga harus terlihat oleh admin.
       final data =
           await FirestoreService.ambilSemuaProduk();
 
       if (!mounted) return;
 
+      final List<Map<String, dynamic>>
+          hasil = [];
+
+      for (final item in data) {
+        final product =
+            Map<String, dynamic>.from(item);
+
+        product['sku'] =
+            product['sku']?.toString() ?? '';
+
+        product['name'] =
+            product['name']?.toString() ?? '-';
+
+        product['category'] =
+            product['category']?.toString() ??
+                '-';
+
+        product['brand'] =
+            product['brand']?.toString() ?? '-';
+
+        product['cost'] =
+            _parseDouble(product['cost']);
+
+        // MARGIN SEPENUHNYA DARI ADMIN
+        product['margin'] =
+            _parseDouble(product['margin']);
+
+        product['active'] =
+            product['active'] == true;
+
+        hasil.add(product);
+      }
+
       setState(() {
         products.clear();
-
-        if (data.isNotEmpty) {
-          for (final item in data) {
-            final product =
-                Map<String, dynamic>.from(item);
-
-            // Pastikan margin selalu ada.
-            // Margin sepenuhnya dikontrol admin.
-            product['margin'] =
-                _parseDouble(product['margin']);
-
-            // Pastikan active memiliki nilai boolean.
-            product['active'] =
-                product['active'] == true;
-
-            products.add(product);
-          }
-        }
+        products.addAll(hasil);
       });
     } catch (e) {
       addLog(
@@ -102,21 +167,40 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // HELPER ANGKA
+  // LOAD TRANSAKSI
   // =========================================================
 
-  double _parseDouble(dynamic value) {
-    if (value == null) return 0;
+  Future<void>
+      _muatTransaksiDariFirestore() async {
+    if (!mounted) return;
 
-    if (value is num) {
-      return value.toDouble();
+    setState(() {
+      loadingTransactions = true;
+    });
+
+    try {
+      final data =
+          await FirestoreService
+              .ambilSemuaTransaksi();
+
+      if (!mounted) return;
+
+      setState(() {
+        transactions.clear();
+        transactions.addAll(data);
+      });
+    } catch (e) {
+      addLog(
+        'Firestore / ambil transaksi',
+        e.toString(),
+      );
     }
 
-    return double.tryParse(
-          value.toString().replaceAll('.', ''),
-        ) ??
-        double.tryParse(value.toString()) ??
-        0;
+    if (!mounted) return;
+
+    setState(() {
+      loadingTransactions = false;
+    });
   }
 
   // =========================================================
@@ -132,19 +216,15 @@ class _AdminDashboardScreenState
 
     try {
       final result =
-          await DigiflazzService.saldo();
-
-      final data = result['data'];
+          await DigiflazzService()
+              .cekSaldoModal();
 
       if (!mounted) return;
 
-      if (data != null) {
-        setState(() {
-          saldo = _parseDouble(
-            data['deposit'],
-          );
-        });
-      }
+      setState(() {
+        saldo =
+            result.toDouble();
+      });
     } catch (e) {
       addLog(
         '/cek-saldo',
@@ -161,18 +241,29 @@ class _AdminDashboardScreenState
 
   // =========================================================
   // SYNC PRODUK DIGIFLAZZ
+  // =========================================================
   //
-  // PENTING:
-  // SYNC TIDAK MENGATUR MARGIN.
+  // ATURAN:
   //
-  // Margin lama berdasarkan SKU akan dipertahankan.
-  // Produk baru mendapatkan margin Rp0.
+  // Digiflazz = sumber HARGA MODAL
+  // Admin     = sumber MARGIN
+  //
+  // Produk lama:
+  //   margin tetap
+  //   active tetap
+  //
+  // Produk baru:
+  //   margin = 0
+  //   active = true
+  //
   // =========================================================
 
   Future<void> syncProducts() async {
     if (lastSync != null) {
       final difference =
-          DateTime.now().difference(lastSync!);
+          DateTime.now().difference(
+        lastSync!,
+      );
 
       if (difference.inMinutes < 5) {
         final wait =
@@ -194,118 +285,168 @@ class _AdminDashboardScreenState
 
     try {
       // =====================================================
-      // SIMPAN MARGIN LAMA BERDASARKAN SKU
-      // AGAR SYNC TIDAK MENGHAPUS HARGA JUAL ADMIN
+      // AMBIL DATA LAMA DARI FIRESTORE
+      //
+      // Ini lebih aman daripada hanya membaca products
+      // yang sedang tampil di layar.
+      // Produk nonaktif tetap mempunyai margin.
       // =====================================================
 
-      final Map<String, double> marginLama = {};
+      final dataLama =
+          await FirestoreService
+              .ambilSemuaProduk();
 
-      for (final product in products) {
+      final Map<String, Map<String, dynamic>>
+          produkLama = {};
+
+      for (final item in dataLama) {
         final sku =
-            product['sku']?.toString() ?? '';
+            item['sku']?.toString() ?? '';
 
-        if (sku.isNotEmpty) {
-          marginLama[sku] =
-              _parseDouble(
-            product['margin'],
-          );
+        if (sku.isEmpty) {
+          continue;
         }
+
+        produkLama[sku] =
+            Map<String, dynamic>.from(item);
       }
 
       // =====================================================
       // AMBIL PRICE LIST DIGIFLAZZ
       // =====================================================
 
-      final result =
-          await DigiflazzService.priceList();
+      final List<dynamic> data =
+          await DigiflazzService()
+              .ambilSemuaProduk();
 
-      final data = result['data'];
+      if (data.isEmpty) {
+        throw Exception(
+          'Price list Digiflazz kosong.',
+        );
+      }
 
-      if (data is List) {
-        final List<Map<String, dynamic>>
-            hasilProduk = [];
+      final List<Map<String, dynamic>>
+          hasilProduk = [];
 
-        for (final item in data) {
-          final sku =
-              item['buyer_sku_code']
-                      ?.toString() ??
-                  '-';
-
-          final price =
-              _parseDouble(
-            item['price'],
-          );
-
-          // =================================================
-          // PERTAHANKAN MARGIN YANG SUDAH DIATUR ADMIN
-          //
-          // Produk baru = Rp0
-          // =================================================
-
-          final double margin =
-              marginLama[sku] ?? 0;
-
-          hasilProduk.add({
-            'sku': sku,
-
-            'name':
-                item['product_name']
-                        ?.toString() ??
-                    '-',
-
-            'category':
-                item['category']
-                        ?.toString() ??
-                    '-',
-
-            'brand':
-                item['brand']
-                        ?.toString() ??
-                    '-',
-
-            // HARGA MODAL DARI DIGIFLAZZ
-            'cost': price,
-
-            // MARGIN SEPENUHNYA DARI ADMIN
-            'margin': margin,
-
-            // STATUS PRODUK
-            'active': true,
-          });
+      for (final item in data) {
+        if (item is! Map) {
+          continue;
         }
 
-        // =====================================================
-        // UPDATE TAMPILAN LOKAL
-        // =====================================================
+        final sku =
+            item['buyer_sku_code']
+                    ?.toString() ??
+                '';
 
-        if (!mounted) return;
+        if (sku.isEmpty) {
+          continue;
+        }
 
-        setState(() {
-          products.clear();
-          products.addAll(hasilProduk);
+        final hargaModal =
+            _parseDouble(
+          item['price'],
+        );
+
+        // ===================================================
+        // CARI DATA LAMA
+        // ===================================================
+
+        final dataLamaProduk =
+            produkLama[sku];
+
+        // ===================================================
+        // MARGIN LAMA
+        //
+        // TIDAK DIUBAH OLEH DIGIFLAZZ
+        // ===================================================
+
+        final double margin =
+            dataLamaProduk == null
+                ? 0
+                : _parseDouble(
+                    dataLamaProduk[
+                        'margin'],
+                  );
+
+        // ===================================================
+        // STATUS LAMA
+        //
+        // Kalau admin sebelumnya menonaktifkan produk,
+        // status tersebut tetap dipertahankan.
+        //
+        // Produk baru otomatis aktif.
+        // ===================================================
+
+        final bool active =
+            dataLamaProduk == null
+                ? true
+                : dataLamaProduk[
+                        'active'] ==
+                    true;
+
+        hasilProduk.add({
+          'sku': sku,
+
+          'name':
+              item['product_name']
+                      ?.toString() ??
+                  '-',
+
+          'category':
+              item['category']
+                      ?.toString() ??
+                  '-',
+
+          'brand':
+              item['brand']
+                      ?.toString() ??
+                  '-',
+
+          // HANYA HARGA MODAL DARI DIGIFLAZZ
+          'cost': hargaModal,
+
+          // MARGIN ADMIN
+          'margin': margin,
+
+          // STATUS ADMIN
+          'active': active,
         });
+      }
 
-        // =====================================================
-        // SIMPAN KE FIRESTORE
-        // =====================================================
+      if (hasilProduk.isEmpty) {
+        throw Exception(
+          'Tidak ada produk valid dari Digiflazz.',
+        );
+      }
 
-        await FirestoreService.simpanProduk(
+      // =====================================================
+      // SIMPAN FIRESTORE
+      // =====================================================
+
+      await FirestoreService.simpanProduk(
+        hasilProduk,
+      );
+
+      if (!mounted) return;
+
+      // =====================================================
+      // UPDATE TAMPILAN
+      // =====================================================
+
+      setState(() {
+        products.clear();
+        products.addAll(
           hasilProduk,
         );
 
-        lastSync = DateTime.now();
+        lastSync =
+            DateTime.now();
+      });
 
-        if (!mounted) return;
-
-        message(
-          '${hasilProduk.length} produk berhasil disinkronkan. '
-          'Margin admin tetap dipertahankan. ✅',
-        );
-      } else {
-        throw Exception(
-          'Format data price-list Digiflazz tidak valid.',
-        );
-      }
+      message(
+        '${hasilProduk.length} produk berhasil sync. '
+        'Modal diperbarui, margin admin tetap. ✅',
+      );
     } catch (e) {
       addLog(
         '/price-list',
@@ -327,39 +468,6 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // CEK STATUS TRANSAKSI
-  // =========================================================
-
-  Future<void> checkTransaction(
-    String refId,
-  ) async {
-    try {
-      final result =
-          await DigiflazzService.transaction(
-        refId: refId,
-      );
-
-      if (!mounted) return;
-
-      message(
-        'Status: '
-        '${result['data']?['status'] ?? 'Tidak diketahui'}',
-      );
-    } catch (e) {
-      addLog(
-        '/transaction',
-        e.toString(),
-      );
-
-      if (mounted) {
-        message(
-          'Gagal cek transaksi.',
-        );
-      }
-    }
-  }
-
-  // =========================================================
   // UPDATE MARGIN
   // =========================================================
 
@@ -371,20 +479,46 @@ class _AdminDashboardScreenState
         product['sku']?.toString() ?? '';
 
     if (sku.isEmpty) {
-      message('SKU produk tidak ditemukan.');
+      message(
+        'SKU produk tidak ditemukan.',
+      );
+      return;
+    }
+
+    final text =
+        value.trim();
+
+    if (text.isEmpty) {
+      message(
+        'Margin tidak boleh kosong.',
+      );
       return;
     }
 
     final double newMargin =
-        _parseDouble(value);
+        _parseDouble(text);
 
-    // Update tampilan langsung
+    if (newMargin < 0) {
+      message(
+        'Margin tidak boleh negatif.',
+      );
+      return;
+    }
+
+    final oldMargin =
+        _parseDouble(
+      product['margin'],
+    );
+
+    // Update UI dulu.
     setState(() {
-      product['margin'] = newMargin;
+      product['margin'] =
+          newMargin;
     });
 
     try {
-      await FirestoreService.updateMargin(
+      await FirestoreService
+          .updateMargin(
         sku,
         newMargin,
       );
@@ -395,6 +529,14 @@ class _AdminDashboardScreenState
         'Margin ${rupiah(newMargin)} berhasil disimpan. ✅',
       );
     } catch (e) {
+      // Kembalikan nilai lama kalau gagal.
+      if (mounted) {
+        setState(() {
+          product['margin'] =
+              oldMargin;
+        });
+      }
+
       addLog(
         'Firestore / update margin',
         e.toString(),
@@ -419,12 +561,24 @@ class _AdminDashboardScreenState
     final sku =
         product['sku']?.toString() ?? '';
 
+    if (sku.isEmpty) {
+      message(
+        'SKU produk tidak ditemukan.',
+      );
+      return;
+    }
+
+    final oldValue =
+        product['active'] == true;
+
     setState(() {
-      product['active'] = value;
+      product['active'] =
+          value;
     });
 
     try {
-      await FirestoreService.updateProductActive(
+      await FirestoreService
+          .updateProductActive(
         sku,
         value,
       );
@@ -437,6 +591,13 @@ class _AdminDashboardScreenState
             : 'Produk dinonaktifkan. ⛔',
       );
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          product['active'] =
+              oldValue;
+        });
+      }
+
       addLog(
         'Firestore / update product active',
         e.toString(),
@@ -445,6 +606,59 @@ class _AdminDashboardScreenState
       if (mounted) {
         message(
           'Gagal menyimpan status produk: $e',
+        );
+      }
+    }
+  }
+
+  // =========================================================
+  // CEK STATUS TRANSAKSI
+  // =========================================================
+  //
+  // Untuk sementara status transaksi dibaca dari Firestore.
+  // Jangan panggil method transaction yang tidak ada di
+  // DigiflazzService.
+  //
+  // =========================================================
+
+  Future<void> checkTransaction(
+    String refId,
+  ) async {
+    try {
+      final data =
+          await FirestoreService
+              .ambilSemuaTransaksi();
+
+      final found =
+          data.where(
+        (trx) =>
+            trx['ref_id']
+                ?.toString() ==
+            refId,
+      );
+
+      if (found.isEmpty) {
+        message(
+          'Transaksi tidak ditemukan.',
+        );
+        return;
+      }
+
+      final trx =
+          found.first;
+
+      message(
+        'Status: ${trx['status'] ?? 'Tidak diketahui'}',
+      );
+    } catch (e) {
+      addLog(
+        'Firestore / transaksi',
+        e.toString(),
+      );
+
+      if (mounted) {
+        message(
+          'Gagal cek transaksi.',
         );
       }
     }
@@ -465,7 +679,8 @@ class _AdminDashboardScreenState
         0,
         {
           'time':
-              DateTime.now().toString(),
+              DateTime.now()
+                  .toString(),
           'endpoint':
               endpoint,
           'error':
@@ -479,22 +694,27 @@ class _AdminDashboardScreenState
   // MESSAGE
   // =========================================================
 
-  void message(String text) {
+  void message(
+    String text,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
         .showSnackBar(
       SnackBar(
-        content: Text(text),
+        content:
+            Text(text),
       ),
     );
   }
 
   // =========================================================
-  // FORMAT RUPIAH
+  // RUPIAH
   // =========================================================
 
-  String rupiah(num value) {
+  String rupiah(
+    num value,
+  ) {
     final text =
         value.toStringAsFixed(0);
 
@@ -520,28 +740,41 @@ class _AdminDashboardScreenState
     IconData icon,
   ) {
     return Card(
-      child: Padding(
+      child:
+          Padding(
         padding:
-            const EdgeInsets.all(16),
-        child: Row(
+            const EdgeInsets.all(
+          16,
+        ),
+        child:
+            Row(
           children: [
             CircleAvatar(
-              child: Icon(icon),
+              child:
+                  Icon(icon),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(
+              width: 12,
+            ),
             Expanded(
-              child: Column(
+              child:
+                  Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    CrossAxisAlignment
+                        .start,
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style:
+                        TextStyle(
                       color:
-                          Colors.grey[600],
+                          Colors.grey[
+                              600],
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(
+                    height: 5,
+                  ),
                   Text(
                     value,
                     style:
@@ -569,8 +802,10 @@ class _AdminDashboardScreenState
       onRefresh: () async {
         await loadSaldo();
         await _muatProdukDariFirestore();
+        await _muatTransaksiDariFirestore();
       },
-      child: ListView(
+      child:
+          ListView(
         physics:
             const AlwaysScrollableScrollPhysics(),
         padding:
@@ -578,29 +813,40 @@ class _AdminDashboardScreenState
         children: [
           const Text(
             'Dashboard DesaPay',
-            style: TextStyle(
+            style:
+                TextStyle(
               fontSize: 27,
               fontWeight:
                   FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(
+            height: 6,
+          ),
 
           const Text(
             'Command Center Admin',
-            style: TextStyle(
-              color: Colors.grey,
+            style:
+                TextStyle(
+              color:
+                  Colors.grey,
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(
+            height: 20,
+          ),
 
           LayoutBuilder(
             builder:
-                (context, constraints) {
+                (
+              context,
+              constraints,
+            ) {
               final width =
-                  constraints.maxWidth;
+                  constraints
+                      .maxWidth;
 
               final columns =
                   width >= 900
@@ -612,11 +858,14 @@ class _AdminDashboardScreenState
               return GridView.count(
                 crossAxisCount:
                     columns,
-                shrinkWrap: true,
+                shrinkWrap:
+                    true,
                 physics:
                     const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                crossAxisSpacing:
+                    12,
+                mainAxisSpacing:
+                    12,
                 childAspectRatio:
                     width < 600
                         ? 3.5
@@ -626,28 +875,33 @@ class _AdminDashboardScreenState
                     'Saldo Digiflazz',
                     loadingSaldo
                         ? 'Memuat...'
-                        : rupiah(saldo),
+                        : rupiah(
+                            saldo,
+                          ),
                     Icons
                         .account_balance_wallet,
                   ),
 
                   stat(
                     'Produk',
-                    products.length
+                    products
+                        .length
                         .toString(),
                     Icons.inventory,
                   ),
 
                   stat(
                     'Transaksi',
-                    transactions.length
+                    transactions
+                        .length
                         .toString(),
                     Icons.receipt_long,
                   ),
 
                   stat(
                     'Pengguna',
-                    users.length
+                    users
+                        .length
                         .toString(),
                     Icons.people,
                   ),
@@ -656,26 +910,36 @@ class _AdminDashboardScreenState
             },
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(
+            height: 20,
+          ),
 
           Card(
-            child: Padding(
+            child:
+                Padding(
               padding:
-                  const EdgeInsets.all(18),
-              child: Column(
+                  const EdgeInsets.all(
+                18,
+              ),
+              child:
+                  Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    CrossAxisAlignment
+                        .start,
                 children: [
                   const Text(
                     'Sinkronisasi Produk',
-                    style: TextStyle(
+                    style:
+                        TextStyle(
                       fontSize: 18,
                       fontWeight:
                           FontWeight.bold,
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(
+                    height: 8,
+                  ),
 
                   Text(
                     lastSync == null
@@ -683,39 +947,50 @@ class _AdminDashboardScreenState
                         : 'Terakhir sync: $lastSync',
                   ),
 
-                  const SizedBox(height: 15),
+                  const SizedBox(
+                    height: 12,
+                  ),
 
                   const Text(
-                    'Sync hanya memperbarui harga modal dari Digiflazz. '
-                    'Margin tetap mengikuti pengaturan admin.',
-                    style: TextStyle(
-                      color: Colors.grey,
+                    'Harga modal diambil dari Digiflazz. '
+                    'Margin dan status produk sepenuhnya '
+                    'mengikuti pengaturan Admin.',
+                    style:
+                        TextStyle(
+                      color:
+                          Colors.grey,
                     ),
                   ),
 
-                  const SizedBox(height: 15),
+                  const SizedBox(
+                    height: 15,
+                  ),
 
                   SizedBox(
-                    width: double.infinity,
+                    width:
+                        double.infinity,
                     child:
                         ElevatedButton.icon(
                       onPressed:
                           syncing
                               ? null
                               : syncProducts,
-                      icon: syncing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child:
-                                  CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.sync,
-                            ),
-                      label: Text(
+                      icon:
+                          syncing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(
+                                    strokeWidth:
+                                        2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.sync,
+                                ),
+                      label:
+                          Text(
                         syncing
                             ? 'Syncing...'
                             : 'Manual Sync & Simpan',
@@ -727,28 +1002,36 @@ class _AdminDashboardScreenState
             ),
           ),
 
-          const SizedBox(height: 15),
+          const SizedBox(
+            height: 15,
+          ),
 
           Card(
-            child: ListTile(
-              leading: const Icon(
+            child:
+                ListTile(
+              leading:
+                  const Icon(
                 Icons.cloud_done,
               ),
-              title: const Text(
+              title:
+                  const Text(
                 'Database Produk',
-                style: TextStyle(
+                style:
+                    TextStyle(
                   fontWeight:
                       FontWeight.bold,
                 ),
               ),
-              subtitle: Text(
+              subtitle:
+                  Text(
                 loadingProducts
                     ? 'Memuat dari Firestore...'
-                    : '${products.length} produk tersedia dari Firestore',
+                    : '${products.length} produk tersedia',
               ),
               trailing:
                   IconButton(
-                icon: const Icon(
+                icon:
+                    const Icon(
                   Icons.refresh,
                 ),
                 onPressed:
@@ -768,17 +1051,23 @@ class _AdminDashboardScreenState
   Widget productsPage() {
     return Padding(
       padding:
-          const EdgeInsets.all(16),
-      child: Column(
+          const EdgeInsets.all(
+        16,
+      ),
+      child:
+          Column(
         crossAxisAlignment:
-            CrossAxisAlignment.start,
+            CrossAxisAlignment
+                .start,
         children: [
           Row(
             children: [
               const Expanded(
-                child: Text(
+                child:
+                    Text(
                   'Produk',
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     fontSize: 27,
                     fontWeight:
                         FontWeight.bold,
@@ -791,35 +1080,48 @@ class _AdminDashboardScreenState
                     syncing
                         ? null
                         : syncProducts,
-                icon: const Icon(
+                icon:
+                    const Icon(
                   Icons.sync,
                 ),
                 label:
-                    const Text('Sync'),
+                    const Text(
+                  'Sync',
+                ),
               ),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(
+            height: 8,
+          ),
 
           const Text(
-            'Atur margin sendiri. Harga jual = harga modal Digiflazz + margin.',
-            style: TextStyle(
-              color: Colors.grey,
+            'Harga jual = Harga Modal Digiflazz + Margin Admin',
+            style:
+                TextStyle(
+              color:
+                  Colors.grey,
             ),
           ),
 
-          const SizedBox(height: 15),
+          const SizedBox(
+            height: 15,
+          ),
 
           Expanded(
-            child: Card(
+            child:
+                Card(
               child:
                   products.isEmpty
                       ? const Center(
-                          child: Text(
-                            'Belum ada produk.\nSilakan Manual Sync.',
+                          child:
+                              Text(
+                            'Belum ada produk.\n'
+                            'Silakan Manual Sync.',
                             textAlign:
-                                TextAlign.center,
+                                TextAlign
+                                    .center,
                           ),
                         )
                       : SingleChildScrollView(
@@ -833,54 +1135,71 @@ class _AdminDashboardScreenState
                                   const [
                                 DataColumn(
                                   label:
-                                      Text('SKU'),
+                                      Text(
+                                    'SKU',
+                                  ),
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Produk'),
+                                      Text(
+                                    'Produk',
+                                  ),
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Kategori'),
+                                      Text(
+                                    'Kategori',
+                                  ),
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Modal'),
+                                      Text(
+                                    'Modal',
+                                  ),
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Margin Admin'),
+                                      Text(
+                                    'Margin Admin',
+                                  ),
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Harga Jual'),
+                                      Text(
+                                    'Harga Jual',
+                                  ),
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Aktif'),
+                                      Text(
+                                    'Aktif',
+                                  ),
                                 ),
                               ],
                               rows:
                                   products.map(
-                                (product) {
-                                  final double cost =
+                                (
+                                  product,
+                                ) {
+                                  final cost =
                                       _parseDouble(
                                     product[
                                         'cost'],
                                   );
 
-                                  final double margin =
+                                  final margin =
                                       _parseDouble(
                                     product[
                                         'margin'],
                                   );
 
-                                  final double hargaJual =
+                                  final hargaJual =
                                       cost +
                                           margin;
 
                                   return DataRow(
                                     cells: [
+                                      // SKU
                                       DataCell(
                                         Text(
                                           product[
@@ -890,9 +1209,11 @@ class _AdminDashboardScreenState
                                         ),
                                       ),
 
+                                      // NAMA
                                       DataCell(
                                         SizedBox(
-                                          width: 200,
+                                          width:
+                                              220,
                                           child:
                                               Text(
                                             product[
@@ -903,6 +1224,7 @@ class _AdminDashboardScreenState
                                         ),
                                       ),
 
+                                      // KATEGORI
                                       DataCell(
                                         Text(
                                           product[
@@ -912,10 +1234,7 @@ class _AdminDashboardScreenState
                                         ),
                                       ),
 
-                                      // ===================================
-                                      // HARGA MODAL
-                                      // ===================================
-
+                                      // MODAL
                                       DataCell(
                                         Text(
                                           rupiah(
@@ -924,13 +1243,13 @@ class _AdminDashboardScreenState
                                         ),
                                       ),
 
-                                      // ===================================
+                                      // =================================================
                                       // MARGIN ADMIN
-                                      // ===================================
-
+                                      // =================================================
                                       DataCell(
                                         SizedBox(
-                                          width: 130,
+                                          width:
+                                              140,
                                           child:
                                               TextFormField(
                                             key:
@@ -947,7 +1266,9 @@ class _AdminDashboardScreenState
                                                   false,
                                             ),
                                             onFieldSubmitted:
-                                                (value) async {
+                                                (
+                                              value,
+                                            ) async {
                                               await updateMargin(
                                                 product,
                                                 value,
@@ -968,10 +1289,7 @@ class _AdminDashboardScreenState
                                         ),
                                       ),
 
-                                      // ===================================
                                       // HARGA JUAL
-                                      // ===================================
-
                                       DataCell(
                                         Text(
                                           rupiah(
@@ -985,10 +1303,7 @@ class _AdminDashboardScreenState
                                         ),
                                       ),
 
-                                      // ===================================
-                                      // STATUS AKTIF
-                                      // ===================================
-
+                                      // STATUS
                                       DataCell(
                                         Switch(
                                           value:
@@ -996,7 +1311,9 @@ class _AdminDashboardScreenState
                                                       'active'] ==
                                                   true,
                                           onChanged:
-                                              (value) {
+                                              (
+                                            value,
+                                          ) {
                                             updateProductStatus(
                                               product,
                                               value,
@@ -1023,154 +1340,272 @@ class _AdminDashboardScreenState
   // =========================================================
 
   Widget transactionPage() {
-    return ListView(
-      padding:
-          const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Monitor Transaksi',
-          style: TextStyle(
-            fontSize: 27,
-            fontWeight:
-                FontWeight.bold,
-          ),
+    return RefreshIndicator(
+      onRefresh:
+          _muatTransaksiDariFirestore,
+      child:
+          ListView(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding:
+            const EdgeInsets.all(
+          16,
         ),
-
-        const SizedBox(height: 20),
-
-        if (transactions.isEmpty)
-          const Card(
-            child: Padding(
-              padding:
-                  EdgeInsets.all(30),
-              child: Center(
-                child: Text(
-                  'Belum ada transaksi.',
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child:
+                    Text(
+                  'Monitor Transaksi',
+                  style:
+                      TextStyle(
+                    fontSize: 27,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-          )
-        else
-          Card(
-            child: SingleChildScrollView(
-              scrollDirection:
-                  Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(
-                    label:
-                        Text('Ref ID'),
+
+              IconButton(
+                onPressed:
+                    loadingTransactions
+                        ? null
+                        : _muatTransaksiDariFirestore,
+                icon:
+                    const Icon(
+                  Icons.refresh,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(
+            height: 20,
+          ),
+
+          if (loadingTransactions)
+            const Center(
+              child:
+                  Padding(
+                padding:
+                    EdgeInsets.all(
+                  30,
+                ),
+                child:
+                    CircularProgressIndicator(),
+              ),
+            )
+          else if (transactions.isEmpty)
+            const Card(
+              child:
+                  Padding(
+                padding:
+                    EdgeInsets.all(
+                  30,
+                ),
+                child:
+                    Center(
+                  child:
+                      Text(
+                    'Belum ada transaksi.',
                   ),
-                  DataColumn(
-                    label:
-                        Text('User'),
-                  ),
-                  DataColumn(
-                    label:
-                        Text('Produk'),
-                  ),
-                  DataColumn(
-                    label:
-                        Text('Nominal'),
-                  ),
-                  DataColumn(
-                    label:
-                        Text('Status'),
-                  ),
-                  DataColumn(
-                    label:
-                        Text('Action'),
-                  ),
-                ],
-                rows:
-                    transactions.map(
-                  (trx) {
-                    return DataRow(
-                      cells: [
-                        DataCell(
+                ),
+              ),
+            )
+          else
+            Card(
+              child:
+                  SingleChildScrollView(
+                scrollDirection:
+                    Axis.horizontal,
+                child:
+                    DataTable(
+                  columns:
+                      const [
+                    DataColumn(
+                      label:
                           Text(
-                            trx['ref_id']
-                                .toString(),
+                        'Ref ID',
+                      ),
+                    ),
+                    DataColumn(
+                      label:
+                          Text(
+                        'User',
+                      ),
+                    ),
+                    DataColumn(
+                      label:
+                          Text(
+                        'Produk',
+                      ),
+                    ),
+                    DataColumn(
+                      label:
+                          Text(
+                        'Nominal',
+                      ),
+                    ),
+                    DataColumn(
+                      label:
+                          Text(
+                        'Status',
+                      ),
+                    ),
+                    DataColumn(
+                      label:
+                          Text(
+                        'Action',
+                      ),
+                    ),
+                  ],
+                  rows:
+                      transactions.map(
+                    (
+                      trx,
+                    ) {
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            Text(
+                              trx[
+                                      'ref_id']
+                                  ?.toString() ??
+                                  '-',
+                            ),
                           ),
-                        ),
-                        DataCell(
-                          Text(
-                            trx['user']
-                                .toString(),
+                          DataCell(
+                            Text(
+                              trx[
+                                      'user']
+                                  ?.toString() ??
+                                  '-',
+                            ),
                           ),
-                        ),
-                        DataCell(
-                          Text(
-                            trx['product']
-                                .toString(),
+                          DataCell(
+                            Text(
+                              trx[
+                                      'product']
+                                  ?.toString() ??
+                                  '-',
+                            ),
                           ),
-                        ),
-                        DataCell(
-                          Text(
-                            rupiah(
-                              _parseDouble(
-                                trx['amount'],
+                          DataCell(
+                            Text(
+                              rupiah(
+                                _parseDouble(
+                                  trx[
+                                      'amount'],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        DataCell(
-                          Text(
-                            trx['status']
-                                .toString(),
-                          ),
-                        ),
-                        DataCell(
-                          ElevatedButton(
-                            onPressed: () {
-                              checkTransaction(
-                                trx['ref_id']
-                                    .toString(),
-                              );
-                            },
-                            child:
-                                const Text(
-                              'Cek',
+                          DataCell(
+                            Text(
+                              trx[
+                                      'status']
+                                  ?.toString() ??
+                                  '-',
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                ).toList(),
+                          DataCell(
+                            ElevatedButton(
+                              onPressed:
+                                  () {
+                                checkTransaction(
+                                  trx[
+                                          'ref_id']
+                                      ?.toString() ??
+                                      '',
+                                );
+                              },
+                              child:
+                                  const Text(
+                                'Cek',
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ).toList(),
+                ),
               ),
+            ),
+
+          const SizedBox(
+            height: 25,
+          ),
+
+          const Text(
+            'API Error Log',
+            style:
+                TextStyle(
+              fontSize: 20,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
 
-        const SizedBox(height: 25),
-
-        const Text(
-          'API Error Log',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight:
-                FontWeight.bold,
+          const SizedBox(
+            height: 10,
           ),
-        ),
 
-        ...apiLogs.map(
-          (log) => Card(
-            child: ListTile(
-              leading:
-                  const Icon(
-                Icons.error,
-                color: Colors.red,
+          if (apiLogs.isEmpty)
+            const Card(
+              child:
+                  Padding(
+                padding:
+                    EdgeInsets.all(
+                  20,
+                ),
+                child:
+                    Text(
+                  'Belum ada error API.',
+                ),
               ),
-              title:
-                  Text(log['endpoint']),
-              subtitle:
-                  Text(log['error']),
-              trailing:
-                  Text(log['time']),
+            )
+          else
+            ...apiLogs.map(
+              (
+                log,
+              ) =>
+                  Card(
+                child:
+                    ListTile(
+                  leading:
+                      const Icon(
+                    Icons.error,
+                    color:
+                        Colors.red,
+                  ),
+                  title:
+                      Text(
+                    log[
+                            'endpoint']
+                        ?.toString() ??
+                        '-',
+                  ),
+                  subtitle:
+                      Text(
+                    log[
+                            'error']
+                        ?.toString() ??
+                        '-',
+                  ),
+                  trailing:
+                      Text(
+                    log[
+                            'time']
+                        ?.toString() ??
+                        '',
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1181,25 +1616,33 @@ class _AdminDashboardScreenState
   Widget usersPage() {
     return ListView(
       padding:
-          const EdgeInsets.all(16),
+          const EdgeInsets.all(
+        16,
+      ),
       children: [
         const Text(
           'Manajemen Pengguna',
-          style: TextStyle(
+          style:
+              TextStyle(
             fontSize: 27,
             fontWeight:
                 FontWeight.bold,
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(
+          height: 20,
+        ),
 
         Card(
-          child: SingleChildScrollView(
+          child:
+              SingleChildScrollView(
             scrollDirection:
                 Axis.horizontal,
-            child: DataTable(
-              columns: const [
+            child:
+                DataTable(
+              columns:
+                  const [
                 DataColumn(
                   label:
                       Text('ID'),
@@ -1227,7 +1670,9 @@ class _AdminDashboardScreenState
               ],
               rows:
                   users.asMap().entries.map(
-                (entry) {
+                (
+                  entry,
+                ) {
                   final index =
                       entry.key;
 
@@ -1235,34 +1680,40 @@ class _AdminDashboardScreenState
                       entry.value;
 
                   final blocked =
-                      user['status'] ==
+                      user[
+                              'status'] ==
                           'Diblokir';
 
                   return DataRow(
                     cells: [
                       DataCell(
                         Text(
-                          user['id'],
+                          user[
+                              'id'],
                         ),
                       ),
                       DataCell(
                         Text(
-                          user['name'],
+                          user[
+                              'name'],
                         ),
                       ),
                       DataCell(
                         Text(
-                          user['email'],
+                          user[
+                              'email'],
                         ),
                       ),
                       DataCell(
                         Text(
-                          user['status'],
+                          user[
+                              'status'],
                         ),
                       ),
                       DataCell(
                         Text(
-                          user['reason']
+                          user[
+                                      'reason']
                                   .toString()
                                   .isEmpty
                               ? '-'
@@ -1273,7 +1724,8 @@ class _AdminDashboardScreenState
                       DataCell(
                         blocked
                             ? OutlinedButton(
-                                onPressed: () {
+                                onPressed:
+                                    () {
                                   setState(
                                     () {
                                       user[
@@ -1299,7 +1751,8 @@ class _AdminDashboardScreenState
                                   foregroundColor:
                                       Colors.white,
                                 ),
-                                onPressed: () {
+                                onPressed:
+                                    () {
                                   blockUser(
                                     index,
                                   );
@@ -1325,13 +1778,19 @@ class _AdminDashboardScreenState
   // BLOKIR USER
   // =========================================================
 
-  void blockUser(int index) {
+  void blockUser(
+    int index,
+  ) {
     final controller =
         TextEditingController();
 
     showDialog(
-      context: context,
-      builder: (_) {
+      context:
+          context,
+      builder:
+          (
+        _,
+      ) {
         return AlertDialog(
           title:
               const Text(
@@ -1341,7 +1800,8 @@ class _AdminDashboardScreenState
               TextField(
             controller:
                 controller,
-            maxLines: 3,
+            maxLines:
+                3,
             decoration:
                 const InputDecoration(
               labelText:
@@ -1352,8 +1812,9 @@ class _AdminDashboardScreenState
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(
+              onPressed:
+                  () =>
+                      Navigator.pop(
                 context,
               ),
               child:
@@ -1369,7 +1830,8 @@ class _AdminDashboardScreenState
                 foregroundColor:
                     Colors.white,
               ),
-              onPressed: () {
+              onPressed:
+                  () {
                 if (controller
                     .text
                     .trim()
@@ -1380,16 +1842,23 @@ class _AdminDashboardScreenState
                   return;
                 }
 
-                setState(() {
-                  users[index][
-                          'status'] =
-                      'Diblokir';
+                setState(
+                  () {
+                    users[
+                            index]
+                        [
+                            'status'] =
+                        'Diblokir';
 
-                  users[index][
-                          'reason'] =
-                      controller.text
-                          .trim();
-                });
+                    users[
+                            index]
+                        [
+                            'reason'] =
+                        controller
+                            .text
+                            .trim();
+                  },
+                );
 
                 Navigator.pop(
                   context,
@@ -1417,26 +1886,36 @@ class _AdminDashboardScreenState
   Widget ticketsPage() {
     return ListView(
       padding:
-          const EdgeInsets.all(16),
+          const EdgeInsets.all(
+        16,
+      ),
       children: [
         const Text(
           'CS / Keluhan',
-          style: TextStyle(
+          style:
+              TextStyle(
             fontSize: 27,
             fontWeight:
                 FontWeight.bold,
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(
+          height: 20,
+        ),
 
         if (tickets.isEmpty)
           const Card(
-            child: Padding(
+            child:
+                Padding(
               padding:
-                  EdgeInsets.all(30),
-              child: Center(
-                child: Text(
+                  EdgeInsets.all(
+                30,
+              ),
+              child:
+                  Center(
+                child:
+                    Text(
                   'Belum ada tiket keluhan.',
                 ),
               ),
@@ -1444,53 +1923,78 @@ class _AdminDashboardScreenState
           ),
 
         ...tickets.map(
-          (ticket) {
+          (
+            ticket,
+          ) {
             return Card(
-              child: ListTile(
+              child:
+                  ListTile(
                 leading:
                     const CircleAvatar(
                   child:
-                      Icon(Icons.support_agent),
+                      Icon(
+                    Icons.support_agent,
+                  ),
                 ),
-                title: Text(
+                title:
+                    Text(
                   '${ticket['id']} • ${ticket['user']}',
                 ),
                 subtitle:
                     Text(
-                  ticket['message'],
+                  ticket[
+                          'message']
+                      ?.toString() ??
+                      '-',
                 ),
                 trailing:
                     DropdownButton<String>(
                   value:
-                      ticket['status'],
-                  items: const [
+                      ticket[
+                          'status'],
+                  items:
+                      const [
                     DropdownMenuItem(
-                      value: 'Open',
+                      value:
+                          'Open',
                       child:
-                          Text('Open'),
+                          Text(
+                        'Open',
+                      ),
                     ),
                     DropdownMenuItem(
-                      value: 'Diproses',
+                      value:
+                          'Diproses',
                       child:
-                          Text('Diproses'),
+                          Text(
+                        'Diproses',
+                      ),
                     ),
                     DropdownMenuItem(
-                      value: 'Selesai',
+                      value:
+                          'Selesai',
                       child:
-                          Text('Selesai'),
+                          Text(
+                        'Selesai',
+                      ),
                     ),
                   ],
                   onChanged:
-                      (value) {
-                    if (value == null) {
+                      (
+                    value,
+                  ) {
+                    if (value ==
+                        null) {
                       return;
                     }
 
-                    setState(() {
-                      ticket[
-                              'status'] =
-                          value;
-                    });
+                    setState(
+                      () {
+                        ticket[
+                                'status'] =
+                            value;
+                      },
+                    );
                   },
                 ),
               ),
@@ -1508,26 +2012,36 @@ class _AdminDashboardScreenState
   Widget logsPage() {
     return ListView(
       padding:
-          const EdgeInsets.all(16),
+          const EdgeInsets.all(
+        16,
+      ),
       children: [
         const Text(
           'API Error Log',
-          style: TextStyle(
+          style:
+              TextStyle(
             fontSize: 27,
             fontWeight:
                 FontWeight.bold,
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(
+          height: 20,
+        ),
 
         if (apiLogs.isEmpty)
           const Card(
-            child: Padding(
+            child:
+                Padding(
               padding:
-                  EdgeInsets.all(30),
-              child: Center(
-                child: Text(
+                  EdgeInsets.all(
+                30,
+              ),
+              child:
+                  Center(
+                child:
+                    Text(
                   'Belum ada error API.',
                 ),
               ),
@@ -1535,19 +2049,39 @@ class _AdminDashboardScreenState
           ),
 
         ...apiLogs.map(
-          (log) => Card(
-            child: ListTile(
+          (
+            log,
+          ) =>
+              Card(
+            child:
+                ListTile(
               leading:
                   const Icon(
                 Icons.error,
-                color: Colors.red,
+                color:
+                    Colors.red,
               ),
               title:
-                  Text(log['endpoint']),
+                  Text(
+                log[
+                        'endpoint']
+                    ?.toString() ??
+                    '-',
+              ),
               subtitle:
-                  Text(log['error']),
+                  Text(
+                log[
+                        'error']
+                    ?.toString() ??
+                    '-',
+              ),
               trailing:
-                  Text(log['time']),
+                  Text(
+                log[
+                        'time']
+                    ?.toString() ??
+                    '',
+              ),
             ),
           ),
         ),
@@ -1585,7 +2119,7 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // MENU ADMIN
+  // MENU
   // =========================================================
 
   Widget menuList({
@@ -1603,13 +2137,18 @@ class _AdminDashboardScreenState
             Icon(icon),
         title:
             Text(title),
-        onTap: () {
-          setState(() {
-            menu = index;
-          });
+        onTap:
+            () {
+          setState(
+            () {
+              menu = index;
+            },
+          );
 
           if (closeDrawer) {
-            Navigator.pop(context);
+            Navigator.pop(
+              context,
+            );
           }
         },
       );
@@ -1657,10 +2196,12 @@ class _AdminDashboardScreenState
 
   Widget desktopSidebar() {
     return Container(
-      width: 240,
+      width:
+          240,
       color:
           Colors.grey.shade100,
-      child: Column(
+      child:
+          Column(
         children: [
           const SizedBox(
             height: 30,
@@ -1695,8 +2236,11 @@ class _AdminDashboardScreenState
 
           const Padding(
             padding:
-                EdgeInsets.all(15),
-            child: Text(
+                EdgeInsets.all(
+              15,
+            ),
+            child:
+                Text(
               'DesaPay Admin v1.0',
               style:
                   TextStyle(
@@ -1716,8 +2260,10 @@ class _AdminDashboardScreenState
 
   Widget mobileDrawer() {
     return Drawer(
-      child: SafeArea(
-        child: Column(
+      child:
+          SafeArea(
+        child:
+            Column(
           children: [
             const SizedBox(
               height: 25,
@@ -1747,15 +2293,19 @@ class _AdminDashboardScreenState
             ),
 
             menuList(
-              closeDrawer: true,
+              closeDrawer:
+                  true,
             ),
 
             const Spacer(),
 
             const Padding(
               padding:
-                  EdgeInsets.all(15),
-              child: Text(
+                  EdgeInsets.all(
+                15,
+              ),
+              child:
+                  Text(
                 'DesaPay Admin v1.0',
                 style:
                     TextStyle(
@@ -1771,7 +2321,7 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // BUILD RESPONSIVE
+  // BUILD
   // =========================================================
 
   @override
@@ -1780,18 +2330,20 @@ class _AdminDashboardScreenState
   ) {
     return LayoutBuilder(
       builder:
-          (context, constraints) {
+          (
+        context,
+        constraints,
+      ) {
         final isMobile =
-            constraints.maxWidth < 700;
-
-        // ===================================================
-        // MOBILE
-        // ===================================================
+            constraints.maxWidth <
+                700;
 
         if (isMobile) {
           return Scaffold(
-            appBar: AppBar(
-              title: Text(
+            appBar:
+                AppBar(
+              title:
+                  Text(
                 [
                   'Dashboard',
                   'Produk',
@@ -1802,29 +2354,27 @@ class _AdminDashboardScreenState
                 ][menu],
               ),
               backgroundColor:
-                  Theme.of(context)
+                  Theme.of(
+                context,
+              )
                       .colorScheme
                       .primary,
               foregroundColor:
                   Colors.white,
             ),
-
             drawer:
                 mobileDrawer(),
-
             body:
                 SafeArea(
-              child: content(),
+              child:
+                  content(),
             ),
           );
         }
 
-        // ===================================================
-        // DESKTOP / LAPTOP
-        // ===================================================
-
         return Scaffold(
-          body: Row(
+          body:
+              Row(
             children: [
               desktopSidebar(),
 
