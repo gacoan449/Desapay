@@ -37,11 +37,23 @@ jobs:
           flutter --version
           dart --version
 
-      - name: Install Dependencies & Generate Icons
+      # Langkah 1: Buat folder android terlebih dahulu agar struktur dasar Gradle & Manifest terbentuk
+      - name: Generate Android Platform Folder
         run: |
-          flutter pub get
-          dart run flutter_launcher_icons
+          if [ ! -d "android" ]; then
+            echo "Folder android tidak ditemukan, membuat platform Android..."
+            flutter create . --platforms=android
+          fi
 
+      # Langkah 2: Ambil semua library/dependencies dari pubspec.yaml
+      - name: Install Dependencies
+        run: flutter pub get
+
+      # Langkah 3: Generate launcher icons setelah folder android dipastikan siap dan terintegrasi
+      - name: Generate Launcher Icons
+        run: dart run flutter_launcher_icons
+
+      # Langkah 4: Jalankan proses kompilasi rilis APK dengan bersih
       - name: Build APK Clean
         run: |
           flutter clean
