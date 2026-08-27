@@ -13,6 +13,26 @@ const DIGIFLAZZ_API_KEY = defineSecret("DIGIFLAZZ_API_KEY");
 const DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction";
 
 // ============================================================
+// TEST MODE
+// ============================================================
+
+// Buat produk Firestore:
+// collection: products
+// sku: TEST_PULSA_0
+// active: true
+// category: PULSA
+// brand: TEST
+// name: Pulsa Test Rp 0
+// cost: 0
+// margin: 0
+//
+// Transaksi dengan SKU ini TIDAK dikirim ke Digiflazz.
+// Saldo user juga TIDAK dipotong.
+// Digunakan untuk mengetes alur transaksi DesaPay.
+
+const TEST_SKU = "TEST_PULSA_0";
+
+// ============================================================
 // HELPER
 // ============================================================
 
@@ -27,11 +47,7 @@ function normalizeStatus(status, rc) {
   const s = String(status || "").toLowerCase();
   const r = String(rc || "");
 
-  if (
-    s === "sukses" ||
-    s === "success" ||
-    r === "00"
-  ) {
+  if (s === "sukses" || s === "success" || r === "00") {
     return "SUCCESS";
   }
 
@@ -75,12 +91,11 @@ exports.beliPulsa = onCall(
     }
 
     const uid = request.auth.uid;
+    const data = request.data || {};
 
     // --------------------------------------------------------
     // 2. INPUT
     // --------------------------------------------------------
-
-    const data = request.data || {};
 
     const customerNo = String(
       data.customerNo || ""
@@ -130,7 +145,6 @@ exports.beliPulsa = onCall(
     }
 
     const productDoc = productQuery.docs[0];
-
     const product = productDoc.data();
 
     const cost = Number(product.cost || 0);
@@ -138,9 +152,115 @@ exports.beliPulsa = onCall(
 
     const sellingPrice =
       Number(
-        product.sellingPrice ||
+        product.sellingPrice ??
         (cost + margin)
       );
+
+    // ========================================================
+    // 4. MODE TEST Rp 0
+    // ========================================================
+
+    if (sku === TEST_SKU) {
+      const transactionRef = db
+        .collection("transactions")
+        .doc();
+
+      const refId = transactionRef.id;
+
+      const userRef = db
+        .collection("users")
+        .doc(uid);
+
+      const userSnap = await userRef.get();
+
+      if (!userSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "Data pengguna tidak ditemukan."
+        );
+      }
+
+      const userData = userSnap.data() || {};
+      const balance = Number(userData.balance || 0);
+
+      // Tidak memotong saldo karena harga Rp0.
+      await transactionRef.set({
+        transactionId: refId,
+        refId: refId,
+
+        uid: uid,
+
+        type: "PULSA",
+        category: "PULSA",
+
+        sku: TEST_SKU,
+
+        productName:
+          String(
+            product.name ||
+            "Pulsa Test Rp 0"
+          ),
+
+        brand:
+          String(
+            product.brand ||
+            "TEST"
+          ),
+
+        customerNo: customerNo,
+
+        amount: 0,
+
+        cost: 0,
+        margin: 0,
+
+        status: "SUCCESS",
+
+        paymentMethod: "SALDO_UTAMA",
+
+        balanceBefore: balance,
+        balanceAfter: balance,
+
+        testing: true,
+
+        rc: "00",
+
+        message:
+          "TEST BERHASIL. Transaksi Rp0 tidak dikirim ke Digiflazz.",
+
+        sn: "TEST-SN-000000",
+
+        createdAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+
+        updatedAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+
+        testing: true,
+
+        transactionId: refId,
+
+        status: "SUCCESS",
+
+        message:
+          "TEST BERHASIL. Saldo tidak dipotong.",
+
+        sn: "TEST-SN-000000",
+
+        amount: 0,
+
+        balanceBefore: balance,
+        balanceAfter: balance,
+      };
+    }
+
+    // --------------------------------------------------------
+    // 5. PRODUK NORMAL TIDAK BOLEH HARGA 0
+    // --------------------------------------------------------
 
     if (sellingPrice <= 0) {
       throw new HttpsError(
@@ -150,7 +270,7 @@ exports.beliPulsa = onCall(
     }
 
     // --------------------------------------------------------
-    // 4. BUAT REF ID
+    // 6. BUAT REF ID
     // --------------------------------------------------------
 
     const transactionRef = db
@@ -164,7 +284,7 @@ exports.beliPulsa = onCall(
       .doc(uid);
 
     // --------------------------------------------------------
-    // 5. POTONG SALDO SECARA ATOMIC
+    // 7. POTONG SALDO ATOMIC
     // --------------------------------------------------------
 
     await db.runTransaction(async (tx) => {
@@ -194,6 +314,7 @@ exports.beliPulsa = onCall(
 
       tx.update(userRef, {
         balance: newBalance,
+
         updatedAt:
           admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -236,6 +357,8 @@ exports.beliPulsa = onCall(
         balanceBefore: balance,
         balanceAfter: newBalance,
 
+        testing: true,
+
         createdAt:
           admin.firestore.FieldValue.serverTimestamp(),
 
@@ -245,7 +368,7 @@ exports.beliPulsa = onCall(
     });
 
     // --------------------------------------------------------
-    // 6. KIRIM KE DIGIFLAZZ
+    // 8. KIRIM KE DIGIFLAZZ
     // --------------------------------------------------------
 
     const username =
@@ -272,10 +395,6 @@ exports.beliPulsa = onCall(
 
       sign: sign,
 
-      // ======================================================
-      // UNTUK TESTING DIGIFLAZZ
-      // Hapus/comment baris ini saat production.
-      // ======================================================
       testing: true,
     };
 
@@ -300,9 +419,10 @@ exports.beliPulsa = onCall(
         await response.json();
 
     } catch (error) {
-      // ------------------------------------------------------
-      // API TIDAK TERHUBUNG
-      // ------------------------------------------------------
+      console.error(
+        "DIGIFLAZZ REQUEST ERROR:",
+        error
+      );
 
       await transactionRef.update({
         status: "FAILED",
@@ -340,12 +460,10 @@ exports.beliPulsa = onCall(
       );
 
     // --------------------------------------------------------
-    // 7. SUCCESS
+    // 9. SUCCESS
     // --------------------------------------------------------
 
-    if (
-      digiflazzStatus === "SUCCESS"
-    ) {
+    if (digiflazzStatus === "SUCCESS") {
       await transactionRef.update({
         status: "SUCCESS",
 
@@ -400,12 +518,10 @@ exports.beliPulsa = onCall(
     }
 
     // --------------------------------------------------------
-    // 8. PENDING
+    // 10. PENDING
     // --------------------------------------------------------
 
-    if (
-      digiflazzStatus === "PENDING"
-    ) {
+    if (digiflazzStatus === "PENDING") {
       await transactionRef.update({
         status: "PENDING",
 
@@ -454,7 +570,7 @@ exports.beliPulsa = onCall(
     }
 
     // --------------------------------------------------------
-    // 9. FAILED -> REFUND
+    // 11. FAILED -> REFUND
     // --------------------------------------------------------
 
     await transactionRef.update({
@@ -530,8 +646,7 @@ async function refundBalance(
           currentBalance + amount,
 
         updatedAt:
-          admin.firestore.FieldValue
-            .serverTimestamp(),
+          admin.firestore.FieldValue.serverTimestamp(),
       });
     }
   );
@@ -545,8 +660,7 @@ async function refundBalance(
       refundedAmount: amount,
 
       refundedAt:
-        admin.firestore.FieldValue
-          .serverTimestamp(),
+        admin.firestore.FieldValue.serverTimestamp(),
     });
 }
 
@@ -572,13 +686,10 @@ exports.digiflazzCallback = onRequest(
         );
 
       if (!refId) {
-        res
-          .status(400)
-          .json({
-            success: false,
-            message:
-              "ref_id kosong.",
-          });
+        res.status(400).json({
+          success: false,
+          message: "ref_id kosong.",
+        });
 
         return;
       }
@@ -592,13 +703,11 @@ exports.digiflazzCallback = onRequest(
         await transactionRef.get();
 
       if (!transactionSnap.exists) {
-        res
-          .status(404)
-          .json({
-            success: false,
-            message:
-              "Transaksi tidak ditemukan.",
-          });
+        res.status(404).json({
+          success: false,
+          message:
+            "Transaksi tidak ditemukan.",
+        });
 
         return;
       }
@@ -613,12 +722,10 @@ exports.digiflazzCallback = onRequest(
         );
 
       // ------------------------------------------------------
-      // CALLBACK SUCCESS
+      // SUCCESS
       // ------------------------------------------------------
 
-      if (
-        status === "SUCCESS"
-      ) {
+      if (status === "SUCCESS") {
         await transactionRef.update({
           status: "SUCCESS",
 
@@ -642,8 +749,7 @@ exports.digiflazzCallback = onRequest(
             data.status || "",
 
           updatedAt:
-            admin.firestore.FieldValue
-              .serverTimestamp(),
+            admin.firestore.FieldValue.serverTimestamp(),
         });
 
         res.json({
@@ -654,12 +760,10 @@ exports.digiflazzCallback = onRequest(
       }
 
       // ------------------------------------------------------
-      // CALLBACK FAILED
+      // FAILED
       // ------------------------------------------------------
 
-      if (
-        status === "FAILED"
-      ) {
+      if (status === "FAILED") {
         await transactionRef.update({
           status: "FAILED",
 
@@ -678,17 +782,12 @@ exports.digiflazzCallback = onRequest(
             data.status || "",
 
           updatedAt:
-            admin.firestore.FieldValue
-              .serverTimestamp(),
+            admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Refund hanya jika sebelumnya
-        // masih PENDING/PROCESSING
         if (
-          transaction.status ===
-            "PENDING" ||
-          transaction.status ===
-            "PROCESSING"
+          transaction.status === "PENDING" ||
+          transaction.status === "PROCESSING"
         ) {
           await refundBalance(
             transaction.uid,
@@ -707,7 +806,7 @@ exports.digiflazzCallback = onRequest(
       }
 
       // ------------------------------------------------------
-      // MASIH PENDING
+      // PENDING
       // ------------------------------------------------------
 
       await transactionRef.update({
@@ -725,8 +824,7 @@ exports.digiflazzCallback = onRequest(
           ),
 
         updatedAt:
-          admin.firestore.FieldValue
-            .serverTimestamp(),
+          admin.firestore.FieldValue.serverTimestamp(),
       });
 
       res.json({
@@ -739,13 +837,11 @@ exports.digiflazzCallback = onRequest(
         error
       );
 
-      res
-        .status(500)
-        .json({
-          success: false,
-          message:
-            "Internal server error.",
-        });
+      res.status(500).json({
+        success: false,
+        message:
+          "Internal server error.",
+      });
     }
   }
 );
