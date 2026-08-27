@@ -52,24 +52,24 @@ jobs:
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA (FIX): Daftarkan Ekstensi Flutter & Atasi Konflik Firebase Compiler
-      - name: Initialize Flutter Gradle Infrastructure & Fix Dependencies
+      # ✅ LANGKAH UTAMA (FIX): Sinkronisasi Plugin & Resolusi Firebase via settings.gradle
+      - name: Configure Gradle Settings & Fix Extensions
         run: |
           # 1. Ambil ulang pub dependencies pasca clean
           flutter pub get
           
-          # 2. SOLUSI UTAMA EROR EXTENSION FLUTTER:
-          # Memaksa Flutter mengevaluasi dan mendaftarkan Plugin internalnya secara global ke Gradle local cache.
-          # Ini otomatis memperbaiki error 'Extension with name flutter does not exist' pada plugin .kts modern.
-          flutter assemble
+          # 2. Amankan settings.gradle
+          SETTINGS_GRADLE="android/settings.gradle"
           
-          # 3. SOLUSI FIX FIREBASE: Suntik resolusi strategi checker-qual ke root build.gradle secara terpusat
-          BUILD_GRADLE="android/build.gradle"
-          if [ -f "$BUILD_GRADLE" ]; then
-            echo "Menyuntikkan pemaksaan versi checker-qual yang ramah Firebase ke subprojects..."
-            cat << 'EOF' >> "$BUILD_GRADLE"
+          if [ -f "$SETTINGS_GRADLE" ]; then
+            echo "Menyuntikkan perbaikan ekstensi flutter dan resolusi compiler Firebase..."
             
-            subprojects {
+            # Tambahkan konfigurasi resolusi strategi langsung ke tingkat manajemen proyek di settings.gradle
+            # Ini akan memaksa semua modul (termasuk .kts seperti android_file_picker) memuat classpath dengan benar
+            cat << 'EOF' >> "$SETTINGS_GRADLE"
+
+            // Perbaikan otomatis untuk dependensi Firebase & modul .kts eksternal
+            gradle.lifecycle.beforeProject { project ->
                 project.configurations.all {
                     resolutionStrategy {
                         forcedModules = ['org.checkerframework:checker-qual:3.43.0']
