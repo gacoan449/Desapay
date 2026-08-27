@@ -53,15 +53,16 @@ jobs:
       - name: Generate Launcher Icons
         run: dart run flutter_launcher_icons
 
-      # Langkah 4: Jalankan Pembersihan Sebelum Injeksi Gradle Global
+      # Langkah 4: Jalankan Pembersihan Sebelum Injeksi Gradle Modern
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA: Suntik Resolusi Global ke ROOT build.gradle & Atasi Error Firebase Kotlin
-      - name: Force Fix Firebase Kotlin Compiler Issue Global
+      # ✅ LANGKAH UTAMA: Suntik Resolusi ke Struktur Gradle Baru & Atasi Error Firebase Kotlin
+      - name: Force Fix Firebase Kotlin Compiler Issue Modern
         run: |
           SETTINGS_GRADLE="android/settings.gradle"
           BUILD_GRADLE="android/build.gradle"
+          APP_BUILD_GRADLE="android/app/build.gradle"
           
           # 1. Paksa ganti versi Kotlin ke 2.0.20 di settings.gradle (Struktur Flutter Baru)
           if [ -f "$SETTINGS_GRADLE" ]; then
@@ -76,10 +77,12 @@ jobs:
             sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "2.0.20"/g' "$BUILD_GRADLE"
           fi
           
-          # 3. SUNTIKAN GLOBAL: Memaksa ROOT gradle menerapkan konfigurasi resolusi 'checker-qual' ke SELURUH SUB-PROYEK PLUGIN
-          if [ -f "$BUILD_GRADLE" ]; then
-            echo "Menyuntikkan resolusi strategi checker-qual ke root subprojects..."
-            printf "\nsubprojects {\n    project.configurations.all {\n        resolutionStrategy {\n            forcedModules = ['org.checkerframework:checker-qual:3.42.0']\n        }\n    }\n}\n" >> "$BUILD_GRADLE"
+          # 3. SUNTIKAN STRUKTUR BARU: Memaksa kompilator memuat kelas checker-qual yang dibutuhkan Firebase Auth
+          if [ -f "$APP_BUILD_GRADLE" ]; then
+            echo "Menyuntikkan resolusi strategi checker-qual ke struktur gradle tingkat aplikasi..."
+            # Memasang di bagian paling atas berkas agar terbaca oleh seluruh classpath sub-dependency Kotlin
+            sed -i '1i\
+            configurations.all {\n    resolutionStrategy {\n        forcedModules = ["org.checkerframework:checker-qual:3.42.0"]\n    }\n}\n' "$APP_BUILD_GRADLE"
           fi
 
       # Langkah 5: Ambil ulang dependensi dan langsung kompilasi rilis tanpa men-clean lagi
