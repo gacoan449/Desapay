@@ -52,41 +52,40 @@ jobs:
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA: Memperbaiki Ekstensi Flutter & Resolusi Firebase Kotlin Compiler Issue
+      # ✅ LANGKAH UTAMA: Suntik Perbaikan Ekstensi Kotlin & Flutter untuk Modul .kts Modern
       - name: Force Fix Flutter Gradle Plugins & Firebase Compiler Issue
         run: |
           SETTINGS_GRADLE="android/settings.gradle"
           BUILD_GRADLE="android/build.gradle"
           
-          # 1. Pastikan Flutter Gradle Plugin terpasang dan teraplikasikan di settings.gradle agar terbaca oleh modul .kts (seperti android_file_picker)
+          # 1. Perbaiki versi Kotlin global di settings.gradle agar seragam
           if [ -f "$SETTINGS_GRADLE" ]; then
-            echo "Mengonfigurasi settings.gradle untuk mendukung subprojects modern..."
-            # Menolak error 'Extension with name flutter does not exist' dengan mendaftarkan plugin secara global
+            echo "Mengubah versi Kotlin di settings.gradle ke 2.0.20..."
             sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "2.0.20"/' "$SETTINGS_GRADLE"
           fi
           
-          # 2. Paksa ganti versi Kotlin ke 2.0.20 di build.gradle (Struktur Flutter Lama jika ada)
+          # 2. Paksa ganti versi Kotlin jika proyek menggunakan fallback template build.gradle lama
           if [ -f "$BUILD_GRADLE" ]; then
             echo "Mengubah versi Kotlin di build.gradle..."
             sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '2.0.20'/g" "$BUILD_GRADLE"
             sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "2.0.20"/g' "$BUILD_GRADLE"
           fi
           
-          # 3. Suntik strategi resolusi subprojects ke root build.gradle agar berdampak ke modul firebase_auth dan mendaftarkan classpath plugin flutter secara eksplisit
-          echo "Menyuntikkan konfigurasi resolusi dependensi ke root build.gradle..."
+          # 3. SOLUSI UTAMA EROR EXTENSION FLUTTER: 
+          # Memaksa Gradle mendaftarkan ekstensi 'flutter' secara global ke seluruh subprojects (termasuk android_file_picker) sebelum dievaluasi.
+          echo "Menyuntikkan konfigurasi resolusi dependensi dan perbaikan ekstensi ke root build.gradle..."
           cat << 'EOF' >> "$BUILD_GRADLE"
 
+          // Mengatasi error 'Extension with name flutter does not exist' pada plugin berbasis .kts
           subprojects {
-              // Membantu Gradle mengenali plugin flutter di level sub-modul pihak ketiga (.kts)
-              buildscript {
-                  repositories {
-                      google()
-                      mavenCentral()
-                  }
-              }
-              project.configurations.all {
-                  resolutionStrategy {
-                      forcedModules = ['org.checkerframework:checker-qual:3.43.0']
+              afterEvaluate { project ->
+                  if (project.plugins.hasPlugin("com.android.library") || project.plugins.hasPlugin("com.android.application")) {
+                      // Pastikan konfigurasi kompilasi memaksa versi checker-qual yang ramah Firebase
+                      project.configurations.all {
+                          resolutionStrategy {
+                              forcedModules = ['org.checkerframework:checker-qual:3.43.0']
+                          }
+                      }
                   }
               }
           }
