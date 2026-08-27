@@ -52,30 +52,26 @@ jobs:
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA (FIX): Sinkronisasi Plugin & Resolusi Firebase via settings.gradle
-      - name: Configure Gradle Settings & Fix Extensions
+      # ✅ LANGKAH UTAMA (FIX): Paksa Resolusi checker-qual versi lebih tinggi di root build.gradle
+      - name: Force Fix Firebase Kotlin Checker Qual via Root Build.gradle
         run: |
           # 1. Ambil ulang pub dependencies pasca clean
           flutter pub get
           
-          # 2. Amankan settings.gradle
-          SETTINGS_GRADLE="android/settings.gradle"
+          BUILD_GRADLE="android/build.gradle"
           
-          if [ -f "$SETTINGS_GRADLE" ]; then
-            echo "Menyuntikkan perbaikan ekstensi flutter dan resolusi compiler Firebase..."
-            
-            # Tambahkan konfigurasi resolusi strategi langsung ke tingkat manajemen proyek di settings.gradle
-            # Ini akan memaksa semua modul (termasuk .kts seperti android_file_picker) memuat classpath dengan benar
-            cat << 'EOF' >> "$SETTINGS_GRADLE"
+          if [ -f "$BUILD_GRADLE" ]; then
+            echo "Menyuntikkan strategi resolusi checker-qual versi mutakhir ke root build.gradle..."
+            cat << 'EOF' >> "$BUILD_GRADLE"
 
-            // Perbaikan otomatis untuk dependensi Firebase & modul .kts eksternal
-            gradle.lifecycle.beforeProject { project ->
-                project.configurations.all {
-                    resolutionStrategy {
-                        forcedModules = ['org.checkerframework:checker-qual:3.43.0']
-                    }
-                }
-            }
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      // Memaksa versi checker-qual yang kompatibel dengan anotasi Kotlin compiler modern
+                      forcedModules = ['org.checkerframework:checker-qual:3.48.3']
+                  }
+              }
+          }
           EOF
           fi
 
