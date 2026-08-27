@@ -66,12 +66,27 @@ class _AdminDashboardScreenState
 
       if (!mounted) return;
 
-      if (data.isNotEmpty) {
-        setState(() {
-          products.clear();
-          products.addAll(data);
-        });
-      }
+      setState(() {
+        products.clear();
+
+        if (data.isNotEmpty) {
+          for (final item in data) {
+            final product =
+                Map<String, dynamic>.from(item);
+
+            // Pastikan margin selalu ada.
+            // Margin sepenuhnya dikontrol admin.
+            product['margin'] =
+                _parseDouble(product['margin']);
+
+            // Pastikan active memiliki nilai boolean.
+            product['active'] =
+                product['active'] == true;
+
+            products.add(product);
+          }
+        }
+      });
     } catch (e) {
       addLog(
         'Firestore / ambil produk',
@@ -84,6 +99,24 @@ class _AdminDashboardScreenState
     setState(() {
       loadingProducts = false;
     });
+  }
+
+  // =========================================================
+  // HELPER ANGKA
+  // =========================================================
+
+  double _parseDouble(dynamic value) {
+    if (value == null) return 0;
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+          value.toString().replaceAll('.', ''),
+        ) ??
+        double.tryParse(value.toString()) ??
+        0;
   }
 
   // =========================================================
@@ -107,10 +140,9 @@ class _AdminDashboardScreenState
 
       if (data != null) {
         setState(() {
-          saldo = double.tryParse(
-                data['deposit'].toString(),
-              ) ??
-              0;
+          saldo = _parseDouble(
+            data['deposit'],
+          );
         });
       }
     } catch (e) {
@@ -129,6 +161,12 @@ class _AdminDashboardScreenState
 
   // =========================================================
   // SYNC PRODUK DIGIFLAZZ
+  //
+  // PENTING:
+  // SYNC TIDAK MENGATUR MARGIN.
+  //
+  // Margin lama berdasarkan SKU akan dipertahankan.
+  // Produk baru mendapatkan margin Rp0.
   // =========================================================
 
   Future<void> syncProducts() async {
@@ -155,6 +193,29 @@ class _AdminDashboardScreenState
     });
 
     try {
+      // =====================================================
+      // SIMPAN MARGIN LAMA BERDASARKAN SKU
+      // AGAR SYNC TIDAK MENGHAPUS HARGA JUAL ADMIN
+      // =====================================================
+
+      final Map<String, double> marginLama = {};
+
+      for (final product in products) {
+        final sku =
+            product['sku']?.toString() ?? '';
+
+        if (sku.isNotEmpty) {
+          marginLama[sku] =
+              _parseDouble(
+            product['margin'],
+          );
+        }
+      }
+
+      // =====================================================
+      // AMBIL PRICE LIST DIGIFLAZZ
+      // =====================================================
+
       final result =
           await DigiflazzService.priceList();
 
@@ -165,44 +226,58 @@ class _AdminDashboardScreenState
             hasilProduk = [];
 
         for (final item in data) {
+          final sku =
+              item['buyer_sku_code']
+                      ?.toString() ??
+                  '-';
+
           final price =
-              double.tryParse(
-                    item['price']
-                            ?.toString() ??
-                        '0',
-                  ) ??
-                  0;
+              _parseDouble(
+            item['price'],
+          );
+
+          // =================================================
+          // PERTAHANKAN MARGIN YANG SUDAH DIATUR ADMIN
+          //
+          // Produk baru = Rp0
+          // =================================================
+
+          final double margin =
+              marginLama[sku] ?? 0;
 
           hasilProduk.add({
-            'sku':
-                item['buyer_sku_code']
-                    ?.toString() ??
-                    '-',
+            'sku': sku,
 
             'name':
                 item['product_name']
-                    ?.toString() ??
+                        ?.toString() ??
                     '-',
 
             'category':
                 item['category']
-                    ?.toString() ??
+                        ?.toString() ??
                     '-',
 
             'brand':
                 item['brand']
-                    ?.toString() ??
+                        ?.toString() ??
                     '-',
 
+            // HARGA MODAL DARI DIGIFLAZZ
             'cost': price,
 
-            'margin': 1000,
+            // MARGIN SEPENUHNYA DARI ADMIN
+            'margin': margin,
 
+            // STATUS PRODUK
             'active': true,
           });
         }
 
-        // Update tampilan lokal
+        // =====================================================
+        // UPDATE TAMPILAN LOKAL
+        // =====================================================
+
         if (!mounted) return;
 
         setState(() {
@@ -223,7 +298,12 @@ class _AdminDashboardScreenState
         if (!mounted) return;
 
         message(
-          '${hasilProduk.length} produk berhasil disinkronkan & tersimpan! ✅',
+          '${hasilProduk.length} produk berhasil disinkronkan. '
+          'Margin admin tetap dipertahankan. ✅',
+        );
+      } else {
+        throw Exception(
+          'Format data price-list Digiflazz tidak valid.',
         );
       }
     } catch (e) {
@@ -262,7 +342,8 @@ class _AdminDashboardScreenState
       if (!mounted) return;
 
       message(
-        'Status: ${result['data']?['status'] ?? 'Tidak diketahui'}',
+        'Status: '
+        '${result['data']?['status'] ?? 'Tidak diketahui'}',
       );
     } catch (e) {
       addLog(
@@ -273,6 +354,97 @@ class _AdminDashboardScreenState
       if (mounted) {
         message(
           'Gagal cek transaksi.',
+        );
+      }
+    }
+  }
+
+  // =========================================================
+  // UPDATE MARGIN
+  // =========================================================
+
+  Future<void> updateMargin(
+    Map<String, dynamic> product,
+    String value,
+  ) async {
+    final sku =
+        product['sku']?.toString() ?? '';
+
+    if (sku.isEmpty) {
+      message('SKU produk tidak ditemukan.');
+      return;
+    }
+
+    final double newMargin =
+        _parseDouble(value);
+
+    // Update tampilan langsung
+    setState(() {
+      product['margin'] = newMargin;
+    });
+
+    try {
+      await FirestoreService.updateMargin(
+        sku,
+        newMargin,
+      );
+
+      if (!mounted) return;
+
+      message(
+        'Margin ${rupiah(newMargin)} berhasil disimpan. ✅',
+      );
+    } catch (e) {
+      addLog(
+        'Firestore / update margin',
+        e.toString(),
+      );
+
+      if (mounted) {
+        message(
+          'Gagal menyimpan margin: $e',
+        );
+      }
+    }
+  }
+
+  // =========================================================
+  // UPDATE STATUS PRODUK
+  // =========================================================
+
+  Future<void> updateProductStatus(
+    Map<String, dynamic> product,
+    bool value,
+  ) async {
+    final sku =
+        product['sku']?.toString() ?? '';
+
+    setState(() {
+      product['active'] = value;
+    });
+
+    try {
+      await FirestoreService.updateProductActive(
+        sku,
+        value,
+      );
+
+      if (!mounted) return;
+
+      message(
+        value
+            ? 'Produk diaktifkan. ✅'
+            : 'Produk dinonaktifkan. ⛔',
+      );
+    } catch (e) {
+      addLog(
+        'Firestore / update product active',
+        e.toString(),
+      );
+
+      if (mounted) {
+        message(
+          'Gagal menyimpan status produk: $e',
         );
       }
     }
@@ -302,6 +474,10 @@ class _AdminDashboardScreenState
       );
     });
   }
+
+  // =========================================================
+  // MESSAGE
+  // =========================================================
 
   void message(String text) {
     if (!mounted) return;
@@ -352,9 +528,7 @@ class _AdminDashboardScreenState
             CircleAvatar(
               child: Icon(icon),
             ),
-
             const SizedBox(width: 12),
-
             Expanded(
               child: Column(
                 crossAxisAlignment:
@@ -367,9 +541,7 @@ class _AdminDashboardScreenState
                           Colors.grey[600],
                     ),
                   ),
-
                   const SizedBox(height: 5),
-
                   Text(
                     value,
                     style:
@@ -452,7 +624,9 @@ class _AdminDashboardScreenState
                 children: [
                   stat(
                     'Saldo Digiflazz',
-                    rupiah(saldo),
+                    loadingSaldo
+                        ? 'Memuat...'
+                        : rupiah(saldo),
                     Icons
                         .account_balance_wallet,
                   ),
@@ -507,6 +681,16 @@ class _AdminDashboardScreenState
                     lastSync == null
                         ? 'Belum sync dari sesi ini'
                         : 'Terakhir sync: $lastSync',
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  const Text(
+                    'Sync hanya memperbarui harga modal dari Digiflazz. '
+                    'Margin tetap mengikuti pengaturan admin.',
+                    style: TextStyle(
+                      color: Colors.grey,
+                    ),
                   ),
 
                   const SizedBox(height: 15),
@@ -616,6 +800,15 @@ class _AdminDashboardScreenState
             ],
           ),
 
+          const SizedBox(height: 8),
+
+          const Text(
+            'Atur margin sendiri. Harga jual = harga modal Digiflazz + margin.',
+            style: TextStyle(
+              color: Colors.grey,
+            ),
+          ),
+
           const SizedBox(height: 15),
 
           Expanded(
@@ -632,8 +825,10 @@ class _AdminDashboardScreenState
                       : SingleChildScrollView(
                           scrollDirection:
                               Axis.horizontal,
-                          child: SingleChildScrollView(
-                            child: DataTable(
+                          child:
+                              SingleChildScrollView(
+                            child:
+                                DataTable(
                               columns:
                                   const [
                                 DataColumn(
@@ -654,7 +849,7 @@ class _AdminDashboardScreenState
                                 ),
                                 DataColumn(
                                   label:
-                                      Text('Margin'),
+                                      Text('Margin Admin'),
                                 ),
                                 DataColumn(
                                   label:
@@ -668,27 +863,28 @@ class _AdminDashboardScreenState
                               rows:
                                   products.map(
                                 (product) {
-                                  final cost =
-                                      double.tryParse(
-                                            product['cost']
-                                                    ?.toString() ??
-                                                '0',
-                                          ) ??
-                                          0;
+                                  final double cost =
+                                      _parseDouble(
+                                    product[
+                                        'cost'],
+                                  );
 
-                                  final margin =
-                                      double.tryParse(
-                                            product['margin']
-                                                    ?.toString() ??
-                                                '0',
-                                          ) ??
-                                          0;
+                                  final double margin =
+                                      _parseDouble(
+                                    product[
+                                        'margin'],
+                                  );
+
+                                  final double hargaJual =
+                                      cost +
+                                          margin;
 
                                   return DataRow(
                                     cells: [
                                       DataCell(
                                         Text(
-                                          product['sku']
+                                          product[
+                                                      'sku']
                                                   ?.toString() ??
                                               '-',
                                         ),
@@ -699,7 +895,8 @@ class _AdminDashboardScreenState
                                           width: 200,
                                           child:
                                               Text(
-                                            product['name']
+                                            product[
+                                                        'name']
                                                     ?.toString() ??
                                                 '-',
                                           ),
@@ -708,11 +905,16 @@ class _AdminDashboardScreenState
 
                                       DataCell(
                                         Text(
-                                          product['category']
+                                          product[
+                                                      'category']
                                                   ?.toString() ??
                                               '-',
                                         ),
                                       ),
+
+                                      // ===================================
+                                      // HARGA MODAL
+                                      // ===================================
 
                                       DataCell(
                                         Text(
@@ -723,103 +925,81 @@ class _AdminDashboardScreenState
                                       ),
 
                                       // ===================================
-                                      // EDIT MARGIN + FIRESTORE
+                                      // MARGIN ADMIN
                                       // ===================================
 
                                       DataCell(
                                         SizedBox(
-                                          width: 110,
+                                          width: 130,
                                           child:
                                               TextFormField(
+                                            key:
+                                                ValueKey(
+                                              '${product['sku']}_${margin}',
+                                            ),
                                             initialValue:
                                                 margin.toStringAsFixed(
                                               0,
                                             ),
                                             keyboardType:
-                                                TextInputType.number,
+                                                const TextInputType.numberWithOptions(
+                                              decimal:
+                                                  false,
+                                            ),
                                             onFieldSubmitted:
                                                 (value) async {
-                                              final newMargin =
-                                                  double.tryParse(
-                                                        value,
-                                                      ) ??
-                                                      0;
-
-                                              setState(
-                                                () {
-                                                  product[
-                                                          'margin'] =
-                                                      newMargin;
-                                                },
+                                              await updateMargin(
+                                                product,
+                                                value,
                                               );
-
-                                              try {
-                                                await FirestoreService
-                                                    .updateMargin(
-                                                  product[
-                                                      'sku'],
-                                                  newMargin,
-                                                );
-
-                                                if (mounted) {
-                                                  ScaffoldMessenger
-                                                      .of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content:
-                                                          Text(
-                                                        'Harga diperbarui & tersimpan! ✅',
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                              } catch (e) {
-                                                addLog(
-                                                  'Firestore / update margin',
-                                                  e.toString(),
-                                                );
-
-                                                if (mounted) {
-                                                  message(
-                                                    'Gagal menyimpan margin: $e',
-                                                  );
-                                                }
-                                              }
                                             },
                                             decoration:
                                                 const InputDecoration(
                                               prefixText:
                                                   'Rp ',
+                                              hintText:
+                                                  'Margin',
                                               isDense:
                                                   true,
+                                              border:
+                                                  OutlineInputBorder(),
                                             ),
                                           ),
                                         ),
                                       ),
 
+                                      // ===================================
+                                      // HARGA JUAL
+                                      // ===================================
+
                                       DataCell(
                                         Text(
                                           rupiah(
-                                            cost +
-                                                margin,
+                                            hargaJual,
+                                          ),
+                                          style:
+                                              const TextStyle(
+                                            fontWeight:
+                                                FontWeight.bold,
                                           ),
                                         ),
                                       ),
 
+                                      // ===================================
+                                      // STATUS AKTIF
+                                      // ===================================
+
                                       DataCell(
                                         Switch(
                                           value:
-                                              product['active'] ==
+                                              product[
+                                                      'active'] ==
                                                   true,
                                           onChanged:
                                               (value) {
-                                            setState(
-                                              () {
-                                                product[
-                                                        'active'] =
-                                                    value;
-                                              },
+                                            updateProductStatus(
+                                              product,
+                                              value,
                                             );
                                           },
                                         ),
@@ -928,8 +1108,9 @@ class _AdminDashboardScreenState
                         DataCell(
                           Text(
                             rupiah(
-                              trx['amount']
-                                  as num,
+                              _parseDouble(
+                                trx['amount'],
+                              ),
                             ),
                           ),
                         ),
@@ -985,9 +1166,7 @@ class _AdminDashboardScreenState
               subtitle:
                   Text(log['error']),
               trailing:
-                  Text(
-                log['time'],
-              ),
+                  Text(log['time']),
             ),
           ),
         ),
@@ -1406,30 +1585,6 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // NAV ITEM
-  // =========================================================
-
-  Widget navItem(
-    IconData icon,
-    String title,
-    int index,
-  ) {
-    return ListTile(
-      selected:
-          menu == index,
-      leading:
-          Icon(icon),
-      title:
-          Text(title),
-      onTap: () {
-        setState(() {
-          menu = index;
-        });
-      },
-    );
-  }
-
-  // =========================================================
   // MENU ADMIN
   // =========================================================
 
@@ -1630,7 +1785,7 @@ class _AdminDashboardScreenState
             constraints.maxWidth < 700;
 
         // ===================================================
-        // HP
+        // MOBILE
         // ===================================================
 
         if (isMobile) {
@@ -1665,7 +1820,7 @@ class _AdminDashboardScreenState
         }
 
         // ===================================================
-        // PC / LAPTOP
+        // DESKTOP / LAPTOP
         // ===================================================
 
         return Scaffold(
