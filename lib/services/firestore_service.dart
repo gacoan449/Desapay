@@ -8,164 +8,62 @@ class FirestoreService {
   // PRODUK
   // =========================================================
 
-  /// Simpan / update produk dari hasil Sync Digiflazz.
+  /// Simpan / update banyak produk sekaligus.
   ///
   /// PENTING:
-  /// - cost = harga modal dari Digiflazz
-  /// - margin = setting ADMIN, bukan dari Digiflazz
-  /// - margin lama TIDAK ditimpa saat sync
-  /// - active lama TIDAK ditimpa saat sync
+  /// Margin yang dikirim dari Admin tetap disimpan.
+  /// Tidak ada kalkulasi margin otomatis di sini.
   static Future<void> simpanProduk(
     List<Map<String, dynamic>> produkList,
   ) async {
-    if (produkList.isEmpty) return;
-
     // Firestore batch maksimal 500 operasi.
-    // Kita pecah agar aman jika produk Digiflazz >500.
+    // Kita pecah menjadi beberapa batch agar aman.
     const int batchLimit = 450;
 
-    // Ambil semua SKU yang akan disinkronkan.
-    final List<String> skuList = produkList
-        .map(
-          (produk) =>
-              produk['sku']?.toString() ?? '',
-        )
-        .where(
-          (sku) => sku.isNotEmpty,
-        )
-        .toList();
-
-    // =======================================================
-    // AMBIL DATA PRODUK LAMA
-    // =======================================================
-
-    final Map<String, Map<String, dynamic>> produkLama = {};
-
-    // Firestore whereIn memiliki batas jumlah item.
-    // Kita pecah menjadi kelompok kecil.
-    const int whereInLimit = 30;
-
-    for (int i = 0; i < skuList.length; i += whereInLimit) {
-      final int end =
-          (i + whereInLimit < skuList.length)
-              ? i + whereInLimit
-              : skuList.length;
-
-      final List<String> kelompok =
-          skuList.sublist(i, end);
-
-      final snapshot = await db
-          .collection('products')
-          .where(
-            'sku',
-            whereIn: kelompok,
-          )
-          .get();
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-
-        final sku =
-            data['sku']?.toString() ?? doc.id;
-
-        produkLama[sku] = data;
-      }
-    }
-
-    // =======================================================
-    // SIMPAN PRODUK
-    // =======================================================
-
-    for (
-      int start = 0;
-      start < produkList.length;
-      start += batchLimit
-    ) {
-      final int end =
-          (start + batchLimit < produkList.length)
-              ? start + batchLimit
-              : produkList.length;
-
+    for (int start = 0;
+        start < produkList.length;
+        start += batchLimit) {
       final batch = db.batch();
 
-      final kelompokProduk =
+      final int end =
+          (start + batchLimit > produkList.length)
+              ? produkList.length
+              : start + batchLimit;
+
+      final chunk =
           produkList.sublist(start, end);
 
-      for (final produk in kelompokProduk) {
-        final String sku =
+      for (final produk in chunk) {
+        final sku =
             produk['sku']?.toString() ?? '';
 
-        if (sku.isEmpty) continue;
+        if (sku.isEmpty || sku == '-') {
+          continue;
+        }
 
         final docRef =
             db.collection('products').doc(sku);
-
-        final oldData =
-            produkLama[sku];
-
-        // ===================================================
-        // MARGIN
-        // ===================================================
-        //
-        // Jika produk sudah ada:
-        // gunakan margin lama dari Admin Dashboard.
-        //
-        // Jika produk baru:
-        // margin = 0.
-        //
-        final num marginLama =
-            oldData?['margin'] is num
-                ? oldData!['margin'] as num
-                : num.tryParse(
-                      oldData?['margin']
-                              ?.toString() ??
-                          '',
-                    ) ??
-                    0;
-
-        // ===================================================
-        // ACTIVE
-        // ===================================================
-        //
-        // Jika produk sudah ada:
-        // pertahankan status aktif/nonaktif dari admin.
-        //
-        // Jika produk baru:
-        // aktif otomatis.
-        //
-        final bool activeLama =
-            oldData?['active'] is bool
-                ? oldData!['active'] as bool
-                : true;
 
         batch.set(
           docRef,
           {
             'sku': sku,
-
             'name':
-                produk['name']?.toString() ??
-                    '-',
-
+                produk['name']?.toString() ?? '-',
             'category':
-                produk['category']?.toString() ??
-                    '-',
-
+                produk['category']?.toString() ?? '-',
             'brand':
-                produk['brand']?.toString() ??
-                    '-',
+                produk['brand']?.toString() ?? '-',
 
-            // HARGA MODAL ASLI DIGIFLAZZ
-            'cost':
-                produk['cost'] ?? 0,
+            // Harga modal dari Digiflazz
+            'cost': produk['cost'] ?? 0,
 
-            // MARGIN HANYA DARI ADMIN
-            'margin':
-                marginLama,
+            // Margin ADMIN.
+            // Tidak pernah dihitung otomatis.
+            'margin': produk['margin'] ?? 0,
 
-            // STATUS ADMIN
             'active':
-                activeLama,
+                produk['active'] == true,
 
             'updatedAt':
                 FieldValue.serverTimestamp(),
@@ -178,66 +76,92 @@ class FirestoreService {
     }
 
     print(
-      '✅ ${produkList.length} produk berhasil disimpan.',
+      '✅ ${produkList.length} produk tersimpan di Firestore',
     );
   }
 
-  // =========================================================
-  // AMBIL SEMUA PRODUK
-  // =========================================================
-
+  /// Ambil SEMUA produk, termasuk produk nonaktif.
+  ///
+  /// Ini penting untuk Admin Dashboard agar margin produk
+  /// nonaktif tidak hilang ketika melakukan sync.
   static Future<List<Map<String, dynamic>>>
       ambilSemuaProduk() async {
-    final snapshot = await db
-        .collection('products')
-        .where(
-          'active',
-          isEqualTo: true,
-        )
-        .orderBy('category')
-        .get();
+    final snapshot =
+        await db.collection('products').get();
 
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
+    final products =
+        snapshot.docs.map((doc) {
+      final data =
+          Map<String, dynamic>.from(doc.data());
 
-      return {
-        ...data,
+      // Pastikan SKU selalu tersedia.
+      data['sku'] ??= doc.id;
 
-        // Pastikan SKU selalu tersedia
-        'sku':
-            data['sku']?.toString() ??
-                doc.id,
-      };
+      // Pastikan field margin ada.
+      data['margin'] ??= 0;
+
+      // Pastikan active boolean.
+      data['active'] =
+          data['active'] == true;
+
+      return data;
     }).toList();
+
+    // Urutkan berdasarkan kategori lalu nama.
+    products.sort((a, b) {
+      final categoryA =
+          a['category']?.toString() ?? '';
+
+      final categoryB =
+          b['category']?.toString() ?? '';
+
+      final categoryCompare =
+          categoryA.compareTo(categoryB);
+
+      if (categoryCompare != 0) {
+        return categoryCompare;
+      }
+
+      final nameA =
+          a['name']?.toString() ?? '';
+
+      final nameB =
+          b['name']?.toString() ?? '';
+
+      return nameA.compareTo(nameB);
+    });
+
+    return products;
   }
 
-  // =========================================================
-  // AMBIL SEMUA PRODUK TERMASUK NONAKTIF
-  // =========================================================
-
+  /// Ambil produk aktif saja.
   static Future<List<Map<String, dynamic>>>
-      ambilSemuaProdukAdmin() async {
-    final snapshot = await db
-        .collection('products')
-        .orderBy('category')
-        .get();
+      ambilProdukAktif() async {
+    final snapshot =
+        await db
+            .collection('products')
+            .where(
+              'active',
+              isEqualTo: true,
+            )
+            .get();
 
     return snapshot.docs.map((doc) {
-      final data = doc.data();
+      final data =
+          Map<String, dynamic>.from(
+        doc.data(),
+      );
 
-      return {
-        ...data,
-        'sku':
-            data['sku']?.toString() ??
-                doc.id,
-      };
+      data['sku'] ??= doc.id;
+      data['margin'] ??= 0;
+      data['active'] =
+          data['active'] == true;
+
+      return data;
     }).toList();
   }
 
-  // =========================================================
-  // UPDATE MARGIN DARI ADMIN DASHBOARD
-  // =========================================================
-
+  /// Update margin produk.
   static Future<void> updateMargin(
     String sku,
     num margin,
@@ -264,15 +188,11 @@ class FirestoreService {
     });
 
     print(
-      '✅ Margin diperbarui: '
-      '$sku = $margin',
+      '✅ Margin diperbarui: $sku = $margin',
     );
   }
 
-  // =========================================================
-  // UPDATE STATUS PRODUK
-  // =========================================================
-
+  /// Update status aktif/nonaktif produk.
   static Future<void> updateProductActive(
     String sku,
     bool active,
@@ -299,93 +219,6 @@ class FirestoreService {
   }
 
   // =========================================================
-  // UPDATE PRODUK ADMIN
-  // =========================================================
-
-  static Future<void> updateProduk({
-    required String sku,
-    String? name,
-    String? category,
-    String? brand,
-    num? cost,
-    num? margin,
-    bool? active,
-  }) async {
-    if (sku.trim().isEmpty) {
-      throw Exception(
-        'SKU produk tidak boleh kosong.',
-      );
-    }
-
-    final Map<String, dynamic> data = {
-      'updatedAt':
-          FieldValue.serverTimestamp(),
-    };
-
-    if (name != null) {
-      data['name'] = name;
-    }
-
-    if (category != null) {
-      data['category'] = category;
-    }
-
-    if (brand != null) {
-      data['brand'] = brand;
-    }
-
-    if (cost != null) {
-      data['cost'] = cost;
-    }
-
-    if (margin != null) {
-      if (margin < 0) {
-        throw Exception(
-          'Margin tidak boleh negatif.',
-        );
-      }
-
-      data['margin'] = margin;
-    }
-
-    if (active != null) {
-      data['active'] = active;
-    }
-
-    await db
-        .collection('products')
-        .doc(sku)
-        .update(data);
-
-    print(
-      '✅ Produk diperbarui: $sku',
-    );
-  }
-
-  // =========================================================
-  // HAPUS PRODUK
-  // =========================================================
-
-  static Future<void> hapusProduk(
-    String sku,
-  ) async {
-    if (sku.trim().isEmpty) {
-      throw Exception(
-        'SKU produk tidak boleh kosong.',
-      );
-    }
-
-    await db
-        .collection('products')
-        .doc(sku)
-        .delete();
-
-    print(
-      '🗑️ Produk dihapus: $sku',
-    );
-  }
-
-  // =========================================================
   // TRANSAKSI
   // =========================================================
 
@@ -397,7 +230,7 @@ class FirestoreService {
 
     if (refId.isEmpty) {
       throw Exception(
-        'ref_id transaksi wajib diisi.',
+        'ref_id transaksi tidak boleh kosong.',
       );
     }
 
@@ -414,81 +247,22 @@ class FirestoreService {
     );
   }
 
-  // =========================================================
-  // AMBIL SEMUA TRANSAKSI
-  // =========================================================
-
   static Future<List<Map<String, dynamic>>>
       ambilSemuaTransaksi() async {
-    final snapshot = await db
-        .collection('transactions')
-        .orderBy(
-          'createdAt',
-          descending: true,
-        )
-        .limit(100)
-        .get();
+    final snapshot =
+        await db
+            .collection('transactions')
+            .orderBy(
+              'createdAt',
+              descending: true,
+            )
+            .limit(100)
+            .get();
 
     return snapshot.docs.map((doc) {
-      final data = doc.data();
-
-      return {
-        ...data,
-        'ref_id':
-            data['ref_id']?.toString() ??
-                doc.id,
-      };
-    }).toList();
-  }
-
-  // =========================================================
-  // AMBIL TRANSAKSI BERDASARKAN REF ID
-  // =========================================================
-
-  static Future<Map<String, dynamic>?>
-      ambilTransaksi(
-    String refId,
-  ) async {
-    final doc = await db
-        .collection('transactions')
-        .doc(refId)
-        .get();
-
-    if (!doc.exists) {
-      return null;
-    }
-
-    return {
-      ...doc.data()!,
-      'ref_id': refId,
-    };
-  }
-
-  // =========================================================
-  // UPDATE STATUS TRANSAKSI
-  // =========================================================
-
-  static Future<void> updateStatusTransaksi(
-    String refId,
-    String status,
-  ) async {
-    if (refId.trim().isEmpty) {
-      throw Exception(
-        'ref_id tidak boleh kosong.',
+      return Map<String, dynamic>.from(
+        doc.data(),
       );
-    }
-
-    await db
-        .collection('transactions')
-        .doc(refId)
-        .update({
-      'status': status,
-      'updatedAt':
-          FieldValue.serverTimestamp(),
-    });
-
-    print(
-      '✅ Status transaksi $refId = $status',
-    );
+    }).toList();
   }
 }
