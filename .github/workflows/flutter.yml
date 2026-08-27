@@ -40,42 +40,51 @@ jobs:
             flutter create . --platforms=android
           fi
 
-      # Langkah 2: Ambil seluruh dependensi awal aplikasi
+      # Langkah 2: Intervensi pubspec.yaml untuk mengatasi konflik Firebase secara instan
+      - name: Align Firebase Package Versions
+        run: |
+          echo "Menyesuaikan versi Firebase di pubspec.yaml agar ramah compiler..."
+          # Mengganti versi Firebase ke versi stabil yang tidak merusak classpath checker-qual
+          sed -i 's/firebase_core: ^4.14.0/firebase_core: ^3.6.0/g' pubspec.yaml
+          sed -i 's/firebase_auth: ^6.6.0/firebase_auth: ^5.3.1/g' pubspec.yaml
+          sed -i 's/cloud_firestore: ^6.9.0/cloud_firestore: ^5.4.4/g' pubspec.yaml
+          sed -i 's/firebase_storage: ^13.5.0/firebase_storage: ^12.3.2/g' pubspec.yaml
+
+      # Langkah 3: Ambil seluruh dependensi aplikasi yang sudah diselaraskan
       - name: Install Dependencies
         run: flutter pub get
 
-      # Langkah 3: Generate launcher icons (di-skip dengan aman jika belum ada asetnya)
+      # Langkah 4: Generate launcher icons (otomatis dilewati jika aset belum siap)
       - name: Generate Launcher Icons
         run: dart run flutter_launcher_icons || echo "Launcher icons dilewati"
 
-      # Langkah 4: Bersihkan sisa build lama
+      # Langkah 5: Bersihkan sisa build lama
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA (FIX): Paksa Resolusi checker-qual versi lebih tinggi di root build.gradle
-      - name: Force Fix Firebase Kotlin Checker Qual via Root Build.gradle
+      # ✅ LANGKAH EMAS: Kunci paksa resolusi compiler Kotlin agar tidak crash di modul eksternal
+      - name: Force Global Gradle Resolution Strategy
         run: |
-          # 1. Ambil ulang pub dependencies pasca clean
+          # Ambil kembali dependensi pasca clean
           flutter pub get
           
           BUILD_GRADLE="android/build.gradle"
-          
           if [ -f "$BUILD_GRADLE" ]; then
-            echo "Menyuntikkan strategi resolusi checker-qual versi mutakhir ke root build.gradle..."
+            echo "Menyuntikkan aturan pengikat untuk menepis error checker-qual..."
             cat << 'EOF' >> "$BUILD_GRADLE"
 
-          allprojects {
-              configurations.all {
-                  resolutionStrategy {
-                      // Memaksa versi checker-qual yang kompatibel dengan anotasi Kotlin compiler modern
-                      forcedModules = ['org.checkerframework:checker-qual:3.48.3']
-                  }
-              }
-          }
+            allprojects {
+                configurations.all {
+                    resolutionStrategy {
+                        // Memaksa Gradle menggunakan versi checker-qual stabil di tingkat root kompilasi
+                        forcedModules = ['org.checkerframework:checker-qual:3.42.0']
+                    }
+                }
+            }
           EOF
           fi
 
-      # Langkah 5: Proses Kompilasi Akhir Menjadi APK Rilis
+      # Langkah 6: Proses Kompilasi Akhir Menjadi APK Rilis
       - name: Build APK Final
         run: flutter build apk --release --no-tree-shake-icons
 
