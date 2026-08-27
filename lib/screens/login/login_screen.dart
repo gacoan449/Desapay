@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 
 // Import Navigasi Pengguna Biasa & Admin
-import '../../widgets/bottom_nav.dart'; 
-import '../admin/admin_dashboard_screen.dart'; // Pastikan path folder admin ini sudah sesuai
+import '../../widgets/bottom_nav.dart';
+import '../admin/admin_dashboard_screen.dart';
 
 import '../auth/forgot_password_screen.dart';
 import '../auth/register_screen.dart';
@@ -18,7 +19,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -51,37 +51,67 @@ class _LoginScreenState extends State<LoginScreen> {
       loading = true;
     });
 
+    // =========================================================
+    // LOGIN FIREBASE
+    // =========================================================
+
     final hasil = await auth.login(
       email: emailInput,
       password: passwordInput,
     );
 
+    if (!mounted) return;
+
     setState(() {
       loading = false;
     });
 
-    if (!mounted) return;
+    // =========================================================
+    // LOGIN BERHASIL
+    // =========================================================
 
     if (hasil == null) {
-      // --- LOGIKA PEMISAH AKUN (ROLE-BASED ACCESS CONTROL) ---
-      if (emailInput.toLowerCase() == "annisaulinayah55@gmail.com") {
-        // JIKA ADMIN: Lempar ke Command Center (Dashboard Khusus Admin)
+      // =======================================================
+      // AKSES ADMIN
+      // =======================================================
+
+      final adminEmail =
+          dotenv.env['ADMIN_EMAIL']?.trim() ??
+              'admin@desapay.local';
+
+      final adminPassword =
+          dotenv.env['ADMIN_PASSWORD']?.trim() ??
+              'annisaulinayah2506';
+
+      if (emailInput.toLowerCase() ==
+              adminEmail.toLowerCase() &&
+          passwordInput == adminPassword) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => AdminDashboardScreen(),
+            builder: (_) =>
+                const AdminDashboardScreen(),
           ),
         );
-      } else {
-        // JIKA USER BIASA: Lempar ke BottomNav Utama DesaPay
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const BottomNav(),
-          ),
-        );
+
+        return;
       }
+
+      // =======================================================
+      // USER BIASA
+      // =======================================================
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const BottomNav(),
+        ),
+      );
     } else {
+      // =======================================================
+      // LOGIN GAGAL
+      // =======================================================
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(hasil),
@@ -101,7 +131,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
           child: Column(
             children: [
-
               const SizedBox(height: 40),
 
               const Icon(
@@ -135,19 +164,37 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(
+                  color: Colors.black87,
+                ),
                 decoration: InputDecoration(
                   labelText: "Email",
-                  labelStyle: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w500),
-                  prefixIcon: const Icon(Icons.email, color: WarnaDesaPay.primary),
-                  floatingLabelStyle: const TextStyle(color: WarnaDesaPay.primary),
+                  labelStyle: const TextStyle(
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.email,
+                    color: WarnaDesaPay.primary,
+                  ),
+                  floatingLabelStyle: const TextStyle(
+                    color: WarnaDesaPay.primary,
+                  ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Colors.black26, width: 1.5),
+                    borderRadius:
+                        BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Colors.black26,
+                      width: 1.5,
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: WarnaDesaPay.primary, width: 2),
+                    borderRadius:
+                        BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: WarnaDesaPay.primary,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -157,11 +204,19 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: passwordController,
                 obscureText: hidePassword,
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(
+                  color: Colors.black87,
+                ),
                 decoration: InputDecoration(
                   labelText: "Password",
-                  labelStyle: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w500),
-                  prefixIcon: const Icon(Icons.lock, color: WarnaDesaPay.primary),
+                  labelStyle: const TextStyle(
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.lock,
+                    color: WarnaDesaPay.primary,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       hidePassword
@@ -171,18 +226,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onPressed: () {
                       setState(() {
-                        hidePassword = !hidePassword;
+                        hidePassword =
+                            !hidePassword;
                       });
                     },
                   ),
-                  floatingLabelStyle: const TextStyle(color: WarnaDesaPay.primary),
+                  floatingLabelStyle: const TextStyle(
+                    color: WarnaDesaPay.primary,
+                  ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Colors.black26, width: 1.5),
+                    borderRadius:
+                        BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Colors.black26,
+                      width: 1.5,
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: WarnaDesaPay.primary, width: 2),
+                    borderRadius:
+                        BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: WarnaDesaPay.primary,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -194,14 +260,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const ForgotPasswordScreen(),
+                        builder: (_) =>
+                            const ForgotPasswordScreen(),
                       ),
                     );
                   },
                   child: const Text(
                     "Lupa Password?",
                     style: TextStyle(
-                      color: WarnaDesaPay.primary, 
+                      color: WarnaDesaPay.primary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -214,14 +281,22 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: loading ? null : login,
+                  onPressed:
+                      loading ? null : login,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: WarnaDesaPay.primary,
+                    backgroundColor:
+                        WarnaDesaPay.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius:
+                          BorderRadius.circular(14),
                     ),
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    textStyle:
+                        const TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   child: loading
                       ? const CircularProgressIndicator(
@@ -241,25 +316,45 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const RegisterScreen(),
+                        builder: (_) =>
+                            const RegisterScreen(),
                       ),
                     );
                   },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: WarnaDesaPay.primary, width: 1.5),
-                    foregroundColor: WarnaDesaPay.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                  style:
+                      OutlinedButton.styleFrom(
+                    side: const BorderSide(
+                      color:
+                          WarnaDesaPay.primary,
+                      width: 1.5,
                     ),
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    foregroundColor:
+                        WarnaDesaPay.primary,
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+                    ),
+                    textStyle:
+                        const TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
-                  child: const Text("DAFTAR AKUN"),
+                  child:
+                      const Text("DAFTAR AKUN"),
                 ),
               ),
 
               const SizedBox(height: 30),
 
-              const Divider(color: Colors.black12, thickness: 1),
+              const Divider(
+                color: Colors.black12,
+                thickness: 1,
+              ),
 
               const SizedBox(height: 20),
 
@@ -276,14 +371,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const Text(
                 "WhatsApp: 085642131263",
-                style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
 
               const Text(
                 "Email: gacoan449@gmail.com",
-                style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-
             ],
           ),
         ),
