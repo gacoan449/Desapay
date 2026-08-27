@@ -37,7 +37,7 @@ jobs:
           flutter --version
           dart --version
 
-      # Langkah 1: Buat folder android terlebih dahulu agar struktur dasar Gradle & Manifest terbentuk
+      # Langkah 1: Buat folder android bersih otomatis
       - name: Generate Android Platform Folder
         run: |
           if [ ! -d "android" ]; then
@@ -45,11 +45,30 @@ jobs:
             flutter create . --platforms=android
           fi
 
+      # ✅ LANGKAH BARU: Paksa naikkan versi Kotlin agar Firebase v6 terbaru mau di-compile
+      - name: Force Update Kotlin Version for Firebase
+        run: |
+          SETTINGS_GRADLE="android/settings.gradle"
+          BUILD_GRADLE="android/build.gradle"
+          
+          # Cek jika proyek menggunakan struktur settings.gradle baru (Flutter 3.x ke atas)
+          if [ -f "$SETTINGS_GRADLE" ]; then
+            echo "Mengubah versi Kotlin di settings.gradle..."
+            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' "$SETTINGS_GRADLE"
+          fi
+          
+          # Cek jika proyek menggunakan struktur build.gradle lama
+          if [ -f "$BUILD_GRADLE" ]; then
+            echo "Mengubah versi Kotlin di build.gradle..."
+            sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '1.9.24'/g" "$BUILD_GRADLE"
+            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "1.9.24"/g' "$BUILD_GRADLE"
+          fi
+
       # Langkah 2: Ambil semua library/dependencies dari pubspec.yaml
       - name: Install Dependencies
         run: flutter pub get
 
-      # Langkah 3: Generate launcher icons setelah folder android dipastikan siap dan terintegrasi
+      # Langkah 3: Generate launcher icons setelah folder android dipastikan siap
       - name: Generate Launcher Icons
         run: dart run flutter_launcher_icons
 
