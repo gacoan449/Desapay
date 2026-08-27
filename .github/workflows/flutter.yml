@@ -52,30 +52,38 @@ jobs:
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA: Suntik Resolusi via Root Gradle untuk Memaksa Versi checker-qual
-      - name: Force Fix Firebase Kotlin Compiler Issue
+      # ✅ LANGKAH UTAMA: Memperbaiki Ekstensi Flutter & Resolusi Firebase Kotlin Compiler Issue
+      - name: Force Fix Flutter Gradle Plugins & Firebase Compiler Issue
         run: |
           SETTINGS_GRADLE="android/settings.gradle"
           BUILD_GRADLE="android/build.gradle"
           
-          # 1. Paksa ganti versi Kotlin ke 2.0.20 di settings.gradle (Struktur Flutter Baru)
+          # 1. Pastikan Flutter Gradle Plugin terpasang dan teraplikasikan di settings.gradle agar terbaca oleh modul .kts (seperti android_file_picker)
           if [ -f "$SETTINGS_GRADLE" ]; then
-            echo "Mengubah versi Kotlin di settings.gradle..."
+            echo "Mengonfigurasi settings.gradle untuk mendukung subprojects modern..."
+            # Menolak error 'Extension with name flutter does not exist' dengan mendaftarkan plugin secara global
             sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "2.0.20"/' "$SETTINGS_GRADLE"
           fi
           
-          # 2. Paksa ganti versi Kotlin ke 2.0.20 di build.gradle (Struktur Flutter Lama)
+          # 2. Paksa ganti versi Kotlin ke 2.0.20 di build.gradle (Struktur Flutter Lama jika ada)
           if [ -f "$BUILD_GRADLE" ]; then
             echo "Mengubah versi Kotlin di build.gradle..."
             sed -i "s/ext.kotlin_version = '[^']*'/ext.kotlin_version = '2.0.20'/g" "$BUILD_GRADLE"
-            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = '2.0.20'/g' "$BUILD_GRADLE"
+            sed -i 's/ext.kotlin_version = "[^"]*"/ext.kotlin_version = "2.0.20"/g' "$BUILD_GRADLE"
           fi
           
-          # 3. SOLUSI FIX: Suntik strategi resolusi subprojects ke root build.gradle agar berdampak ke modul firebase_auth
+          # 3. Suntik strategi resolusi subprojects ke root build.gradle agar berdampak ke modul firebase_auth dan mendaftarkan classpath plugin flutter secara eksplisit
           echo "Menyuntikkan konfigurasi resolusi dependensi ke root build.gradle..."
           cat << 'EOF' >> "$BUILD_GRADLE"
 
           subprojects {
+              // Membantu Gradle mengenali plugin flutter di level sub-modul pihak ketiga (.kts)
+              buildscript {
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
               project.configurations.all {
                   resolutionStrategy {
                       forcedModules = ['org.checkerframework:checker-qual:3.43.0']
