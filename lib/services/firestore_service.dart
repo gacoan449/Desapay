@@ -23,6 +23,13 @@ class FirestoreService {
   // PRODUCTS
   // =========================================================
 
+  /// Simpan / update produk.
+  ///
+  /// PENTING:
+  /// - Margin yang sudah ada di Firestore TIDAK ditimpa jika
+  ///   data baru tidak mengirim margin.
+  /// - active juga dipertahankan jika tidak dikirim.
+  /// - isTest dipertahankan jika tidak dikirim.
   static Future<void> simpanProduk(
     List<Map<String, dynamic>> produkList,
   ) async {
@@ -37,21 +44,39 @@ class FirestoreService {
 
       for (final produk in produkList.sublist(start, end)) {
         final sku = produk['sku']?.toString() ?? '';
-        if (sku.isEmpty || sku == '-') continue;
+
+        if (sku.isEmpty || sku == '-') {
+          continue;
+        }
+
+        final data = <String, dynamic>{
+          'sku': sku,
+          'name': produk['name']?.toString() ?? '-',
+          'category': produk['category']?.toString() ?? '-',
+          'brand': produk['brand']?.toString() ?? '-',
+          'cost': produk['cost'] ?? 0,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        // Margin hanya ditulis jika memang dikirim.
+        // Ini mencegah sinkronisasi Digiflazz menghapus margin Admin.
+        if (produk.containsKey('margin')) {
+          data['margin'] = produk['margin'] ?? 0;
+        }
+
+        // active hanya ditulis jika memang dikirim.
+        if (produk.containsKey('active')) {
+          data['active'] = produk['active'] == true;
+        }
+
+        // isTest hanya ditulis jika memang dikirim.
+        if (produk.containsKey('isTest')) {
+          data['isTest'] = produk['isTest'] == true;
+        }
 
         batch.set(
           db.collection('products').doc(sku),
-          {
-            'sku': sku,
-            'name': produk['name']?.toString() ?? '-',
-            'category': produk['category']?.toString() ?? '-',
-            'brand': produk['brand']?.toString() ?? '-',
-            'cost': produk['cost'] ?? 0,
-            'margin': produk['margin'] ?? 0,
-            'active': produk['active'] == true,
-            'isTest': produk['isTest'] == true,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
+          data,
           SetOptions(merge: true),
         );
       }
@@ -60,6 +85,108 @@ class FirestoreService {
     }
   }
 
+  /// Ambil semua produk.
+  static Future<List<Map<String, dynamic>>>
+      ambilSemuaProduk() async {
+    final snap = await db.collection('products').get();
+
+    final result = snap.docs.map((doc) {
+      final d = Map<String, dynamic>.from(doc.data());
+
+      d['sku'] ??= doc.id;
+      d['name'] ??= '-';
+      d['category'] ??= '-';
+      d['brand'] ??= '-';
+      d['cost'] ??= 0;
+      d['margin'] ??= 0;
+      d['active'] = d['active'] == true;
+      d['isTest'] = d['isTest'] == true;
+
+      return d;
+    }).toList();
+
+    result.sort(
+      (a, b) => (a['category'] ?? '')
+          .toString()
+          .compareTo(
+            (b['category'] ?? '').toString(),
+          ),
+    );
+
+    return result;
+  }
+
+  /// Ambil hanya produk yang aktif.
+  ///
+  /// Digunakan oleh PPOB agar user hanya melihat produk aktif.
+  static Future<List<Map<String, dynamic>>>
+      ambilProdukAktif() async {
+    final snap = await db
+        .collection('products')
+        .where('active', isEqualTo: true)
+        .get();
+
+    final result = snap.docs.map((doc) {
+      final d = Map<String, dynamic>.from(doc.data());
+
+      d['sku'] ??= doc.id;
+      d['name'] ??= '-';
+      d['category'] ??= '-';
+      d['brand'] ??= '-';
+      d['cost'] ??= 0;
+      d['margin'] ??= 0;
+      d['active'] = true;
+      d['isTest'] = d['isTest'] == true;
+
+      return d;
+    }).toList();
+
+    result.sort(
+      (a, b) {
+        final categoryCompare = (a['category'] ?? '')
+            .toString()
+            .compareTo(
+              (b['category'] ?? '').toString(),
+            );
+
+        if (categoryCompare != 0) {
+          return categoryCompare;
+        }
+
+        return (a['name'] ?? '')
+            .toString()
+            .compareTo(
+              (b['name'] ?? '').toString(),
+            );
+      },
+    );
+
+    return result;
+  }
+
+  /// Update margin produk dari Admin.
+  static Future<void> updateMargin(
+    String sku,
+    num margin,
+  ) async {
+    await db.collection('products').doc(sku).update({
+      'margin': margin,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Aktif / nonaktifkan produk dari Admin.
+  static Future<void> updateProductActive(
+    String sku,
+    bool active,
+  ) async {
+    await db.collection('products').doc(sku).update({
+      'active': active,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Buat produk TEST.
   static Future<void> buatProdukTest() async {
     final data = [
       {
@@ -97,48 +224,6 @@ class FirestoreService {
     await simpanProduk(data);
   }
 
-  static Future<List<Map<String, dynamic>>>
-      ambilSemuaProduk() async {
-    final snap = await db.collection('products').get();
-
-    final result = snap.docs.map((doc) {
-      final d = Map<String, dynamic>.from(doc.data());
-      d['sku'] ??= doc.id;
-      d['margin'] ??= 0;
-      d['cost'] ??= 0;
-      d['active'] = d['active'] == true;
-      d['isTest'] = d['isTest'] == true;
-      return d;
-    }).toList();
-
-    result.sort((a, b) =>
-        (a['category'] ?? '').toString().compareTo(
-              (b['category'] ?? '').toString(),
-            ));
-
-    return result;
-  }
-
-  static Future<void> updateMargin(
-    String sku,
-    num margin,
-  ) async {
-    await db.collection('products').doc(sku).update({
-      'margin': margin,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  static Future<void> updateProductActive(
-    String sku,
-    bool active,
-  ) async {
-    await db.collection('products').doc(sku).update({
-      'active': active,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
   // =========================================================
   // TRANSACTIONS
   // =========================================================
@@ -147,7 +232,10 @@ class FirestoreService {
     Map<String, dynamic> trx,
   ) async {
     final ref = trx['ref_id']?.toString() ?? '';
-    if (ref.isEmpty) throw Exception('ref_id kosong');
+
+    if (ref.isEmpty) {
+      throw Exception('ref_id kosong');
+    }
 
     await db.collection('transactions').doc(ref).set({
       ...trx,
@@ -235,10 +323,12 @@ class FirestoreService {
 
     return snap.docs.map((d) {
       final x = Map<String, dynamic>.from(d.data());
+
       x['id'] = d.id;
       x['balance'] ??= 0;
       x['kycStatus'] ??= 'BELUM';
       x['status'] ??= 'Aktif';
+
       return x;
     }).toList();
   }
@@ -258,7 +348,11 @@ class FirestoreService {
       }
 
       final data = snap.data() ?? {};
-      final before = (data['balance'] ?? 0) as num;
+
+      final before = data['balance'] is num
+          ? data['balance'] as num
+          : 0;
+
       final after = before + amount;
 
       if (after < 0) {
@@ -452,9 +546,18 @@ class FirestoreService {
 
     final snap = await db
         .collection('transactions')
-        .where('createdAt', isGreaterThanOrEqualTo: start)
-        .where('createdAt', isLessThan: end)
-        .where('status', isEqualTo: 'SUCCESS')
+        .where(
+          'createdAt',
+          isGreaterThanOrEqualTo: start,
+        )
+        .where(
+          'createdAt',
+          isLessThan: end,
+        )
+        .where(
+          'status',
+          isEqualTo: 'SUCCESS',
+        )
         .get();
 
     double total = 0;
@@ -464,11 +567,11 @@ class FirestoreService {
 
       final margin = data['margin'] is num
           ? (data['margin'] as num).toDouble()
-          : 0;
+          : 0.0;
 
       final biaya = data['fee'] is num
           ? (data['fee'] as num).toDouble()
-          : 0;
+          : 0.0;
 
       total += margin - biaya;
     }
