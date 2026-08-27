@@ -32,7 +32,7 @@ jobs:
           channel: stable
           cache: true
 
-      # Langkah 1: Buat folder android bersih otomatis dari nol
+      # Langkah 1: Buat folder android dari nol jika tidak ada
       - name: Generate Android Platform Folder
         run: |
           if [ ! -d "android" ]; then
@@ -40,71 +40,48 @@ jobs:
             flutter create . --platforms=android
           fi
 
-      # Langkah 2: Ambil semua library/dependencies awal dari pubspec.yaml
+      # Langkah 2: Ambil seluruh dependensi awal aplikasi
       - name: Install Dependencies
         run: flutter pub get
 
-      # Langkah 3: Generate launcher icons setelah folder android dipastikan siap
+      # Langkah 3: Generate launcher icons (di-skip dengan aman jika belum ada asetnya)
       - name: Generate Launcher Icons
-        run: dart run flutter_launcher_icons || echo "Launcher icons skip jika tidak dikonfigurasi"
+        run: dart run flutter_launcher_icons || echo "Launcher icons dilewati"
 
-      # Langkah 4: Jalankan Pembersihan Sebelum Injeksi Gradle Modern
+      # Langkah 4: Bersihkan sisa build lama
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH UTAMA: Suntik Skrip Perbaikan Global ke settings.gradle & build.gradle
-      - name: Force Fix Flutter Gradle Plugins & Firebase Compiler Issue
+      # ✅ LANGKAH UTAMA (FIX): Daftarkan Ekstensi Flutter & Atasi Konflik Firebase Compiler
+      - name: Initialize Flutter Gradle Infrastructure & Fix Dependencies
         run: |
-          SETTINGS_GRADLE="android/settings.gradle"
-          BUILD_GRADLE="android/build.gradle"
-          
-          # 1. Ubah settings.gradle agar meng-apply Kotlin 2.0.20 secara global
-          if [ -f "$SETTINGS_GRADLE" ]; then
-            echo "Mengonfigurasi settings.gradle..."
-            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "2.0.20"/' "$SETTINGS_GRADLE"
-          fi
-          
-          # 2. SOLUSI FIX 'Extension with name flutter does not exist':
-          # Kita memaksa root build.gradle untuk meng-apply plugin Flutter secara eksplisit ke tingkat root 
-          # agar terekspos ke subprojects modern berbasis Kotlin DSL (.kts) seperti android_file_picker.
-          echo "Menyuntikkan perbaikan plugin global ke root build.gradle..."
-          
-          # Bersihkan total build.gradle bawaan dan ganti dengan struktur kokoh yang kompatibel dengan subprojects .kts
-          cat << 'EOF' > "$BUILD_GRADLE"
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          // Atasi kegagalan pembacaan ekstensi flutter pada plugin .kts eksternal
-          subprojects {
-              project.afterEvaluate {
-                  if (project.plugins.hasPlugin("com.android.library") || project.plugins.hasPlugin("com.android.application")) {
-                      project.configurations.all {
-                          resolutionStrategy {
-                              // Paksa perbaikan konflik Firebase Auth Kotlin Compiler
-                              forcedModules = ['org.checkerframework:checker-qual:3.43.0']
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
-
-      # Langkah 5: Ambil ulang dependensi dan langsung kompilasi rilis tanpa men-clean lagi
-      - name: Build APK Final
-        run: |
+          # 1. Ambil ulang pub dependencies pasca clean
           flutter pub get
-          flutter build apk --release --no-tree-shake-icons
+          
+          # 2. SOLUSI UTAMA EROR EXTENSION FLUTTER:
+          # Memaksa Flutter mengevaluasi dan mendaftarkan Plugin internalnya secara global ke Gradle local cache.
+          # Ini otomatis memperbaiki error 'Extension with name flutter does not exist' pada plugin .kts modern.
+          flutter assemble
+          
+          # 3. SOLUSI FIX FIREBASE: Suntik resolusi strategi checker-qual ke root build.gradle secara terpusat
+          BUILD_GRADLE="android/build.gradle"
+          if [ -f "$BUILD_GRADLE" ]; then
+            echo "Menyuntikkan pemaksaan versi checker-qual yang ramah Firebase ke subprojects..."
+            cat << 'EOF' >> "$BUILD_GRADLE"
+            
+            subprojects {
+                project.configurations.all {
+                    resolutionStrategy {
+                        forcedModules = ['org.checkerframework:checker-qual:3.43.0']
+                    }
+                }
+            }
+          EOF
+          fi
+
+      # Langkah 5: Proses Kompilasi Akhir Menjadi APK Rilis
+      - name: Build APK Final
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Cek hasil APK
         run: |
