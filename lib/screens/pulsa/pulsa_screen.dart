@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
 
@@ -51,16 +52,12 @@ class _CustomBounceState extends State<CustomBounce>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) {
-        _controller.forward();
-      },
+      onTapDown: (_) => _controller.forward(),
       onTapUp: (_) {
         _controller.reverse();
         widget.onTap();
       },
-      onTapCancel: () {
-        _controller.reverse();
-      },
+      onTapCancel: () => _controller.reverse(),
       child: ScaleTransition(
         scale: _scale,
         child: widget.child,
@@ -77,11 +74,11 @@ class PulsaScreen extends StatefulWidget {
 }
 
 class _PulsaScreenState extends State<PulsaScreen> {
-  final TextEditingController nomorController =
-      TextEditingController();
+  final TextEditingController nomorController = TextEditingController();
 
-  final FirebaseFirestore _db =
-      FirebaseFirestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   List<Map<String, dynamic>> _daftarPulsaReguler = [];
 
@@ -91,6 +88,12 @@ class _PulsaScreenState extends State<PulsaScreen> {
   String _operatorTerdeteksi = "";
 
   Map<String, dynamic>? _produkTerpilih;
+
+  // =========================================================
+  // USER
+  // =========================================================
+
+  String? get _uid => _auth.currentUser?.uid;
 
   // =========================================================
   // DISPOSE
@@ -113,7 +116,6 @@ class _PulsaScreenState extends State<PulsaScreen> {
         _daftarPulsaReguler = [];
         _produkTerpilih = null;
       });
-
       return;
     }
 
@@ -224,7 +226,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
   }
 
   // =========================================================
-  // AMBIL PRODUK DARI FIRESTORE
+  // PRODUK
   // =========================================================
 
   Future<void> _ambilProdukPulsaDariFirestore(
@@ -237,67 +239,41 @@ class _PulsaScreenState extends State<PulsaScreen> {
     try {
       final snapshot = await _db
           .collection('products')
-          .where(
-            'active',
-            isEqualTo: true,
-          )
+          .where('active', isEqualTo: true)
           .get();
 
       final List<Map<String, dynamic>> hasil = [];
 
       for (final doc in snapshot.docs) {
-        final data =
-            Map<String, dynamic>.from(doc.data());
+        final data = Map<String, dynamic>.from(doc.data());
 
         final category =
-            (data['category'] ?? '')
-                .toString()
-                .toUpperCase();
+            (data['category'] ?? '').toString().toUpperCase();
 
         final brand =
-            (data['brand'] ?? '')
-                .toString()
-                .toUpperCase();
+            (data['brand'] ?? '').toString().toUpperCase();
 
-        // Hanya pulsa reguler
         if (category != 'PULSA') {
           continue;
         }
 
-        // Operator
         if (!brand.contains(operator)) {
           continue;
         }
 
-        // SKU
         data['sku'] ??= doc.id;
 
-        // Modal dari admin
-        final num cost =
-            _toNum(data['cost']);
+        final num cost = _toNum(data['cost']);
+        final num margin = _toNum(data['margin']);
 
-        // Margin dari admin
-        final num margin =
-            _toNum(data['margin']);
-
-        // Harga jual
-        final num hargaJual =
-            cost + margin;
-
-        data['sellingPrice'] =
-            hargaJual;
+        data['sellingPrice'] = cost + margin;
 
         hasil.add(data);
       }
 
       hasil.sort((a, b) {
-        final hargaA =
-            _toNum(a['sellingPrice']);
-
-        final hargaB =
-            _toNum(b['sellingPrice']);
-
-        return hargaA.compareTo(hargaB);
+        return _toNum(a['sellingPrice'])
+            .compareTo(_toNum(b['sellingPrice']));
       });
 
       if (!mounted) return;
@@ -314,26 +290,16 @@ class _PulsaScreenState extends State<PulsaScreen> {
         _sedangMemuat = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Gagal mengambil produk: $e",
-          ),
-          backgroundColor:
-              WarnaDesaPay.danger,
-        ),
-      );
+      _tampilkanPesan("Gagal mengambil produk: $e");
     }
   }
 
   // =========================================================
-  // KONVERSI ANGKA
+  // ANGKA
   // =========================================================
 
   num _toNum(dynamic value) {
-    if (value is num) {
-      return value;
-    }
+    if (value is num) return value;
 
     return num.tryParse(
           value?.toString() ?? '',
@@ -342,22 +308,53 @@ class _PulsaScreenState extends State<PulsaScreen> {
   }
 
   String rupiah(dynamic angka) {
-    final int value =
-        _toNum(angka).toInt();
+    final int value = _toNum(angka).toInt();
 
-    return value
-        .toString()
-        .replaceAllMapped(
-          RegExp(
-            r'(\d{1,3})(?=(\d{3})+(?!\d))',
-          ),
-          (Match m) =>
-              '${m[1]}.',
+    return value.toString().replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]}.',
         );
   }
 
   // =========================================================
-  // BOTTOM SHEET INVOICE
+  // CEK SALDO USER
+  // =========================================================
+
+  Future<num?> _ambilSaldoUser() async {
+    if (_uid == null) {
+      _tampilkanPesan("Anda belum login.");
+      return null;
+    }
+
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(_uid)
+          .get();
+
+      if (!doc.exists) {
+        _tampilkanPesan("Data akun pengguna tidak ditemukan.");
+        return null;
+      }
+
+      final data = doc.data() ?? {};
+
+      // Mendukung beberapa kemungkinan nama field saldo.
+      final saldo = data['saldo'] ??
+          data['balance'] ??
+          data['saldoUtama'] ??
+          data['wallet'] ??
+          0;
+
+      return _toNum(saldo);
+    } catch (e) {
+      _tampilkanPesan("Gagal membaca saldo: $e");
+      return null;
+    }
+  }
+
+  // =========================================================
+  // INVOICE
   // =========================================================
 
   void _prosesBottomSheetInvoice(
@@ -368,10 +365,8 @@ class _PulsaScreenState extends State<PulsaScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(24),
         ),
       ),
@@ -382,29 +377,19 @@ class _PulsaScreenState extends State<PulsaScreen> {
             left: 24,
             right: 24,
             bottom:
-                MediaQuery.of(context)
-                        .viewInsets
-                        .bottom +
-                    24,
+                MediaQuery.of(context).viewInsets.bottom + 24,
           ),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
                   width: 40,
                   height: 5,
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.grey.shade300,
-                    borderRadius:
-                        BorderRadius.circular(
-                      10,
-                    ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
@@ -415,16 +400,13 @@ class _PulsaScreenState extends State<PulsaScreen> {
                 "Konfirmasi Pembayaran",
                 style: TextStyle(
                   fontSize: 18,
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
 
               const SizedBox(height: 16),
 
               const Divider(),
-
-              const SizedBox(height: 8),
 
               _buildInvoiceRow(
                 "Jenis Layanan",
@@ -433,9 +415,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
 
               _buildInvoiceRow(
                 "Produk",
-                produk['name']
-                        ?.toString() ??
-                    "-",
+                produk['name']?.toString() ?? "-",
               ),
 
               _buildInvoiceRow(
@@ -461,25 +441,21 @@ class _PulsaScreenState extends State<PulsaScreen> {
 
               Row(
                 mainAxisAlignment:
-                    MainAxisAlignment
-                        .spaceBetween,
+                    MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Total Pembayaran",
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight:
-                          FontWeight.w500,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
                     "Rp ${rupiah(produk['sellingPrice'])}",
                     style: TextStyle(
                       fontSize: 18,
-                      fontWeight:
-                          FontWeight.bold,
-                      color:
-                          WarnaDesaPay.primary,
+                      fontWeight: FontWeight.bold,
+                      color: WarnaDesaPay.primary,
                     ),
                   ),
                 ],
@@ -490,12 +466,10 @@ class _PulsaScreenState extends State<PulsaScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  style:
-                      ElevatedButton.styleFrom(
+                  style: ElevatedButton.styleFrom(
                     backgroundColor:
                         WarnaDesaPay.primary,
-                    foregroundColor:
-                        Colors.white,
+                    foregroundColor: Colors.white,
                     padding:
                         const EdgeInsets.symmetric(
                       vertical: 16,
@@ -503,29 +477,23 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     shape:
                         RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(
-                        14,
-                      ),
+                          BorderRadius.circular(14),
                     ),
                     elevation: 0,
                   ),
-                  onPressed:
-                      _sedangTransaksi
-                          ? null
-                          : () {
-                              Navigator.pop(
-                                context,
-                              );
+                  onPressed: _sedangTransaksi
+                      ? null
+                      : () async {
+                          Navigator.pop(context);
 
-                              _buatPermintaanTransaksi(
-                                produk,
-                              );
-                            },
+                          await _buatPermintaanTransaksi(
+                            produk,
+                          );
+                        },
                   child: const Text(
                     "Konfirmasi & Bayar",
                     style: TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
                   ),
@@ -539,25 +507,29 @@ class _PulsaScreenState extends State<PulsaScreen> {
   }
 
   // =========================================================
-  // BUAT TRANSAKSI KE FIRESTORE
+  // BUAT TRANSAKSI
   // =========================================================
 
   Future<void> _buatPermintaanTransaksi(
     Map<String, dynamic> produk,
   ) async {
-    if (_sedangTransaksi) {
+    if (_sedangTransaksi) return;
+
+    if (_uid == null) {
+      _tampilkanPesan("Anda belum login.");
       return;
     }
 
-    final nomor =
-        nomorController.text.trim();
+    final nomor = nomorController.text.trim();
 
-    final sku =
-        produk['sku']?.toString() ?? '';
+    final sku = produk['sku']?.toString() ?? '';
 
-    if (nomor.isEmpty) {
+    final harga =
+        _toNum(produk['sellingPrice']).toInt();
+
+    if (nomor.length < 10) {
       _tampilkanPesan(
-        "Nomor tujuan belum diisi.",
+        "Nomor HP tidak valid.",
       );
       return;
     }
@@ -569,33 +541,78 @@ class _PulsaScreenState extends State<PulsaScreen> {
       return;
     }
 
+    if (harga <= 0) {
+      _tampilkanPesan(
+        "Harga produk tidak valid.",
+      );
+      return;
+    }
+
     setState(() {
       _sedangTransaksi = true;
     });
 
-    // ID transaksi unik
-    final transaksiRef =
-        _db.collection('transaction_requests').doc();
-
-    final harga =
-        _toNum(
-      produk['sellingPrice'],
-    ).toInt();
-
     try {
+      // =====================================================
+      // CEK SALDO USER SEBELUM MEMBUAT REQUEST
+      // =====================================================
+
+      final userRef =
+          _db.collection('users').doc(_uid);
+
+      final userSnapshot =
+          await userRef.get();
+
+      if (!userSnapshot.exists) {
+        throw Exception(
+          "Data pengguna tidak ditemukan.",
+        );
+      }
+
+      final userData =
+          userSnapshot.data() ?? {};
+
+      final saldo = _toNum(
+        userData['saldo'] ??
+            userData['balance'] ??
+            userData['saldoUtama'] ??
+            userData['wallet'] ??
+            0,
+      );
+
+      if (saldo < harga) {
+        if (mounted) {
+          _tampilkanPesan(
+            "Saldo tidak cukup. Saldo: Rp ${rupiah(saldo)}",
+          );
+        }
+
+        setState(() {
+          _sedangTransaksi = false;
+        });
+
+        return;
+      }
+
+      // =====================================================
+      // TRANSAKSI
+      // =====================================================
+
+      final transaksiRef = _db
+          .collection('transaction_requests')
+          .doc();
+
       await transaksiRef.set({
-        'transactionId':
-            transaksiRef.id,
+        'transactionId': transaksiRef.id,
+        'uid': _uid,
 
         'type': 'PULSA',
-
         'category': 'PULSA',
 
         'sku': sku,
 
         'productName':
-            produk['name']?.toString() ??
-                '-',
+            produk['name']?.toString() ?? '-',
 
         'brand':
             produk['brand']?.toString() ??
@@ -608,10 +625,10 @@ class _PulsaScreenState extends State<PulsaScreen> {
 
         'amount': harga,
 
-        'status': 'WAITING',
-
         'paymentMethod':
             'SALDO_UTAMA',
+
+        'status': 'WAITING',
 
         'createdAt':
             FieldValue.serverTimestamp(),
@@ -644,7 +661,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
   }
 
   // =========================================================
-  // MONITOR STATUS TRANSAKSI
+  // MONITOR TRANSAKSI
   // =========================================================
 
   void _tampilkanDialogMenunggu(
@@ -658,21 +675,17 @@ class _PulsaScreenState extends State<PulsaScreen> {
         return StreamBuilder<
             DocumentSnapshot<Map<String, dynamic>>>(
           stream: _db
-              .collection(
-                'transaction_requests',
-              )
+              .collection('transaction_requests')
               .doc(transactionId)
               .snapshots(),
-
-          builder:
-              (context, snapshot) {
+          builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const AlertDialog(
-                title:
-                    Text("Memproses Transaksi"),
+                title: Text(
+                  "Memproses Transaksi",
+                ),
                 content: Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 16),
@@ -685,28 +698,18 @@ class _PulsaScreenState extends State<PulsaScreen> {
             }
 
             final data =
-                snapshot.data!.data() ??
-                    {};
+                snapshot.data?.data() ?? {};
 
             final status =
-                (data['status'] ??
-                        'WAITING')
+                (data['status'] ?? 'WAITING')
                     .toString()
                     .toUpperCase();
 
             final sn =
-                data['sn']
-                        ?.toString() ??
-                    '';
+                data['sn']?.toString() ?? '';
 
             final message =
-                data['message']
-                        ?.toString() ??
-                    '';
-
-            // =============================================
-            // MENUNGGU
-            // =============================================
+                data['message']?.toString() ?? '';
 
             if (status == 'WAITING' ||
                 status == 'PROCESSING' ||
@@ -730,10 +733,6 @@ class _PulsaScreenState extends State<PulsaScreen> {
               );
             }
 
-            // =============================================
-            // SUKSES
-            // =============================================
-
             if (status == 'SUCCESS' ||
                 status == 'SUKSES') {
               return AlertDialog(
@@ -749,11 +748,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
                       color: Colors.green,
                       size: 64,
                     ),
-
-                    const SizedBox(
-                      height: 16,
-                    ),
-
+                    const SizedBox(height: 16),
                     Text(
                       produk['name']
                               ?.toString() ??
@@ -761,19 +756,12 @@ class _PulsaScreenState extends State<PulsaScreen> {
                       textAlign:
                           TextAlign.center,
                     ),
-
-                    const SizedBox(
-                      height: 8,
-                    ),
-
+                    const SizedBox(height: 8),
                     Text(
                       "Nomor: ${nomorController.text}",
                     ),
-
                     if (sn.isNotEmpty) ...[
-                      const SizedBox(
-                        height: 8,
-                      ),
+                      const SizedBox(height: 8),
                       Text(
                         "SN: $sn",
                         textAlign:
@@ -792,12 +780,9 @@ class _PulsaScreenState extends State<PulsaScreen> {
                       nomorController.clear();
 
                       setState(() {
-                        _operatorTerdeteksi =
-                            "";
-                        _daftarPulsaReguler =
-                            [];
-                        _produkTerpilih =
-                            null;
+                        _operatorTerdeteksi = "";
+                        _daftarPulsaReguler = [];
+                        _produkTerpilih = null;
                       });
                     },
                     child:
@@ -806,10 +791,6 @@ class _PulsaScreenState extends State<PulsaScreen> {
                 ],
               );
             }
-
-            // =============================================
-            // GAGAL
-            // =============================================
 
             return AlertDialog(
               title:
@@ -823,11 +804,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     color: Colors.red,
                     size: 64,
                   ),
-
-                  const SizedBox(
-                    height: 16,
-                  ),
-
+                  const SizedBox(height: 16),
                   Text(
                     message.isNotEmpty
                         ? message
@@ -865,36 +842,27 @@ class _PulsaScreenState extends State<PulsaScreen> {
   ) {
     return Padding(
       padding:
-          const EdgeInsets.symmetric(
-        vertical: 6,
-      ),
+          const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment:
-            MainAxisAlignment
-                .spaceBetween,
+            MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: TextStyle(
-              color:
-                  Colors.grey.shade500,
+              color: Colors.grey.shade500,
               fontSize: 13,
             ),
           ),
-
           Expanded(
             child: Text(
               value,
-              style:
-                  const TextStyle(
-                fontWeight:
-                    FontWeight.w600,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
                 fontSize: 13,
-                color:
-                    Colors.black87,
+                color: Colors.black87,
               ),
-              textAlign:
-                  TextAlign.end,
+              textAlign: TextAlign.end,
             ),
           ),
         ],
@@ -906,9 +874,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
   // PESAN
   // =========================================================
 
-  void _tampilkanPesan(
-    String pesan,
-  ) {
+  void _tampilkanPesan(String pesan) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -926,9 +892,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
   // =========================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
           const Color(0xffF8FAFC),
@@ -939,16 +903,13 @@ class _PulsaScreenState extends State<PulsaScreen> {
             WarnaDesaPay.primary,
         foregroundColor:
             Colors.white,
-
         title: const Text(
           "Isi Ulang Pulsa",
           style: TextStyle(
-            fontWeight:
-                FontWeight.bold,
+            fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
-
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
@@ -963,19 +924,11 @@ class _PulsaScreenState extends State<PulsaScreen> {
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
-          // ===================================================
-          // INPUT NOMOR
-          // ===================================================
-
           Container(
             width: double.infinity,
             color: Colors.white,
-
             padding:
-                const EdgeInsets.all(
-              20,
-            ),
-
+                const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment:
                   CrossAxisAlignment.start,
@@ -984,79 +937,53 @@ class _PulsaScreenState extends State<PulsaScreen> {
                   "Nomor Handphone Tujuan",
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight:
-                        FontWeight.bold,
-                    color:
-                        Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 10,
-                ),
+                const SizedBox(height: 10),
 
                 TextField(
                   controller:
                       nomorController,
-
                   keyboardType:
                       TextInputType.phone,
-
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.black87,
+                  style: const TextStyle(
+                    color: Colors.black87,
                     fontSize: 16,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
-
-                  onChanged: (value) {
-                    _deteksiOperatorOtomatis(
-                      value,
-                    );
-                  },
-
+                  onChanged:
+                      _deteksiOperatorOtomatis,
                   decoration:
                       InputDecoration(
                     filled: true,
-
                     fillColor:
-                        const Color(
-                      0xFFF1F5F9,
-                    ),
-
+                        const Color(0xFFF1F5F9),
                     hintText:
                         "Contoh: 08xxxxxxxxxx",
-
                     prefixIcon:
                         Icon(
                       Icons
                           .phone_android_rounded,
                       color:
-                          WarnaDesaPay
-                              .primary,
+                          WarnaDesaPay.primary,
                     ),
-
                     suffixIcon:
-                        _operatorTerdeteksi
-                                .isEmpty
+                        _operatorTerdeteksi.isEmpty
                             ? null
                             : Padding(
                                 padding:
                                     const EdgeInsets.only(
                                   right: 12,
                                 ),
-                                child:
-                                    Center(
-                                  child:
-                                      Container(
+                                child: Center(
+                                  child: Container(
                                     padding:
                                         const EdgeInsets.symmetric(
-                                      horizontal:
-                                          10,
-                                      vertical:
-                                          6,
+                                      horizontal: 10,
+                                      vertical: 6,
                                     ),
                                     decoration:
                                         BoxDecoration(
@@ -1086,12 +1013,10 @@ class _PulsaScreenState extends State<PulsaScreen> {
                                   ),
                                 ),
                               ),
-
                     contentPadding:
                         const EdgeInsets.symmetric(
                       vertical: 16,
                     ),
-
                     border:
                         OutlineInputBorder(
                       borderRadius:
@@ -1107,12 +1032,9 @@ class _PulsaScreenState extends State<PulsaScreen> {
             ),
           ),
 
-          const SizedBox(
-            height: 12,
-          ),
+          const SizedBox(height: 12),
 
-          if (_operatorTerdeteksi
-              .isNotEmpty)
+          if (_operatorTerdeteksi.isNotEmpty)
             Padding(
               padding:
                   const EdgeInsets.symmetric(
@@ -1122,18 +1044,12 @@ class _PulsaScreenState extends State<PulsaScreen> {
               child: Text(
                 "Pilih Nominal Pulsa Reguler",
                 style: TextStyle(
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color:
-                      Colors.grey.shade800,
+                  color: Colors.grey.shade800,
                 ),
               ),
             ),
-
-          // ===================================================
-          // GRID PRODUK
-          // ===================================================
 
           Expanded(
             child: _sedangMemuat
@@ -1141,10 +1057,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     child:
                         CircularProgressIndicator(),
                   )
-                : nomorController
-                            .text
-                            .length <
-                        4
+                : nomorController.text.length < 4
                     ? Center(
                         child: Column(
                           mainAxisAlignment:
@@ -1164,12 +1077,9 @@ class _PulsaScreenState extends State<PulsaScreen> {
                             ),
                             const Text(
                               "Masukkan nomor HP untuk memuat katalog pulsa.",
-                              style:
-                                  TextStyle(
-                                color:
-                                    Colors.grey,
-                                fontSize:
-                                    13,
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
                               ),
                             ),
                           ],
@@ -1190,34 +1100,23 @@ class _PulsaScreenState extends State<PulsaScreen> {
                         : GridView.builder(
                             physics:
                                 const BouncingScrollPhysics(),
-
                             padding:
                                 const EdgeInsets.symmetric(
-                              horizontal:
-                                  20,
-                              vertical:
-                                  6,
+                              horizontal: 20,
+                              vertical: 6,
                             ),
-
                             itemCount:
                                 _daftarPulsaReguler
                                     .length,
-
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount:
-                                  2,
-                              crossAxisSpacing:
-                                  12,
-                              mainAxisSpacing:
-                                  12,
-                              childAspectRatio:
-                                  1.3,
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.3,
                             ),
-
                             itemBuilder:
-                                (context,
-                                    index) {
+                                (context, index) {
                               final produk =
                                   _daftarPulsaReguler[
                                       index];
@@ -1228,14 +1127,12 @@ class _PulsaScreenState extends State<PulsaScreen> {
                                     produk,
                                   );
                                 },
-
                                 child:
                                     Container(
                                   padding:
                                       const EdgeInsets.all(
                                     16,
                                   ),
-
                                   decoration:
                                       BoxDecoration(
                                     color:
@@ -1246,7 +1143,8 @@ class _PulsaScreenState extends State<PulsaScreen> {
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black
+                                        color: Colors
+                                            .black
                                             .withOpacity(
                                           0.02,
                                         ),
@@ -1260,26 +1158,23 @@ class _PulsaScreenState extends State<PulsaScreen> {
                                       ),
                                     ],
                                   ),
-
                                   child:
                                       Column(
                                     mainAxisAlignment:
                                         MainAxisAlignment
                                             .center,
-
                                     crossAxisAlignment:
                                         CrossAxisAlignment
                                             .start,
-
                                     children: [
                                       Text(
                                         produk['name']
                                                 ?.toString() ??
                                             "-",
-                                        maxLines:
-                                            2,
+                                        maxLines: 2,
                                         overflow:
-                                            TextOverflow.ellipsis,
+                                            TextOverflow
+                                                .ellipsis,
                                         style:
                                             const TextStyle(
                                           color:
@@ -1290,17 +1185,17 @@ class _PulsaScreenState extends State<PulsaScreen> {
                                               13,
                                         ),
                                       ),
-
                                       const Spacer(),
-
                                       Text(
                                         "Rp ${rupiah(produk['sellingPrice'])}",
                                         style:
                                             TextStyle(
                                           color:
-                                              WarnaDesaPay.primary,
+                                              WarnaDesaPay
+                                                  .primary,
                                           fontWeight:
-                                              FontWeight.w900,
+                                              FontWeight
+                                                  .w900,
                                           fontSize:
                                               16,
                                         ),
