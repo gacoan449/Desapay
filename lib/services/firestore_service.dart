@@ -116,9 +116,9 @@ class FirestoreService {
     return result;
   }
 
-  /// Ambil hanya produk yang aktif.
+  /// Ambil hanya produk yang aktif DAN BUKAN produk tes.
   ///
-  /// Digunakan oleh PPOB agar user hanya melihat produk aktif.
+  /// Digunakan oleh PPOB agar user hanya melihat produk aktif untuk produksi.
   static Future<List<Map<String, dynamic>>>
       ambilProdukAktif() async {
     final snap = await db
@@ -139,7 +139,10 @@ class FirestoreService {
       d['isTest'] = d['isTest'] == true;
 
       return d;
-    }).toList();
+    })
+    // FILTER TAMBAHAN: Membuang produk tes agar tidak muncul di aplikasi user
+    .where((produk) => produk['isTest'] == false) 
+    .toList();
 
     result.sort(
       (a, b) {
@@ -186,7 +189,10 @@ class FirestoreService {
     });
   }
 
-  /// Buat produk TEST.
+  /// Buat produk TEST - (DINONAKTIFKAN UNTUK PRODUKSI)
+  /// Karena sistem sudah siap pakai, pembuatan produk tes dimatikan
+  /// untuk mencegah data dummy masuk ke database production.
+  /* 
   static Future<void> buatProdukTest() async {
     final data = [
       {
@@ -199,30 +205,11 @@ class FirestoreService {
         'active': true,
         'isTest': true,
       },
-      {
-        'sku': 'TEST-DATA-0',
-        'name': 'Paket Data TEST Rp0',
-        'category': 'DATA',
-        'brand': 'TEST',
-        'cost': 0,
-        'margin': 0,
-        'active': true,
-        'isTest': true,
-      },
-      {
-        'sku': 'TEST-PLN-0',
-        'name': 'PLN TEST Rp0',
-        'category': 'PLN',
-        'brand': 'TEST',
-        'cost': 0,
-        'margin': 0,
-        'active': true,
-        'isTest': true,
-      },
+      // ... data lainnya
     ];
-
     await simpanProduk(data);
   }
+  */
 
   // =========================================================
   // TRANSACTIONS
@@ -586,8 +573,33 @@ class FirestoreService {
   }
 
   // =========================================================
-  // HAPUS TRANSAKSI TEST
+  // HAPUS DATA TEST (UNTUK PRODUCTION)
   // =========================================================
+
+  /// Hapus seluruh produk tes dari Firestore.
+  /// Panggil fungsi ini sekali dari sisi admin/backend saat masa rilis.
+  static Future<void> hapusSemuaProdukTest() async {
+    final snap = await db
+        .collection('products')
+        .where('isTest', isEqualTo: true)
+        .get();
+
+    const limit = 450;
+
+    for (int start = 0; start < snap.docs.length; start += limit) {
+      final batch = db.batch();
+
+      final end = start + limit > snap.docs.length
+          ? snap.docs.length
+          : start + limit;
+
+      for (final doc in snap.docs.sublist(start, end)) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+    }
+  }
 
   static Future<void> hapusSemuaTransaksiTest() async {
     final snap = await db
