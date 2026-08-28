@@ -235,7 +235,7 @@ class _AdminDashboardScreenState
                 Icons.error,
               ),
               _card(
-                'TEST Rp0',
+                'TEST Sisa',
                 '$test',
                 Icons.science,
               ),
@@ -382,20 +382,42 @@ class _AdminDashboardScreenState
                 ),
               ),
               ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () async {
-                  await FirestoreService.buatProdukTest();
+                  // Tambahan Fitur Konfirmasi Hapus Produk Tes
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Bersihkan Produk TEST?'),
+                      content: const Text('Ini akan menghapus seluruh data produk TEST dari database untuk persiapan produksi.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Batal'),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Ya, Hapus'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm != true) return;
+
+                  await FirestoreService.hapusSemuaProdukTest();
                   await loadProducts();
 
                   if (!mounted) return;
 
-                  _msg(
-                    'Produk TEST Rp0 berhasil dibuat.',
-                  );
+                  _msg('Seluruh produk TEST berhasil dibersihkan.');
                 },
-                icon: const Icon(Icons.science),
-                label: const Text(
-                  'Tambah Produk TEST',
-                ),
+                icon: const Icon(Icons.delete_sweep),
+                label: const Text('Bersihkan Produk TEST'),
               ),
             ],
           ),
@@ -1063,16 +1085,42 @@ class _AdminDashboardScreenState
               ),
             ),
             ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
               onPressed: () async {
-                await FirestoreService.ujiCobaTransaksi();
+                // Tambahan Fitur Konfirmasi Hapus Transaksi Tes
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Bersihkan Transaksi TEST?'),
+                    content: const Text('Ini akan menghapus seluruh data riwayat transaksi TEST dari database.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Batal'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Ya, Hapus'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm != true) return;
+
+                await FirestoreService.hapusSemuaTransaksiTest();
                 await loadTransactions();
 
                 if (!mounted) return;
 
-                _msg('Transaksi TEST Rp0 masuk.');
+                _msg('Riwayat transaksi TEST berhasil dibersihkan.');
               },
-              icon: const Icon(Icons.science),
-              label: const Text('TEST Rp0'),
+              icon: const Icon(Icons.delete_sweep),
+              label: const Text('Bersihkan Transaksi TEST'),
             ),
           ],
         ),
