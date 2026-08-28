@@ -1,0 +1,191 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // HELPER
+    // ============================================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn()
+        && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.role == "admin";
+    }
+
+
+    // ============================================================
+    // USERS
+    // ============================================================
+
+    match /users/{uid} {
+
+      // User hanya boleh membaca data dirinya sendiri.
+      // Admin boleh membaca semua.
+      allow read: if isOwner(uid) || isAdmin();
+
+
+      // ==========================================================
+      // CREATE
+      // ==========================================================
+
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.saldo == 0
+        && request.resource.data.poin == 0
+        && request.resource.data.member == "Silver";
+
+
+      // ==========================================================
+      // UPDATE
+      // ==========================================================
+
+      allow update: if isAdmin()
+
+        || (
+          isOwner(uid)
+
+          // User TIDAK boleh mengubah field finansial / keamanan.
+          && !request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasAny([
+                "saldo",
+                "poin",
+                "member",
+                "role",
+                "uid",
+                "securityUpdatedAt"
+              ])
+        );
+
+
+      // User tidak boleh menghapus akun melalui Firestore.
+      allow delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // MUTASI SALDO
+    // ============================================================
+
+    match /mutasi_saldo/{mutasiId} {
+
+      // User hanya dapat membaca mutasinya sendiri.
+      allow read: if signedIn()
+        && resource.data.uid == request.auth.uid;
+
+      // Admin boleh membaca semua.
+      allow read: if isAdmin();
+
+      // TIDAK BOLEH dibuat/diubah/dihapus dari aplikasi Flutter.
+      // Hanya Firebase Admin SDK / Cloud Functions.
+      allow create, update, delete: if false;
+    }
+
+
+    // ============================================================
+    // TOP UP TRANSACTIONS
+    // ============================================================
+
+    match /topup_transactions/{transactionId} {
+
+      // User hanya boleh membaca transaksi miliknya.
+      allow read: if signedIn()
+        && resource.data.uid == request.auth.uid;
+
+      // Admin boleh membaca semua.
+      allow read: if isAdmin();
+
+      // Client TIDAK boleh membuat transaksi finansial langsung.
+      // Pembuatan transaksi sebaiknya melalui backend.
+      allow create, update, delete: if false;
+    }
+
+
+    // ============================================================
+    // TRANSACTIONS / RIWAYAT PPOB
+    // ============================================================
+
+    match /transactions/{transactionId} {
+
+      allow read: if signedIn()
+        && resource.data.uid == request.auth.uid;
+
+      allow read: if isAdmin();
+
+      // Jangan izinkan client memanipulasi transaksi.
+      allow create, update, delete: if false;
+    }
+
+
+    // ============================================================
+    // KYC
+    // ============================================================
+
+    match /kyc/{uid} {
+
+      allow read: if isOwner(uid) || isAdmin();
+
+      // User boleh membuat pengajuan KYC miliknya.
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid;
+
+      // User boleh mengubah data pengajuan selama belum diverifikasi admin.
+      allow update: if isAdmin()
+        || (
+          isOwner(uid)
+          && resource.data.status == "PENDING"
+          && request.resource.data.status == "PENDING"
+        );
+
+      // User tidak boleh menghapus KYC.
+      allow delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // PROMO
+    // ============================================================
+
+    match /promos/{promoId} {
+
+      allow read: if signedIn();
+
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // SETTINGS
+    // ============================================================
+
+    match /settings/{settingId} {
+
+      allow read: if signedIn();
+
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // DEFAULT DENY
+    // ============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
