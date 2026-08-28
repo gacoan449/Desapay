@@ -3,51 +3,50 @@
 const crypto = require("crypto");
 
 const { onRequest } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
-
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
 const db = admin.firestore();
 
-/*
-|--------------------------------------------------------------------------
-| KONFIGURASI
-|--------------------------------------------------------------------------
-|
-| JANGAN taruh Private Key TriPay di Flutter.
-|
-| Set secret menggunakan:
-|
-| firebase functions:secrets:set TRIPAY_PRIVATE_KEY
-|
-*/
-
-const { defineSecret } = require("firebase-functions/params");
-
 const TRIPAY_PRIVATE_KEY = defineSecret("TRIPAY_PRIVATE_KEY");
 
 /*
 |--------------------------------------------------------------------------
-| HELPER
+| KONSTANTA
 |--------------------------------------------------------------------------
 */
 
-function jsonResponse(res, statusCode, data) {
-  res.status(statusCode).json(data);
+const REGION = "asia-southeast2";
+
+const ALLOWED_STATUS = new Set([
+  "PAID",
+  "UNPAID",
+  "EXPIRED",
+  "FAILED",
+]);
+
+const BALANCE_FIELD = "balance";
+
+/*
+|--------------------------------------------------------------------------
+| RESPONSE
+|--------------------------------------------------------------------------
+*/
+
+function sendJson(res, statusCode, data) {
+  return res.status(statusCode).json(data);
 }
 
 /*
 |--------------------------------------------------------------------------
-| HMAC SHA256
+| HMAC SHA256 CALLBACK
 |--------------------------------------------------------------------------
-|
-| Callback TriPay harus diverifikasi menggunakan raw body.
-|
 */
 
-function generateCallbackSignature(rawBody, privateKey) {
+function generateSignature(rawBody, privateKey) {
   return crypto
     .createHmac("sha256", privateKey)
     .update(rawBody, "utf8")
@@ -56,16 +55,52 @@ function generateCallbackSignature(rawBody, privateKey) {
 
 /*
 |--------------------------------------------------------------------------
-| CONSTANT
+| CONSTANT TIME SIGNATURE CHECK
 |--------------------------------------------------------------------------
 */
 
-const ALLOWED_STATUS = new Set([
-  "PAID",
-  "UNPAID",
-  "EXPIRED",
-  "FAILED"
-]);
+function verifySignature(rawBody, receivedSignature, privateKey) {
+  if (!rawBody || !receivedSignature || !privateKey) {
+    return false;
+  }
+
+  try {
+    const expected = generateSignature(rawBody, privateKey);
+
+    const expectedBuffer = Buffer.from(expected, "hex");
+    const receivedBuffer = Buffer.from(
+      receivedSignature.trim().toLowerCase(),
+      "hex"
+    );
+
+    if (expectedBuffer.length !== receivedBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(
+      expectedBuffer,
+      receivedBuffer
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| INTEGER AMAN
+|--------------------------------------------------------------------------
+*/
+
+function toSafeInteger(value) {
+  const number = Number(value);
+
+  if (!Number.isSafeInteger(number)) {
+    return null;
+  }
+
+  return number;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -76,40 +111,42 @@ const ALLOWED_STATUS = new Set([
 |
 | https://asia-southeast2-PROJECT_ID.cloudfunctions.net/tripayCallback
 |
+|--------------------------------------------------------------------------
 */
 
 exports.tripayCallback = onRequest(
   {
-    region: "asia-southeast2",
+    region: REGION,
     secrets: [TRIPAY_PRIVATE_KEY],
     cors: false,
     timeoutSeconds: 30,
-    memory: "256MiB"
+    memory: "256MiB",
   },
+
   async (req, res) => {
     /*
     |--------------------------------------------------------------------------
-    | HANYA POST
+    | 1. HANYA POST
     |--------------------------------------------------------------------------
     */
 
     if (req.method !== "POST") {
-      return jsonResponse(res, 405, {
+      return sendJson(res, 405, {
         success: false,
-        message: "Method Not Allowed"
+        message: "Method Not Allowed",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | AMBIL RAW BODY
+    | 2. RAW BODY
     |--------------------------------------------------------------------------
     |
-    | Signature harus dihitung dari JSON mentah.
+    | WAJIB menggunakan raw body untuk verifikasi signature.
     |
     */
 
-    let rawBody;
+    let rawBody = "";
 
     if (Buffer.isBuffer(req.rawBody)) {
       rawBody = req.rawBody.toString("utf8");
@@ -119,78 +156,82 @@ exports.tripayCallback = onRequest(
       rawBody = JSON.stringify(req.body || {});
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | AMBIL SIGNATURE
-    |--------------------------------------------------------------------------
-    */
+    if (!rawBody.trim()) {
+      logger.warn("Callback ditolak: body kosong.");
 
-    const remoteSignature =
-      req.headers["x-callback-signature"] ||
-      req.headers["x-callback-signature".toLowerCase()] ||
-      req.headers["signature"];
-
-    if (!remoteSignature || typeof remoteSignature !== "string") {
-      logger.warn("Callback ditolak: signature tidak ditemukan.");
-
-      return jsonResponse(res, 401, {
+      return sendJson(res, 400, {
         success: false,
-        message: "Invalid callback signature"
+        message: "Empty callback body.",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | VERIFIKASI SIGNATURE
+    | 3. AMBIL SIGNATURE
+    |--------------------------------------------------------------------------
+    */
+
+    const receivedSignature =
+      req.get("X-Callback-Signature") ||
+      req.get("x-callback-signature") ||
+      req.get("Signature");
+
+    if (!receivedSignature) {
+      logger.warn(
+        "Callback ditolak: X-Callback-Signature tidak ditemukan."
+      );
+
+      return sendJson(res, 401, {
+        success: false,
+        message: "Invalid callback signature.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 4. PRIVATE KEY DARI FIREBASE SECRET
     |--------------------------------------------------------------------------
     */
 
     const privateKey = TRIPAY_PRIVATE_KEY.value();
 
     if (!privateKey) {
-      logger.error("TRIPAY_PRIVATE_KEY belum dikonfigurasi.");
+      logger.error(
+        "TRIPAY_PRIVATE_KEY belum dikonfigurasi."
+      );
 
-      return jsonResponse(res, 500, {
+      return sendJson(res, 500, {
         success: false,
-        message: "Server payment gateway belum dikonfigurasi."
-      });
-    }
-
-    const expectedSignature = generateCallbackSignature(
-      rawBody.trim(),
-      privateKey
-    );
-
-    const receivedSignature = remoteSignature.trim().toLowerCase();
-
-    let signatureValid = false;
-
-    try {
-      const expectedBuffer = Buffer.from(expectedSignature, "hex");
-      const receivedBuffer = Buffer.from(receivedSignature, "hex");
-
-      if (expectedBuffer.length === receivedBuffer.length) {
-        signatureValid = crypto.timingSafeEqual(
-          expectedBuffer,
-          receivedBuffer
-        );
-      }
-    } catch (_) {
-      signatureValid = false;
-    }
-
-    if (!signatureValid) {
-      logger.warn("Callback ditolak: signature tidak valid.");
-
-      return jsonResponse(res, 401, {
-        success: false,
-        message: "Invalid callback signature"
+        message: "Payment gateway belum dikonfigurasi.",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | PARSE JSON
+    | 5. VERIFIKASI SIGNATURE
+    |--------------------------------------------------------------------------
+    */
+
+    const signatureValid = verifySignature(
+      rawBody,
+      receivedSignature,
+      privateKey
+    );
+
+    if (!signatureValid) {
+      logger.warn(
+        "Callback ditolak: signature tidak valid."
+      );
+
+      return sendJson(res, 401, {
+        success: false,
+        message: "Invalid callback signature.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 6. PARSE JSON
     |--------------------------------------------------------------------------
     */
 
@@ -198,65 +239,122 @@ exports.tripayCallback = onRequest(
 
     try {
       payload = JSON.parse(rawBody);
-    } catch (e) {
-      logger.error("Callback bukan JSON valid.", e);
+    } catch (error) {
+      logger.error(
+        "Callback JSON tidak valid.",
+        error
+      );
 
-      return jsonResponse(res, 400, {
+      return sendJson(res, 400, {
         success: false,
-        message: "Invalid JSON"
+        message: "Invalid JSON.",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | DATA CALLBACK
+    | 7. AMBIL DATA CALLBACK
     |--------------------------------------------------------------------------
     */
 
-    const reference = String(payload.reference || "").trim();
-    const merchantRef = String(payload.merchant_ref || "").trim();
-    const status = String(payload.status || "").trim().toUpperCase();
+    const reference =
+      String(payload.reference || "").trim();
 
-    const totalAmount = Number(payload.total_amount || 0);
-    const amountReceived = Number(payload.amount_received || 0);
+    const merchantRef =
+      String(payload.merchant_ref || "").trim();
 
-    if (!reference || !merchantRef || !status) {
-      logger.warn("Callback tidak lengkap.", payload);
+    const status =
+      String(payload.status || "")
+        .trim()
+        .toUpperCase();
 
-      return jsonResponse(res, 400, {
+    const totalAmount =
+      toSafeInteger(payload.total_amount);
+
+    const amountReceived =
+      toSafeInteger(payload.amount_received);
+
+    /*
+    |--------------------------------------------------------------------------
+    | 8. VALIDASI DATA WAJIB
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !reference ||
+      !merchantRef ||
+      !status
+    ) {
+      logger.warn(
+        "Callback ditolak: data tidak lengkap.",
+        {
+          reference,
+          merchantRef,
+          status,
+        }
+      );
+
+      return sendJson(res, 400, {
         success: false,
-        message: "Callback data tidak lengkap."
+        message: "Callback data tidak lengkap.",
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 9. VALIDASI STATUS
+    |--------------------------------------------------------------------------
+    */
 
     if (!ALLOWED_STATUS.has(status)) {
-      logger.warn(`Status callback tidak dikenal: ${status}`);
+      logger.warn(
+        `Status callback tidak dikenal: ${status}`
+      );
 
-      return jsonResponse(res, 400, {
+      return sendJson(res, 400, {
         success: false,
-        message: "Status transaksi tidak dikenal."
+        message: "Status transaksi tidak dikenal.",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | VALIDASI NOMINAL
+    | 10. VALIDASI NOMINAL
     |--------------------------------------------------------------------------
     */
 
-    if (totalAmount <= 0) {
-      return jsonResponse(res, 400, {
+    if (
+      totalAmount === null ||
+      totalAmount <= 0
+    ) {
+      logger.warn(
+        `Nominal callback tidak valid: ${merchantRef}`
+      );
+
+      return sendJson(res, 400, {
         success: false,
-        message: "Nominal transaksi tidak valid."
+        message: "Nominal transaksi tidak valid.",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | CARI TRANSAKSI
+    | 11. REFERENSI TRANSAKSI DESAPAY
     |--------------------------------------------------------------------------
     |
-    | Dokumen transaksi wajib sudah dibuat ketika invoice dibuat.
+    | Saat invoice dibuat, aplikasi/backend WAJIB membuat:
+    |
+    | topup_transactions/{merchantRef}
+    |
+    | Contoh:
+    |
+    | {
+    |   uid: "...",
+    |   merchantRef: "DP-123456",
+    |   reference: "...",
+    |   amount: 50000,
+    |   status: "UNPAID"
+    | }
     |
     */
 
@@ -265,234 +363,354 @@ exports.tripayCallback = onRequest(
       .doc(merchantRef);
 
     try {
-      const result = await db.runTransaction(async (transaction) => {
-        const transaksiSnap = await transaction.get(transaksiRef);
+      const result = await db.runTransaction(
+        async (transaction) => {
+          /*
+          |--------------------------------------------------------------------------
+          | 12. AMBIL TRANSAKSI TOP UP
+          |--------------------------------------------------------------------------
+          */
 
-        /*
-        |--------------------------------------------------------------------------
-        | TRANSAKSI TIDAK DITEMUKAN
-        |--------------------------------------------------------------------------
-        */
+          const transaksiSnap =
+            await transaction.get(transaksiRef);
 
-        if (!transaksiSnap.exists) {
-          throw new Error("TRANSACTION_NOT_FOUND");
-        }
+          if (!transaksiSnap.exists) {
+            throw new Error(
+              "TRANSACTION_NOT_FOUND"
+            );
+          }
 
-        const transaksi = transaksiSnap.data();
+          const transaksi =
+            transaksiSnap.data() || {};
 
-        const uid = String(transaksi.uid || "");
+          /*
+          |--------------------------------------------------------------------------
+          | 13. UID
+          |--------------------------------------------------------------------------
+          */
 
-        if (!uid) {
-          throw new Error("TRANSACTION_UID_MISSING");
-        }
+          const uid =
+            String(transaksi.uid || "").trim();
 
-        /*
-        |--------------------------------------------------------------------------
-        | ANTI DOUBLE CREDIT
-        |--------------------------------------------------------------------------
-        */
+          if (!uid) {
+            throw new Error(
+              "TRANSACTION_UID_MISSING"
+            );
+          }
 
-        const currentStatus =
-          String(transaksi.status || "UNPAID").toUpperCase();
+          /*
+          |--------------------------------------------------------------------------
+          | 14. VALIDASI MERCHANT REF
+          |--------------------------------------------------------------------------
+          */
 
-        if (currentStatus === "PAID") {
-          return {
-            alreadyPaid: true,
-            uid,
-            saldoAkhir: Number(transaksi.saldoAkhir || 0)
-          };
-        }
+          const savedMerchantRef =
+            String(
+              transaksi.merchantRef || ""
+            ).trim();
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDASI MERCHANT REF
-        |--------------------------------------------------------------------------
-        */
+          if (
+            savedMerchantRef !== merchantRef
+          ) {
+            throw new Error(
+              "MERCHANT_REFERENCE_MISMATCH"
+            );
+          }
 
-        if (transaksi.merchantRef !== merchantRef) {
-          throw new Error("MERCHANT_REFERENCE_MISMATCH");
-        }
+          /*
+          |--------------------------------------------------------------------------
+          | 15. VALIDASI REFERENCE TRIPAY
+          |--------------------------------------------------------------------------
+          */
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDASI REFERENCE TRIPAY
-        |--------------------------------------------------------------------------
-        */
+          const savedReference =
+            String(
+              transaksi.reference || ""
+            ).trim();
 
-        if (
-          transaksi.reference &&
-          String(transaksi.reference) !== reference
-        ) {
-          throw new Error("TRIPAY_REFERENCE_MISMATCH");
-        }
+          if (
+            savedReference &&
+            savedReference !== reference
+          ) {
+            throw new Error(
+              "TRIPAY_REFERENCE_MISMATCH"
+            );
+          }
 
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDASI NOMINAL
-        |--------------------------------------------------------------------------
-        */
+          /*
+          |--------------------------------------------------------------------------
+          | 16. VALIDASI NOMINAL
+          |--------------------------------------------------------------------------
+          */
 
-        const expectedAmount = Number(transaksi.amount || 0);
+          const expectedAmount =
+            toSafeInteger(transaksi.amount);
 
-        if (
-          expectedAmount <= 0 ||
-          expectedAmount !== totalAmount
-        ) {
-          throw new Error("AMOUNT_MISMATCH");
-        }
+          if (
+            expectedAmount === null ||
+            expectedAmount <= 0
+          ) {
+            throw new Error(
+              "INVALID_TRANSACTION_AMOUNT"
+            );
+          }
 
-        /*
-        |--------------------------------------------------------------------------
-        | STATUS SELAIN PAID
-        |--------------------------------------------------------------------------
-        |
-        | Tidak boleh menambah saldo.
-        |
-        */
+          if (
+            expectedAmount !== totalAmount
+          ) {
+            throw new Error(
+              "AMOUNT_MISMATCH"
+            );
+          }
 
-        if (status !== "PAID") {
-          transaction.update(transaksiRef, {
-            status,
-            callbackReference: reference,
-            callbackReceivedAt:
-              admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt:
-              admin.firestore.FieldValue.serverTimestamp()
-          });
+          /*
+          |--------------------------------------------------------------------------
+          | 17. ANTI DOUBLE CREDIT
+          |--------------------------------------------------------------------------
+          */
+
+          const currentStatus =
+            String(
+              transaksi.status || "UNPAID"
+            ).toUpperCase();
+
+          if (currentStatus === "PAID") {
+            return {
+              alreadyPaid: true,
+              credited: false,
+              uid,
+              saldoAkhir:
+                toSafeInteger(
+                  transaksi.saldoAkhir
+                ) || 0,
+            };
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | 18. STATUS NON-PAID
+          |--------------------------------------------------------------------------
+          |
+          | EXPIRED / FAILED / UNPAID
+          | tidak boleh menambah saldo.
+          |
+          */
+
+          if (status !== "PAID") {
+            transaction.update(
+              transaksiRef,
+              {
+                status,
+                reference,
+                totalAmount,
+                amountReceived:
+                  amountReceived ?? 0,
+                callbackReceivedAt:
+                  admin.firestore.FieldValue
+                    .serverTimestamp(),
+                updatedAt:
+                  admin.firestore.FieldValue
+                    .serverTimestamp(),
+              }
+            );
+
+            return {
+              alreadyPaid: false,
+              credited: false,
+              uid,
+              status,
+            };
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | 19. AMBIL USER
+          |--------------------------------------------------------------------------
+          */
+
+          const userRef =
+            db.collection("users").doc(uid);
+
+          const userSnap =
+            await transaction.get(userRef);
+
+          if (!userSnap.exists) {
+            throw new Error(
+              "USER_NOT_FOUND"
+            );
+          }
+
+          const userData =
+            userSnap.data() || {};
+
+          /*
+          |--------------------------------------------------------------------------
+          | 20. FIELD SALDO
+          |--------------------------------------------------------------------------
+          |
+          | HARUS SAMA dengan SaldoService:
+          |
+          | balance
+          |
+          */
+
+          const saldoSebelumnya =
+            toSafeInteger(
+              userData[BALANCE_FIELD]
+            );
+
+          if (
+            saldoSebelumnya === null ||
+            saldoSebelumnya < 0
+          ) {
+            throw new Error(
+              "INVALID_USER_BALANCE"
+            );
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | 21. HITUNG SALDO BARU
+          |--------------------------------------------------------------------------
+          */
+
+          const saldoBaru =
+            saldoSebelumnya +
+            expectedAmount;
+
+          if (
+            !Number.isSafeInteger(
+              saldoBaru
+            )
+          ) {
+            throw new Error(
+              "BALANCE_OVERFLOW"
+            );
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | 22. UPDATE SALDO USER
+          |--------------------------------------------------------------------------
+          */
+
+          transaction.update(
+            userRef,
+            {
+              [BALANCE_FIELD]:
+                saldoBaru,
+
+              updatedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            }
+          );
+
+          /*
+          |--------------------------------------------------------------------------
+          | 23. BUAT MUTASI SALDO
+          |--------------------------------------------------------------------------
+          */
+
+          const mutasiRef =
+            db.collection(
+              "mutasi_saldo"
+            ).doc();
+
+          transaction.set(
+            mutasiRef,
+            {
+              uid,
+
+              tipe: "MASUK",
+
+              nominal:
+                expectedAmount,
+
+              saldoAwal:
+                saldoSebelumnya,
+
+              saldoAkhir:
+                saldoBaru,
+
+              keterangan:
+                "Top Up Saldo via TriPay",
+
+              sumber:
+                "TRIPAY_CALLBACK",
+
+              merchantRef,
+
+              reference,
+
+              waktu:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            }
+          );
+
+          /*
+          |--------------------------------------------------------------------------
+          | 24. TANDAI TRANSAKSI SUDAH DICREDIT
+          |--------------------------------------------------------------------------
+          */
+
+          transaction.update(
+            transaksiRef,
+            {
+              status: "PAID",
+
+              reference,
+
+              totalAmount:
+                expectedAmount,
+
+              amountReceived:
+                amountReceived ?? 0,
+
+              creditedAmount:
+                expectedAmount,
+
+              saldoAwal:
+                saldoSebelumnya,
+
+              saldoAkhir:
+                saldoBaru,
+
+              credited: true,
+
+              creditedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+
+              callbackReceivedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+
+              updatedAt:
+                admin.firestore.FieldValue
+                  .serverTimestamp(),
+            }
+          );
+
+          /*
+          |--------------------------------------------------------------------------
+          | 25. HASIL
+          |--------------------------------------------------------------------------
+          */
 
           return {
             alreadyPaid: false,
-            credited: false,
+            credited: true,
             uid,
-            status
+            saldoAkhir: saldoBaru,
           };
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | AMOUNT RECEIVED
-        |--------------------------------------------------------------------------
-        |
-        | amount_received bisa berbeda dari total transaksi
-        | karena fee. Untuk kredit saldo, gunakan nominal topup
-        | yang sudah divalidasi dari transaksi.
-        |
-        */
-
-        if (
-          amountReceived > 0 &&
-          amountReceived > expectedAmount
-        ) {
-          logger.warn(
-            `amount_received lebih besar dari expectedAmount: ${merchantRef}`
-          );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | AMBIL USER
-        |--------------------------------------------------------------------------
-        */
-
-        const userRef = db.collection("users").doc(uid);
-        const userSnap = await transaction.get(userRef);
-
-        if (!userSnap.exists) {
-          throw new Error("USER_NOT_FOUND");
-        }
-
-        const userData = userSnap.data();
-
-        const saldoSebelumnya =
-          Number(userData.saldo || 0);
-
-        if (
-          !Number.isSafeInteger(saldoSebelumnya) ||
-          saldoSebelumnya < 0
-        ) {
-          throw new Error("INVALID_USER_BALANCE");
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | HITUNG SALDO BARU
-        |--------------------------------------------------------------------------
-        */
-
-        const saldoBaru =
-          saldoSebelumnya + expectedAmount;
-
-        if (!Number.isSafeInteger(saldoBaru)) {
-          throw new Error("BALANCE_OVERFLOW");
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE SALDO
-        |--------------------------------------------------------------------------
-        */
-
-        transaction.update(userRef, {
-          saldo: saldoBaru,
-          updatedAt:
-            admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | AUDIT MUTASI
-        |--------------------------------------------------------------------------
-        */
-
-        const mutasiRef =
-          db.collection("mutasi_saldo").doc();
-
-        transaction.set(mutasiRef, {
-          uid,
-          tipe: "MASUK",
-          nominal: expectedAmount,
-          saldoAwal: saldoSebelumnya,
-          saldoAkhir: saldoBaru,
-          keterangan: "Top Up Saldo via TriPay",
-          sumber: "TRIPAY_CALLBACK",
-          merchantRef,
-          reference,
-          waktu:
-            admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE TRANSAKSI
-        |--------------------------------------------------------------------------
-        */
-
-        transaction.update(transaksiRef, {
-          status: "PAID",
-          reference,
-          amountReceived,
-          creditedAmount: expectedAmount,
-          saldoAwal: saldoSebelumnya,
-          saldoAkhir: saldoBaru,
-          creditedAt:
-            admin.firestore.FieldValue.serverTimestamp(),
-          callbackReceivedAt:
-            admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt:
-            admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        return {
-          alreadyPaid: false,
-          credited: true,
-          uid,
-          saldoAkhir: saldoBaru
-        };
-      });
+      );
 
       /*
       |--------------------------------------------------------------------------
-      | HASIL
+      | 26. CALLBACK DUPLIKAT
       |--------------------------------------------------------------------------
       */
 
@@ -501,27 +719,47 @@ exports.tripayCallback = onRequest(
           `Callback duplicate diabaikan: ${merchantRef}`
         );
 
-        return jsonResponse(res, 200, {
+        return sendJson(res, 200, {
           success: true,
-          message: "Transaction already processed."
+          message:
+            "Transaction already processed.",
         });
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | 27. TOP UP BERHASIL
+      |--------------------------------------------------------------------------
+      */
 
       if (result.credited) {
         logger.info(
-          `TOP UP BERHASIL: ${merchantRef} -> ${result.uid} -> ${result.saldoAkhir}`
+          `TOP UP BERHASIL | ${merchantRef} | UID: ${result.uid} | SALDO: ${result.saldoAkhir}`
         );
 
-        return jsonResponse(res, 200, {
-          success: true
+        return sendJson(res, 200, {
+          success: true,
         });
       }
 
-      return jsonResponse(res, 200, {
+      /*
+      |--------------------------------------------------------------------------
+      | 28. STATUS NON-PAID
+      |--------------------------------------------------------------------------
+      */
+
+      return sendJson(res, 200, {
         success: true,
-        message: `Transaction status updated to ${result.status}.`
+        message:
+          `Transaction status updated to ${result.status}.`,
       });
     } catch (error) {
+      /*
+      |--------------------------------------------------------------------------
+      | 29. ERROR
+      |--------------------------------------------------------------------------
+      */
+
       logger.error(
         `Gagal memproses callback ${merchantRef}`,
         error
@@ -529,23 +767,37 @@ exports.tripayCallback = onRequest(
 
       /*
       |--------------------------------------------------------------------------
-      | ERROR TRANSAKSI TIDAK DITEMUKAN
+      | TRANSAKSI TIDAK TERDAFTAR
       |--------------------------------------------------------------------------
       |
-      | Return 500 agar TriPay dapat melakukan retry.
+      | 500 supaya TriPay melakukan retry.
       |
       */
 
-      if (error.message === "TRANSACTION_NOT_FOUND") {
-        return jsonResponse(res, 500, {
+      if (
+        error.message ===
+        "TRANSACTION_NOT_FOUND"
+      ) {
+        return sendJson(res, 500, {
           success: false,
-          message: "Transaction not registered."
+          message:
+            "Transaction not registered.",
         });
       }
 
-      return jsonResponse(res, 500, {
+      /*
+      |--------------------------------------------------------------------------
+      | ERROR LAIN
+      |--------------------------------------------------------------------------
+      |
+      | Return 500 supaya callback dapat di-retry.
+      |
+      */
+
+      return sendJson(res, 500, {
         success: false,
-        message: "Callback processing failed."
+        message:
+          "Callback processing failed.",
       });
     }
   }
