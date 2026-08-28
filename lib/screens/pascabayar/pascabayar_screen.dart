@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Untuk mendapatkan UID
 import '../../config/warna.dart';
-import '../../services/digiflazz_service.dart';
+import '../../services/firestore_service.dart';
 
 // Pembungkus Animasi Memantul (Micro-interaction) Premium untuk Tombol Eksekusi
 class CustomBounce extends StatefulWidget {
@@ -66,10 +67,9 @@ class PascabayarScreen extends StatefulWidget {
 
 class _PascabayarScreenState extends State<PascabayarScreen> {
   final TextEditingController _nomorController = TextEditingController();
-  final DigiflazzService _digiflazzService = DigiflazzService();
 
-  List<dynamic> _daftarProdukPPOB = [];
-  dynamic _produkTerpilih;
+  List<Map<String, dynamic>> _daftarProdukPPOB = [];
+  Map<String, dynamic>? _produkTerpilih;
   bool _sedangMemuatProduk = false;
 
   @override
@@ -84,12 +84,16 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
     super.dispose();
   }
 
+  //==========================================
+  // AMBIL PRODUK DARI FIRESTORE (SIAP GO LIVE)
+  //==========================================
   Future<void> _ambilDaftarProdukPascabayar() async {
     setState(() => _sedangMemuatProduk = true);
 
     try {
-      List<dynamic> semuaProduk = await _digiflazzService.ambilSemuaProduk();
-      List<dynamic> produkDisaring = semuaProduk.where((produk) {
+      List<Map<String, dynamic>> semuaProduk = await FirestoreService.ambilProdukAktif();
+      
+      List<Map<String, dynamic>> produkDisaring = semuaProduk.where((produk) {
         String kategori = (produk['category'] ?? '').toString().toUpperCase();
         String brand = (produk['brand'] ?? '').toString().toUpperCase();
 
@@ -102,6 +106,9 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
         }
         return false;
       }).toList();
+
+      // Urutkan berdasarkan nama agar rapi di dropdown
+      produkDisaring.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
 
       setState(() => _daftarProdukPPOB = produkDisaring);
     } catch (_) {
@@ -125,6 +132,9 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
     return Icons.tv_rounded;
   }
 
+  //==========================================
+  // SIMULASI CEK TAGIHAN (INQUIRY)
+  //==========================================
   Future<void> _prosesCekTagihan() async {
     if (_produkTerpilih == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -139,35 +149,34 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
       return;
     }
 
+    // Tampilkan Loading
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    Map<String, dynamic> hasil = await _digiflazzService.kirimTransaksi(
-      buyerSkuCode: _produkTerpilih['buyer_sku_code'],
-      customerNo: _nomorController.text.trim(),
-    );
+    // MENSIMULASIKAN INQUIRY KE SERVER (Delay 2 detik)
+    // Di tahap produksi, ganti delay ini dengan panggilan ke Firebase Cloud Functions Anda.
+    await Future.delayed(const Duration(seconds: 2));
 
     if (mounted) Navigator.pop(context);
 
-    String status = (hasil['status'] ?? 'Gagal').toString().toUpperCase();
+    // Data Simulasi Tagihan (Ganti dengan response asli dari Cloud Functions Anda)
+    String namaPelanggan = "Pelanggan DesaPay";
+    int nominalTagihan = 50000; // Contoh tagihan pokok
     
-    if (status != 'GAGAL') {
-      String namaPelanggan = hasil['customer_name'] ?? 'Pelanggan DesaPay';
-      int nominalTagihan = int.tryParse(hasil['price'].toString()) ?? 0; 
-      int totalBayarLengkap = nominalTagihan + 2500; 
+    // Ambil margin dari Firestore sebagai Biaya Admin
+    int biayaAdmin = (_produkTerpilih!['margin'] as num? ?? 2500).toInt(); 
+    int totalBayarLengkap = nominalTagihan + biayaAdmin; 
 
-      _tampilkanBottomSheetInvoice(namaPelanggan, nominalTagihan, totalBayarLengkap);
-    } else {
-      String pesanGagal = hasil['message'] ?? 'ID Pelanggan tidak terdaftar atau gangguan server pusat';
-      _tampilkanStatusSheet(false, pesanGagal, 0);
-    }
+    _tampilkanBottomSheetInvoice(namaPelanggan, nominalTagihan, biayaAdmin, totalBayarLengkap);
   }
 
+  //==========================================
   // PREMIUM BOTTOM SHEET INVOICE
-  void _tampilkanBottomSheetInvoice(String nama, int tagihan, int total) {
+  //==========================================
+  void _tampilkanBottomSheetInvoice(String nama, int tagihanPokok, int admin, int total) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -189,11 +198,11 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
               const Divider(),
               const SizedBox(height: 8),
               _buildInvoiceRow("Jenis Layanan", widget.jenisLayanan),
-              _buildInvoiceRow("Penyedia / Wilayah", _produkTerpilih['product_name'] ?? '-'),
+              _buildInvoiceRow("Penyedia / Wilayah", _produkTerpilih!['name'] ?? '-'),
               _buildInvoiceRow("ID Pelanggan", _nomorController.text.trim()),
               _buildInvoiceRow("Nama Pelanggan", nama),
-              _buildInvoiceRow("Biaya Pokok", "Rp ${rupiah(tagihan)}"),
-              _buildInvoiceRow("Biaya Admin Loket", "Rp ${rupiah(2500)}"),
+              _buildInvoiceRow("Biaya Pokok", "Rp ${rupiah(tagihanPokok)}"),
+              _buildInvoiceRow("Biaya Admin Loket", "Rp ${rupiah(admin)}"),
               const SizedBox(height: 8),
               const Divider(),
               const SizedBox(height: 12),
@@ -220,7 +229,7 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
                   ),
                   onPressed: () {
                     Navigator.pop(context);
-                    _eksekusiBayarTagihanSelesai(tagihan);
+                    _eksekusiBayarKeFirestore(tagihanPokok, admin, total);
                   },
                   child: const Text("Konfirmasi & Bayar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
@@ -232,23 +241,56 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
     );
   }
 
-  void _eksekusiBayarTagihanSelesai(int total) {
+  //==========================================
+  // EKSEKUSI TRANSAKSI KE FIRESTORE
+  //==========================================
+  void _eksekusiBayarKeFirestore(int tagihanPokok, int admin, int total) async {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'USER_UNKNOWN';
+      final refId = 'DPAY-PASCA-${DateTime.now().millisecondsSinceEpoch}';
+
+      final trxData = {
+        'ref_id': refId,
+        'uid': uid,
+        'sku': _produkTerpilih!['sku'],
+        'productName': _produkTerpilih!['name'],
+        'category': _produkTerpilih!['category'],
+        'brand': _produkTerpilih!['brand'],
+        'customerNo': _nomorController.text.trim(),
+        'amount': total,        // Total tagihan + admin yang dipotong dari saldo user
+        'cost': tagihanPokok,   // Modal / Tagihan pokok
+        'margin': admin,        // Keuntungan loket / Admin
+        'status': 'PENDING',    // Akan diproses oleh Cloud Functions
+        'isTest': false,
+      };
+
+      await FirestoreService.simpanTransaksi(trxData);
+
       if (mounted) {
         Navigator.pop(context); 
+        _tampilkanStatusSheet(true, "Pembayaran tagihan ${_produkTerpilih!['name']} berhasil dikirim ke antrean server.", total);
         _nomorController.clear();
-        _tampilkanStatusSheet(true, "Pembayaran tagihan ${_produkTerpilih['product_name']} berhasil dikirim ke antrean server.", total);
+        setState(() {
+          _produkTerpilih = null;
+        });
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        _tampilkanStatusSheet(false, "Gagal memproses transaksi: $e", 0);
+      }
+    }
   }
 
+  //==========================================
   // PREMIUM DIGITAL RECEIPT SHEET
+  //==========================================
   void _tampilkanStatusSheet(bool isSukses, String pesan, int total) {
     showModalBottomSheet(
       context: context,
@@ -261,9 +303,9 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                isSukses ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                isSukses ? Icons.access_time_filled_rounded : Icons.cancel_rounded,
                 size: 72,
-                color: isSukses ? Colors.green : Colors.red,
+                color: isSukses ? Colors.orange : Colors.red,
               ),
               const SizedBox(height: 16),
               Text(
@@ -279,7 +321,7 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
                   children: [
                     _buildInvoiceRow("Layanan", widget.jenisLayanan),
                     _buildInvoiceRow("ID Pelanggan", _nomorController.text.trim()),
-                    if (isSukses) _buildInvoiceRow("Total Jual", "Rp ${rupiah(total)}"),
+                    if (isSukses) _buildInvoiceRow("Total Bayar", "Rp ${rupiah(total)}"),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
@@ -300,20 +342,13 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isSukses ? Colors.green : Colors.red,
+                    backgroundColor: isSukses ? WarnaDesaPay.primary : Colors.red,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    if (isSukses) {
-                      setState(() {
-                        _produkTerpilih = null;
-                      });
-                    }
-                  },
-                  child: const Text("Selesai", style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Tutup", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -383,17 +418,17 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: DropdownButtonHideUnderline(
-                            child: DropdownButton<dynamic>(
+                            child: DropdownButton<Map<String, dynamic>>(
                               isExpanded: true,
                               dropdownColor: Colors.white,
                               borderRadius: BorderRadius.circular(14),
                               hint: Text("Klik untuk memilih...", style: TextStyle(color: Colors.grey.shade400, fontSize: 14)),
                               value: _produkTerpilih,
                               items: _daftarProdukPPOB.map((produk) {
-                                return DropdownMenuItem<dynamic>(
+                                return DropdownMenuItem<Map<String, dynamic>>(
                                   value: produk,
                                   child: Text(
-                                    produk['product_name'] ?? '-',
+                                    produk['name'] ?? '-',
                                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
                                   ),
                                 );
@@ -450,7 +485,7 @@ class _PascabayarScreenState extends State<PascabayarScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: WarnaDesaPay.primary.withOpacity(0.2),
+                              color: WarnaDesaPay.primary?.withOpacity(0.3) ?? Colors.blue.withOpacity(0.3),
                               blurRadius: 12,
                               offset: const Offset(0, 6),
                             ),
