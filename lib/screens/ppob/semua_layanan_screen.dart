@@ -7,7 +7,12 @@ class SemuaLayananScreen extends StatelessWidget {
   const SemuaLayananScreen({super.key});
 
   void _bukaLayanan(BuildContext context, String namaLayanan) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => PpobGenericScreen(kategori: namaLayanan)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PpobGenericScreen(kategori: namaLayanan),
+      ),
+    );
   }
 
   @override
@@ -15,15 +20,24 @@ class SemuaLayananScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        elevation: 0, backgroundColor: Colors.white, foregroundColor: WarnaDesaPay.textMain,
-        title: const Text("Semua Produk & Layanan", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20), onPressed: () => Navigator.pop(context)),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: WarnaDesaPay.textMain,
+        title: const Text(
+          "Semua Produk & Layanan",
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: ListView(
         physics: const BouncingScrollPhysics(),
         children: [
           _buildKategoriSection(
-            context, judul: "Telekomunikasi",
+            context,
+            judul: "Telekomunikasi",
             layanan: [
               _ItemData("Pulsa Murah", Icons.phone_android_rounded, const Color(0xFFEFF6FF), WarnaDesaPay.primary),
               _ItemData("Paket Data", Icons.wifi_tethering_rounded, const Color(0xFFF0F9FF), const Color(0xFF0284C7)),
@@ -32,7 +46,8 @@ class SemuaLayananScreen extends StatelessWidget {
           ),
           Container(height: 8, color: WarnaDesaPay.lightBg), 
           _buildKategoriSection(
-            context, judul: "Tagihan & Gaya Hidup",
+            context,
+            judul: "Tagihan & Gaya Hidup",
             layanan: [
               _ItemData("Listrik PLN", Icons.bolt_rounded, const Color(0xFFFFFBEB), const Color(0xFFD97706)),
               _ItemData("PDAM Air", Icons.water_drop_rounded, const Color(0xFFECFEFF), WarnaDesaPay.secondary),
@@ -42,7 +57,8 @@ class SemuaLayananScreen extends StatelessWidget {
           ),
           Container(height: 8, color: WarnaDesaPay.lightBg),
           _buildKategoriSection(
-            context, judul: "Hiburan & Top Up",
+            context,
+            judul: "Hiburan & Top Up",
             layanan: [
               _ItemData("Top Up Games", Icons.sports_esports_rounded, const Color(0xFFFFF1F2), const Color(0xFFE11D48)),
               _ItemData("Uang Elektronik", Icons.account_balance_wallet_rounded, const Color(0xFFF5F3FF), const Color(0xFF7C3AED)),
@@ -55,24 +71,42 @@ class SemuaLayananScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildKategoriSection(BuildContext context, {required String judul, required List<_ItemData> layanan}) {
+  Widget _buildKategoriSection(
+    BuildContext context, {
+    required String judul,
+    required List<_ItemData> layanan,
+  }) {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(judul, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: WarnaDesaPay.textMain)),
+          Text(
+            judul,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: WarnaDesaPay.textMain,
+            ),
+          ),
           const SizedBox(height: 20),
           GridView.builder(
-            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4, crossAxisSpacing: 12, mainAxisSpacing: 20, childAspectRatio: 0.85,
+              crossAxisCount: 4,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 20,
+              childAspectRatio: 0.85,
             ),
             itemCount: layanan.length,
             itemBuilder: (context, index) {
               final item = layanan[index];
               return MenuItem(
-                icon: item.icon, title: item.title, badgeColor: item.bgColor, iconColor: item.iconColor,
+                icon: item.icon,
+                title: item.title,
+                badgeColor: item.bgColor,
+                iconColor: item.iconColor,
                 onTap: () => _bukaLayanan(context, item.title),
               );
             },
@@ -84,6 +118,10 @@ class SemuaLayananScreen extends StatelessWidget {
 }
 
 class _ItemData {
-  final String title; final IconData icon; final Color bgColor; final Color iconColor;
+  final String title;
+  final IconData icon;
+  final Color bgColor;
+  final Color iconColor;
+  
   _ItemData(this.title, this.icon, this.bgColor, this.iconColor);
 }
