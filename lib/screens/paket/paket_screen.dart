@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Tambahkan ini untuk UID Transaksi
 import '../../config/warna.dart';
-import '../../services/digiflazz_service.dart';
+import '../../services/firestore_service.dart'; // Ganti dari digiflazz_service ke firestore_service
 
 // Pembungkus Animasi Memantul (Micro-interaction) Premium saat Paket Data Dipilih
 class CustomBounce extends StatefulWidget {
@@ -61,8 +62,7 @@ class PaketScreen extends StatefulWidget {
 
 class _PaketScreenState extends State<PaketScreen> {
   final TextEditingController nomorController = TextEditingController();
-  final DigiflazzService _digiflazzService = DigiflazzService();
-  List<dynamic> daftarPaket = [];
+  List<Map<String, dynamic>> daftarPaket = [];
   bool loading = false;
   String operator = "";
 
@@ -124,30 +124,30 @@ class _PaketScreenState extends State<PaketScreen> {
   }
 
   //==========================================
-  // AMBIL PRODUK DARI DIGIFLAZZ
+  // AMBIL PRODUK DARI FIRESTORE (SIAP GO LIVE)
   //==========================================
   Future<void> ambilProduk(String brand) async {
     setState(() => loading = true);
     try {
-      final semuaProduk = await _digiflazzService.ambilSemuaProduk();
+      // Menembak Firestore, bukan API
+      final semuaProduk = await FirestoreService.ambilProdukAktif();
+      
       daftarPaket = semuaProduk.where((item) {
         final kategori = (item["category"] ?? "").toString().toUpperCase();
         final merk = (item["brand"] ?? "").toString().toUpperCase();
-        return kategori.contains("DATA") && merk.contains(brand);
+        return kategori == "DATA" && merk.contains(brand);
       }).toList();
 
-      daftarPaket.sort((a, b) => (int.tryParse(a["price"].toString()) ?? 0).compareTo(int.tryParse(b["price"].toString()) ?? 0));
+      // Urutkan berdasarkan harga jual (cost + margin)
+      daftarPaket.sort((a, b) {
+        int hargaA = (a["cost"] as num? ?? 0).toInt() + (a["margin"] as num? ?? 0).toInt();
+        int hargaB = (b["cost"] as num? ?? 0).toInt() + (b["margin"] as num? ?? 0).toInt();
+        return hargaA.compareTo(hargaB);
+      });
     } catch (e) {
       daftarPaket = [];
     }
     setState(() => loading = false);
-  }
-
-  int hargaJual(int modal) {
-    if (modal < 10000) return modal + 1000;
-    if (modal < 50000) return modal + 1500;
-    if (modal < 100000) return modal + 2000;
-    return modal + 3000;
   }
 
   String rupiah(int angka) {
@@ -269,51 +269,56 @@ class _PaketScreenState extends State<PaketScreen> {
                         itemCount: daftarPaket.length,
                         itemBuilder: (context, index) {
                           final produk = daftarPaket[index];
-                          final int modal = int.tryParse(produk["price"].toString()) ?? 0;
-                          final int jual = hargaJual(modal);
+                          
+                          // Mengambil nilai dari Firestore
+                          final int modal = (produk["cost"] as num? ?? 0).toInt();
+                          final int margin = (produk["margin"] as num? ?? 0).toInt();
+                          final int jual = modal + margin; // Harga jual otomatis = modal + margin admin
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.02),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                )
-                              ],
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              title: Text(
-                                produk["product_name"] ?? "",
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  produk["desc"] ?? "Produk Paket Data",
-                                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12, height: 1.3),
-                                ),
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    "Rp ${rupiah(jual)}",
-                                    style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "Kode: ${produk["buyer_sku_code"]}",
-                                    style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
-                                  ),
+                          return CustomBounce(
+                            onTap: () => _prosesBottomSheetInvoice(produk, jual),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.02),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  )
                                 ],
                               ),
-                              onTap: () => _prosesBottomSheetInvoice(produk, jual),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                title: Text(
+                                  produk["name"] ?? "-",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    "Paket Data ${produk["brand"] ?? operator}",
+                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12, height: 1.3),
+                                  ),
+                                ),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      "Rp ${rupiah(jual)}",
+                                      style: TextStyle(color: WarnaDesaPay.primary, fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "SKU: ${produk["sku"]}",
+                                      style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           );
                         },
@@ -327,7 +332,7 @@ class _PaketScreenState extends State<PaketScreen> {
   //==========================================
   // PREMIUM BOTTOM SHEET INVOICE
   //==========================================
-  void _prosesBottomSheetInvoice(dynamic produk, int jual) {
+  void _prosesBottomSheetInvoice(Map<String, dynamic> produk, int jual) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -362,7 +367,7 @@ class _PaketScreenState extends State<PaketScreen> {
               const Divider(),
               const SizedBox(height: 8),
               _buildInvoiceRow("Nama Layanan", "Paket Data Internet"),
-              _buildInvoiceRow("Nama Paket", produk["product_name"] ?? ""),
+              _buildInvoiceRow("Nama Paket", produk["name"] ?? ""),
               _buildInvoiceRow("Nomor Tujuan", nomorController.text),
               _buildInvoiceRow("Operator", operator),
               _buildInvoiceRow("Metode Pembayaran", "Saldo Utama DesaPay"),
@@ -411,7 +416,6 @@ class _PaketScreenState extends State<PaketScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-          // DIKOREKSI: Mengganti Alignment.centerRight menjadi TextAlign.end yang valid untuk widget Text
           Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87), textAlign: TextAlign.end)),
         ],
       ),
@@ -419,102 +423,152 @@ class _PaketScreenState extends State<PaketScreen> {
   }
 
   //==========================================
-  // EKSEKUSI API & DIGITAL SLIP RECEIPT
+  // EKSEKUSI FIRESTORE & DIGITAL SLIP RECEIPT
   //==========================================
-  void _eksekusiTransaksiPusat(dynamic produk, int jual) async {
+  void _eksekusiTransaksiPusat(Map<String, dynamic> produk, int jual) async {
+    // Tampilkan Loading
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    final hasil = await _digiflazzService.kirimTransaksi(
-      buyerSkuCode: produk["buyer_sku_code"],
-      customerNo: nomorController.text,
-    );
+    try {
+      // 1. Dapatkan UID User yang sedang login (Standar Firebase)
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'USER_UNKNOWN';
 
-    if (mounted) Navigator.pop(context);
+      // 2. Buat ID Referensi Unik Transaksi
+      final refId = 'DPAY-${DateTime.now().millisecondsSinceEpoch}';
 
-    String status = (hasil["status"] ?? "PENDING").toString().toUpperCase();
-    String pesan = hasil["message"] ?? hasil["sn"] ?? "Transaksi sedang diproses antrean server.";
+      // 3. Susun data mutasi/transaksi
+      final int modal = (produk["cost"] as num? ?? 0).toInt();
+      final int margin = (produk["margin"] as num? ?? 0).toInt();
 
-    if (mounted) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        builder: (context) {
-          bool isSukses = status == "SUKSES";
-          bool isGagal = status == "GAGAL";
+      final trxData = {
+        'ref_id': refId,
+        'uid': uid,
+        'sku': produk['sku'],
+        'productName': produk['name'],
+        'category': produk['category'],
+        'brand': produk['brand'],
+        'customerNo': nomorController.text,
+        'amount': jual,      // Total yang akan dipotong dari saldo user
+        'cost': modal,       // Modal dasar dari Digiflazz
+        'margin': margin,    // Keuntungan admin DesaPay
+        'status': 'PENDING', // PENTING: Backend/Functions yang akan ubah jadi SUCCESS/FAILED
+        'isTest': false,
+      };
 
-          Color statusColor = Colors.orange;
-          IconData statusIcon = Icons.access_time_rounded;
+      // 4. Simpan ke Firestore
+      await FirestoreService.simpanTransaksi(trxData);
 
-          if (isSukses) {
-            statusColor = Colors.green;
-            statusIcon = Icons.check_circle_rounded;
-          } else if (isGagal) {
-            statusColor = Colors.red;
-            statusIcon = Icons.cancel_rounded;
-          }
+      if (mounted) Navigator.pop(context); // Tutup Loading
 
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(statusIcon, size: 72, color: statusColor),
-                const SizedBox(height: 16),
-                Text(
-                  isSukses ? "Transaksi Sukses" : isGagal ? "Transaksi Gagal" : "Transaksi Diproses",
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildInvoiceRow("Produk", produk["product_name"] ?? ""),
-                      _buildInvoiceRow("Nomor Tujuan", nomorController.text),
-                      _buildInvoiceRow("Total Bayar", "Rp ${rupiah(jual)}"),
-                      _buildInvoiceRow("Keterangan/SN", pesan),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: statusColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      if (!isGagal) {
-                        nomorController.clear();
-                        setState(() {
-                          operator = "";
-                          daftarPaket.clear();
-                        });
-                      }
-                    },
-                    child: const Text("Selesai", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+      // 5. Tampilkan Receipt PENDING
+      _tampilkanSlipReceipt(
+        status: "PENDING",
+        pesan: "Transaksi sedang diproses oleh sistem. Saldo akan terpotong saat sukses.",
+        produkName: produk['name'] ?? '',
+        jual: jual,
+      );
+
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Tutup Loading
+      _tampilkanSlipReceipt(
+        status: "GAGAL",
+        pesan: "Gagal memproses transaksi: $e",
+        produkName: produk['name'] ?? '',
+        jual: jual,
       );
     }
+  }
+
+  void _tampilkanSlipReceipt({
+    required String status,
+    required String pesan,
+    required String produkName,
+    required int jual,
+  }) {
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        bool isSukses = status == "SUKSES";
+        bool isGagal = status == "GAGAL";
+
+        Color statusColor = Colors.orange;
+        IconData statusIcon = Icons.access_time_rounded;
+        String titleReceipt = "Transaksi Diproses";
+
+        if (isSukses) {
+          statusColor = Colors.green;
+          statusIcon = Icons.check_circle_rounded;
+          titleReceipt = "Transaksi Sukses";
+        } else if (isGagal) {
+          statusColor = Colors.red;
+          statusIcon = Icons.cancel_rounded;
+          titleReceipt = "Transaksi Gagal";
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(statusIcon, size: 72, color: statusColor),
+              const SizedBox(height: 16),
+              Text(
+                titleReceipt,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    _buildInvoiceRow("Produk", produkName),
+                    _buildInvoiceRow("Nomor Tujuan", nomorController.text),
+                    _buildInvoiceRow("Total Tagihan", "Rp ${rupiah(jual)}"),
+                    _buildInvoiceRow("Keterangan", pesan),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: statusColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (!isGagal) {
+                      nomorController.clear();
+                      setState(() {
+                        operator = "";
+                        daftarPaket.clear();
+                      });
+                    }
+                  },
+                  child: const Text("Selesai", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
