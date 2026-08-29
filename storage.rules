@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ============================================================
+    // HELPER
+    // ============================================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn()
+        && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && firestore.exists(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        )
+        && firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.role == "admin";
+    }
+
+
+    // ============================================================
+    // USER FILES
+    // ============================================================
+    //
+    // Struktur yang digunakan aplikasi:
+    //
+    // users/{uid}/profil.jpg
+    // users/{uid}/ktp.jpg
+    // users/{uid}/selfie.jpg
+    //
+    // User hanya boleh mengakses folder miliknya.
+    // Admin boleh membaca dokumen untuk proses KYC.
+    //
+    // ============================================================
+
+    match /users/{uid}/{fileName} {
+
+      // ----------------------------------------------------------
+      // READ
+      // ----------------------------------------------------------
+
+      allow read: if isOwner(uid) || isAdmin();
+
+
+      // ----------------------------------------------------------
+      // CREATE / UPDATE
+      // ----------------------------------------------------------
+      //
+      // User boleh upload file miliknya sendiri.
+      //
+      // Maksimum 5 MB.
+      //
+      // Hanya file gambar.
+      //
+
+      allow create, update: if isOwner(uid)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+
+      // ----------------------------------------------------------
+      // DELETE
+      // ----------------------------------------------------------
+      //
+      // User tidak boleh menghapus dokumen KYC.
+      //
+      // Foto profil boleh diganti melalui upload baru.
+      // Penghapusan manual hanya admin.
+      //
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // DEFAULT DENY
+    // ============================================================
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
