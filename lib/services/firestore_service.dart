@@ -1,49 +1,61 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class FirestoreService {
-  static final FirebaseFirestore db = FirebaseFirestore.instance;
+  static final FirebaseFirestore db =
+      FirebaseFirestore.instance;
+
+  static final FirebaseFunctions functions =
+      FirebaseFunctions.instanceFor(
+    region: 'asia-southeast2',
+  );
 
   // =========================================================
   // SETTINGS
   // =========================================================
 
   static Future<bool> ambilMaintenance() async {
-    final doc = await db.collection('settings').doc('app').get();
+    final doc =
+        await db.collection('settings').doc('app').get();
+
     return doc.data()?['maintenance'] == true;
   }
 
   static Future<void> setMaintenance(bool value) async {
-    await db.collection('settings').doc('app').set({
-      'maintenance': value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await db.collection('settings').doc('app').set(
+      {
+        'maintenance': value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   // =========================================================
   // PRODUCTS
   // =========================================================
 
-  /// Simpan / update produk.
-  ///
-  /// PENTING:
-  /// - Margin yang sudah ada di Firestore TIDAK ditimpa jika
-  ///   data baru tidak mengirim margin.
-  /// - active juga dipertahankan jika tidak dikirim.
-  /// - isTest dipertahankan jika tidak dikirim.
   static Future<void> simpanProduk(
     List<Map<String, dynamic>> produkList,
   ) async {
     const limit = 450;
 
-    for (int start = 0; start < produkList.length; start += limit) {
+    for (
+      int start = 0;
+      start < produkList.length;
+      start += limit
+    ) {
       final batch = db.batch();
 
-      final end = (start + limit > produkList.length)
-          ? produkList.length
-          : start + limit;
+      final end =
+          (start + limit > produkList.length)
+              ? produkList.length
+              : start + limit;
 
-      for (final produk in produkList.sublist(start, end)) {
-        final sku = produk['sku']?.toString() ?? '';
+      for (final produk
+          in produkList.sublist(start, end)) {
+        final sku =
+            produk['sku']?.toString() ?? '';
 
         if (sku.isEmpty || sku == '-') {
           continue;
@@ -51,27 +63,30 @@ class FirestoreService {
 
         final data = <String, dynamic>{
           'sku': sku,
-          'name': produk['name']?.toString() ?? '-',
-          'category': produk['category']?.toString() ?? '-',
-          'brand': produk['brand']?.toString() ?? '-',
+          'name':
+              produk['name']?.toString() ?? '-',
+          'category':
+              produk['category']?.toString() ?? '-',
+          'brand':
+              produk['brand']?.toString() ?? '-',
           'cost': produk['cost'] ?? 0,
-          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedAt':
+              FieldValue.serverTimestamp(),
         };
 
-        // Margin hanya ditulis jika memang dikirim.
-        // Ini mencegah sinkronisasi Digiflazz menghapus margin Admin.
         if (produk.containsKey('margin')) {
-          data['margin'] = produk['margin'] ?? 0;
+          data['margin'] =
+              produk['margin'] ?? 0;
         }
 
-        // active hanya ditulis jika memang dikirim.
         if (produk.containsKey('active')) {
-          data['active'] = produk['active'] == true;
+          data['active'] =
+              produk['active'] == true;
         }
 
-        // isTest hanya ditulis jika memang dikirim.
         if (produk.containsKey('isTest')) {
-          data['isTest'] = produk['isTest'] == true;
+          data['isTest'] =
+              produk['isTest'] == true;
         }
 
         batch.set(
@@ -85,13 +100,16 @@ class FirestoreService {
     }
   }
 
-  /// Ambil semua produk.
   static Future<List<Map<String, dynamic>>>
       ambilSemuaProduk() async {
-    final snap = await db.collection('products').get();
+    final snap =
+        await db.collection('products').get();
 
     final result = snap.docs.map((doc) {
-      final d = Map<String, dynamic>.from(doc.data());
+      final d =
+          Map<String, dynamic>.from(
+        doc.data(),
+      );
 
       d['sku'] ??= doc.id;
       d['name'] ??= '-';
@@ -109,25 +127,29 @@ class FirestoreService {
       (a, b) => (a['category'] ?? '')
           .toString()
           .compareTo(
-            (b['category'] ?? '').toString(),
+            (b['category'] ?? '')
+                .toString(),
           ),
     );
 
     return result;
   }
 
-  /// Ambil hanya produk yang aktif DAN BUKAN produk tes.
-  ///
-  /// Digunakan oleh PPOB agar user hanya melihat produk aktif untuk produksi.
   static Future<List<Map<String, dynamic>>>
       ambilProdukAktif() async {
     final snap = await db
         .collection('products')
-        .where('active', isEqualTo: true)
+        .where(
+          'active',
+          isEqualTo: true,
+        )
         .get();
 
     final result = snap.docs.map((doc) {
-      final d = Map<String, dynamic>.from(doc.data());
+      final d =
+          Map<String, dynamic>.from(
+        doc.data(),
+      );
 
       d['sku'] ??= doc.id;
       d['name'] ??= '-';
@@ -136,80 +158,68 @@ class FirestoreService {
       d['cost'] ??= 0;
       d['margin'] ??= 0;
       d['active'] = true;
-      d['isTest'] = d['isTest'] == true;
+      d['isTest'] =
+          d['isTest'] == true;
 
       return d;
     })
-    // FILTER TAMBAHAN: Membuang produk tes agar tidak muncul di aplikasi user
-    .where((produk) => produk['isTest'] == false) 
-    .toList();
+        .where(
+          (produk) =>
+              produk['isTest'] == false,
+        )
+        .toList();
 
-    result.sort(
-      (a, b) {
-        final categoryCompare = (a['category'] ?? '')
-            .toString()
-            .compareTo(
-              (b['category'] ?? '').toString(),
-            );
+    result.sort((a, b) {
+      final categoryCompare =
+          (a['category'] ?? '')
+              .toString()
+              .compareTo(
+                (b['category'] ?? '')
+                    .toString(),
+              );
 
-        if (categoryCompare != 0) {
-          return categoryCompare;
-        }
+      if (categoryCompare != 0) {
+        return categoryCompare;
+      }
 
-        return (a['name'] ?? '')
-            .toString()
-            .compareTo(
-              (b['name'] ?? '').toString(),
-            );
-      },
-    );
+      return (a['name'] ?? '')
+          .toString()
+          .compareTo(
+            (b['name'] ?? '')
+                .toString(),
+          );
+    });
 
     return result;
   }
 
-  /// Update margin produk dari Admin.
   static Future<void> updateMargin(
     String sku,
     num margin,
   ) async {
-    await db.collection('products').doc(sku).update({
+    await db
+        .collection('products')
+        .doc(sku)
+        .update({
       'margin': margin,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':
+          FieldValue.serverTimestamp(),
     });
   }
 
-  /// Aktif / nonaktifkan produk dari Admin.
   static Future<void> updateProductActive(
     String sku,
     bool active,
   ) async {
-    await db.collection('products').doc(sku).update({
+    await db
+        .collection('products')
+        .doc(sku)
+        .update({
       'active': active,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':
+          FieldValue.serverTimestamp(),
     });
   }
-
-  /// Buat produk TEST - (DINONAKTIFKAN UNTUK PRODUKSI)
-  /// Karena sistem sudah siap pakai, pembuatan produk tes dimatikan
-  /// untuk mencegah data dummy masuk ke database production.
-  /* 
-  static Future<void> buatProdukTest() async {
-    final data = [
-      {
-        'sku': 'TEST-PULSA-0',
-        'name': 'Pulsa TEST Rp0',
-        'category': 'PULSA',
-        'brand': 'TEST',
-        'cost': 0,
-        'margin': 0,
-        'active': true,
-        'isTest': true,
-      },
-      // ... data lainnya
-    ];
-    await simpanProduk(data);
-  }
-  */
 
   // =========================================================
   // TRANSACTIONS
@@ -218,86 +228,47 @@ class FirestoreService {
   static Future<void> simpanTransaksi(
     Map<String, dynamic> trx,
   ) async {
-    final ref = trx['ref_id']?.toString() ?? '';
+    final ref =
+        trx['ref_id']?.toString() ?? '';
 
     if (ref.isEmpty) {
       throw Exception('ref_id kosong');
     }
 
-    await db.collection('transactions').doc(ref).set({
-      ...trx,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await db
+        .collection('transactions')
+        .doc(ref)
+        .set(
+      {
+        ...trx,
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   static Future<List<Map<String, dynamic>>>
       ambilSemuaTransaksi() async {
     final snap = await db
         .collection('transactions')
-        .orderBy('createdAt', descending: true)
+        .orderBy(
+          'createdAt',
+          descending: true,
+        )
         .limit(300)
         .get();
 
     return snap.docs.map((d) {
-      final x = Map<String, dynamic>.from(d.data());
+      final x =
+          Map<String, dynamic>.from(
+        d.data(),
+      );
+
       x['docId'] = d.id;
+
       return x;
     }).toList();
-  }
-
-  static Future<String> ujiCobaTransaksi({
-    String sku = 'TEST-PULSA-0',
-    String productName = 'Pulsa TEST Rp0',
-    String customerNo = '080000000000',
-  }) async {
-    final ref = db.collection('transactions').doc();
-
-    await ref.set({
-      'transactionId': ref.id,
-      'ref_id': ref.id,
-      'isTest': true,
-      'testMode': true,
-      'sku': sku,
-      'productName': productName,
-      'category': 'PULSA',
-      'brand': 'TEST',
-      'customerNo': customerNo,
-      'amount': 0,
-      'cost': 0,
-      'margin': 0,
-      'status': 'SUCCESS',
-      'digiflazzSent': false,
-      'balanceBefore': 0,
-      'balanceAfter': 0,
-      'message': 'TRANSAKSI TEST Rp0',
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    return ref.id;
-  }
-
-  static Future<String> ujiCobaTransaksiGagal() async {
-    final ref = db.collection('transactions').doc();
-
-    await ref.set({
-      'transactionId': ref.id,
-      'ref_id': ref.id,
-      'isTest': true,
-      'testMode': true,
-      'sku': 'TEST-FAILED',
-      'productName': 'TEST GAGAL',
-      'amount': 0,
-      'cost': 0,
-      'margin': 0,
-      'status': 'FAILED',
-      'digiflazzSent': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    return ref.id;
   }
 
   // =========================================================
@@ -306,10 +277,16 @@ class FirestoreService {
 
   static Future<List<Map<String, dynamic>>>
       ambilUsers() async {
-    final snap = await db.collection('users').limit(500).get();
+    final snap =
+        await db.collection('users')
+            .limit(500)
+            .get();
 
     return snap.docs.map((d) {
-      final x = Map<String, dynamic>.from(d.data());
+      final x =
+          Map<String, dynamic>.from(
+        d.data(),
+      );
 
       x['id'] = d.id;
       x['balance'] ??= 0;
@@ -320,51 +297,94 @@ class FirestoreService {
     }).toList();
   }
 
+  // =========================================================
+  // UBAH SALDO USER
+  // =========================================================
+  //
+  // PENTING:
+  //
+  // Flutter TIDAK BOLEH lagi melakukan:
+  //
+  // users/{uid}.balance = ...
+  //
+  // Semua perubahan saldo dilakukan Cloud Function.
+  //
+  // =========================================================
+
   static Future<void> ubahSaldoUser(
     String uid,
     num amount,
     String alasan,
   ) async {
-    final ref = db.collection('users').doc(uid);
+    final cleanUid = uid.trim();
+    final cleanReason = alasan.trim();
+    final nominal = amount.toInt();
 
-    await db.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-
-      if (!snap.exists) {
-        throw Exception('User tidak ditemukan');
-      }
-
-      final data = snap.data() ?? {};
-
-      final before = data['balance'] is num
-          ? data['balance'] as num
-          : 0;
-
-      final after = before + amount;
-
-      if (after < 0) {
-        throw Exception('Saldo tidak boleh negatif');
-      }
-
-      tx.update(ref, {
-        'balance': after,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      tx.set(
-        db.collection('balance_ledger').doc(),
-        {
-          'uid': uid,
-          'type': amount >= 0 ? 'CREDIT' : 'DEBIT',
-          'amount': amount.abs(),
-          'before': before,
-          'after': after,
-          'reason': alasan,
-          'source': 'ADMIN',
-          'createdAt': FieldValue.serverTimestamp(),
-        },
+    if (cleanUid.isEmpty) {
+      throw Exception(
+        'UID user tidak valid.',
       );
-    });
+    }
+
+    if (cleanReason.isEmpty) {
+      throw Exception(
+        'Alasan perubahan saldo wajib diisi.',
+      );
+    }
+
+    if (nominal == 0) {
+      throw Exception(
+        'Nominal perubahan saldo tidak boleh 0.',
+      );
+    }
+
+    try {
+      final callable =
+          functions.httpsCallable(
+        'adminAdjustBalance',
+      );
+
+      await callable.call({
+        'uid': cleanUid,
+        'amount': nominal,
+        'reason': cleanReason,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      switch (e.code) {
+        case 'unauthenticated':
+          throw Exception(
+            'Sesi login tidak valid. Silakan login kembali.',
+          );
+
+        case 'permission-denied':
+          throw Exception(
+            'Anda tidak memiliki hak akses admin.',
+          );
+
+        case 'not-found':
+          throw Exception(
+            'User tidak ditemukan.',
+          );
+
+        case 'invalid-argument':
+          throw Exception(
+            e.message ??
+                'Data perubahan saldo tidak valid.',
+          );
+
+        case 'failed-precondition':
+          throw Exception(
+            e.message ??
+                'Saldo tidak dapat diproses.',
+          );
+
+        default:
+          throw Exception(
+            e.message ??
+                'Gagal memperbarui saldo.',
+          );
+      }
+    }
   }
 
   // =========================================================
@@ -375,19 +395,45 @@ class FirestoreService {
     required String uid,
     required num limitSaldo,
   }) async {
+    if (uid.trim().isEmpty) {
+      throw Exception(
+        'UID tidak valid.',
+      );
+    }
+
+    if (limitSaldo < 0) {
+      throw Exception(
+        'Limit saldo tidak boleh negatif.',
+      );
+    }
+
     await db.collection('users').doc(uid).update({
       'saldoLimit': limitSaldo,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':
+          FieldValue.serverTimestamp(),
     });
   }
 
   static Future<void> setLimitSaldoBelumKyc(
     num limit,
   ) async {
-    await db.collection('settings').doc('balance').set({
-      'limitUnverifiedKyc': limit,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    if (limit < 0) {
+      throw Exception(
+        'Limit tidak boleh negatif.',
+      );
+    }
+
+    await db
+        .collection('settings')
+        .doc('balance')
+        .set(
+      {
+        'limitUnverifiedKyc': limit,
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   // =========================================================
@@ -398,12 +444,20 @@ class FirestoreService {
       ambilKycPending() async {
     final snap = await db
         .collection('users')
-        .where('kycStatus', isEqualTo: 'PENDING')
+        .where(
+          'kycStatus',
+          isEqualTo: 'PENDING',
+        )
         .get();
 
     return snap.docs.map((d) {
-      final x = Map<String, dynamic>.from(d.data());
+      final x =
+          Map<String, dynamic>.from(
+        d.data(),
+      );
+
       x['id'] = d.id;
+
       return x;
     }).toList();
   }
@@ -414,9 +468,11 @@ class FirestoreService {
     String alasan,
   ) async {
     await db.collection('users').doc(uid).update({
-      'kycStatus': approve ? 'APPROVED' : 'REJECTED',
+      'kycStatus':
+          approve ? 'APPROVED' : 'REJECTED',
       'kycReason': alasan,
-      'kycReviewedAt': FieldValue.serverTimestamp(),
+      'kycReviewedAt':
+          FieldValue.serverTimestamp(),
     });
   }
 
@@ -426,11 +482,19 @@ class FirestoreService {
 
   static Future<List<Map<String, dynamic>>>
       ambilDevices() async {
-    final snap = await db.collection('devices').limit(500).get();
+    final snap =
+        await db.collection('devices')
+            .limit(500)
+            .get();
 
     return snap.docs.map((d) {
-      final x = Map<String, dynamic>.from(d.data());
+      final x =
+          Map<String, dynamic>.from(
+        d.data(),
+      );
+
       x['id'] = d.id;
+
       return x;
     }).toList();
   }
@@ -439,9 +503,13 @@ class FirestoreService {
     String id,
     bool blocked,
   ) async {
-    await db.collection('devices').doc(id).update({
+    await db
+        .collection('devices')
+        .doc(id)
+        .update({
       'blocked': blocked,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt':
+          FieldValue.serverTimestamp(),
     });
   }
 
@@ -453,13 +521,21 @@ class FirestoreService {
       ambilMutasiBank() async {
     final snap = await db
         .collection('bank_mutations')
-        .orderBy('createdAt', descending: true)
+        .orderBy(
+          'createdAt',
+          descending: true,
+        )
         .limit(100)
         .get();
 
     return snap.docs.map((d) {
-      final x = Map<String, dynamic>.from(d.data());
+      final x =
+          Map<String, dynamic>.from(
+        d.data(),
+      );
+
       x['id'] = d.id;
+
       return x;
     }).toList();
   }
@@ -468,14 +544,18 @@ class FirestoreService {
     String id,
     String status,
   ) async {
-    await db.collection('bank_mutations').doc(id).update({
+    await db
+        .collection('bank_mutations')
+        .doc(id)
+        .update({
       'status': status,
-      'processedAt': FieldValue.serverTimestamp(),
+      'processedAt':
+          FieldValue.serverTimestamp(),
     });
   }
 
   // =========================================================
-  // PENGUMUMAN / PROMO
+  // PENGUMUMAN
   // =========================================================
 
   static Future<void> tambahPengumuman({
@@ -487,7 +567,8 @@ class FirestoreService {
       'title': title,
       'message': message,
       'active': active,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt':
+          FieldValue.serverTimestamp(),
     });
   }
 
@@ -495,13 +576,21 @@ class FirestoreService {
       ambilPengumuman() async {
     final snap = await db
         .collection('announcements')
-        .orderBy('createdAt', descending: true)
+        .orderBy(
+          'createdAt',
+          descending: true,
+        )
         .limit(100)
         .get();
 
     return snap.docs.map((d) {
-      final x = Map<String, dynamic>.from(d.data());
+      final x =
+          Map<String, dynamic>.from(
+        d.data(),
+      );
+
       x['id'] = d.id;
+
       return x;
     }).toList();
   }
@@ -510,7 +599,10 @@ class FirestoreService {
     String id,
     bool active,
   ) async {
-    await db.collection('announcements').doc(id).update({
+    await db
+        .collection('announcements')
+        .doc(id)
+        .update({
       'active': active,
     });
   }
@@ -524,11 +616,19 @@ class FirestoreService {
     final now = DateTime.now();
 
     final start = Timestamp.fromDate(
-      DateTime(now.year, now.month, now.day),
+      DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ),
     );
 
     final end = Timestamp.fromDate(
-      DateTime(now.year, now.month, now.day + 1),
+      DateTime(
+        now.year,
+        now.month,
+        now.day + 1,
+      ),
     );
 
     final snap = await db
@@ -552,13 +652,17 @@ class FirestoreService {
     for (final d in snap.docs) {
       final data = d.data();
 
-      final margin = data['margin'] is num
-          ? (data['margin'] as num).toDouble()
-          : 0.0;
+      final margin =
+          data['margin'] is num
+              ? (data['margin'] as num)
+                  .toDouble()
+              : 0.0;
 
-      final biaya = data['fee'] is num
-          ? (data['fee'] as num).toDouble()
-          : 0.0;
+      final biaya =
+          data['fee'] is num
+              ? (data['fee'] as num)
+                  .toDouble()
+              : 0.0;
 
       total += margin - biaya;
     }
@@ -567,33 +671,47 @@ class FirestoreService {
       {
         'date': now,
         'profit': total,
-        'transactionCount': snap.docs.length,
+        'transactionCount':
+            snap.docs.length,
       }
     ];
   }
 
   // =========================================================
-  // HAPUS DATA TEST (UNTUK PRODUCTION)
+  // DATA TEST
   // =========================================================
 
-  /// Hapus seluruh produk tes dari Firestore.
-  /// Panggil fungsi ini sekali dari sisi admin/backend saat masa rilis.
-  static Future<void> hapusSemuaProdukTest() async {
+  static Future<void>
+      hapusSemuaProdukTest() async {
     final snap = await db
         .collection('products')
-        .where('isTest', isEqualTo: true)
+        .where(
+          'isTest',
+          isEqualTo: true,
+        )
         .get();
 
     const limit = 450;
 
-    for (int start = 0; start < snap.docs.length; start += limit) {
+    for (
+      int start = 0;
+      start < snap.docs.length;
+      start += limit
+    ) {
       final batch = db.batch();
 
-      final end = start + limit > snap.docs.length
-          ? snap.docs.length
-          : start + limit;
+      final end =
+          start + limit > snap.docs.length
+              ? snap.docs.length
+              : start + limit;
 
-      for (final doc in snap.docs.sublist(start, end)) {
+      for (
+        final doc
+            in snap.docs.sublist(
+              start,
+              end,
+            )
+      ) {
         batch.delete(doc.reference);
       }
 
@@ -601,22 +719,37 @@ class FirestoreService {
     }
   }
 
-  static Future<void> hapusSemuaTransaksiTest() async {
+  static Future<void>
+      hapusSemuaTransaksiTest() async {
     final snap = await db
         .collection('transactions')
-        .where('isTest', isEqualTo: true)
+        .where(
+          'isTest',
+          isEqualTo: true,
+        )
         .get();
 
     const limit = 450;
 
-    for (int start = 0; start < snap.docs.length; start += limit) {
+    for (
+      int start = 0;
+      start < snap.docs.length;
+      start += limit
+    ) {
       final batch = db.batch();
 
-      final end = start + limit > snap.docs.length
-          ? snap.docs.length
-          : start + limit;
+      final end =
+          start + limit > snap.docs.length
+              ? snap.docs.length
+              : start + limit;
 
-      for (final doc in snap.docs.sublist(start, end)) {
+      for (
+        final doc
+            in snap.docs.sublist(
+              start,
+              end,
+            )
+      ) {
         batch.delete(doc.reference);
       }
 
