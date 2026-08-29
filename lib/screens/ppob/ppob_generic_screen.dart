@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -17,10 +21,6 @@ class PpobGenericScreen extends StatefulWidget {
 }
 
 class _PpobGenericScreenState extends State<PpobGenericScreen> {
-  // =========================================================
-  // CONTROLLER
-  // =========================================================
-
   final TextEditingController _nomorController =
       TextEditingController();
 
@@ -28,10 +28,6 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       TextEditingController();
 
   final FocusNode _nomorFocus = FocusNode();
-
-  // =========================================================
-  // STATE
-  // =========================================================
 
   bool _isLoadingData = true;
   bool _isProcessingTransaction = false;
@@ -46,22 +42,20 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
 
   List<String> _brands = ['Semua'];
 
-  // =========================================================
-  // INIT
-  // =========================================================
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _transactionSubscription;
 
   @override
   void initState() {
     super.initState();
 
     _searchController.addListener(_filterProduk);
-
     _fetchProdukDariFirestore();
   }
 
-  // =========================================================
-  // NORMALISASI TEKS
-  // =========================================================
+  // ==========================================================
+  // NORMALIZE
+  // ==========================================================
 
   String _normalize(dynamic value) {
     if (value == null) return '';
@@ -75,9 +69,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         .replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  // =========================================================
-  // BACA FIELD PRODUK DENGAN AMAN
-  // =========================================================
+  // ==========================================================
+  // PRODUCT HELPERS
+  // ==========================================================
 
   String _productName(Map<String, dynamic> product) {
     return product['name']?.toString() ??
@@ -111,20 +105,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         '';
   }
 
-  // =========================================================
-  // PEMETAAN KATEGORI DESAPAY
-  // =========================================================
-  //
-  // SANGAT PENTING:
-  //
-  // Telkom / IndiHome TIDAK BOLEH menggunakan pencarian
-  // sederhana "contains('telkom')" karena:
-  //
-  // telkomsel != telkom
-  //
-  // Maka dibuat rule khusus.
-  //
-  // =========================================================
+  // ==========================================================
+  // CATEGORY MATCH
+  // ==========================================================
 
   bool _isProductMatch(
     Map<String, dynamic> product,
@@ -135,12 +118,6 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     final name = _normalize(_productName(product));
     final sku = _normalize(_productSku(product));
 
-    final combined = '$category $brand $name $sku';
-
-    // =======================================================
-    // PULSA
-    // =======================================================
-
     if (requestedCategory == 'pulsa') {
       return category.contains('pulsa') ||
           category.contains('prabayar') ||
@@ -148,19 +125,11 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           name.contains('pulsa');
     }
 
-    // =======================================================
-    // PAKET DATA
-    // =======================================================
-
     if (requestedCategory == 'paket data') {
       return category.contains('data') ||
           category.contains('internet') ||
           category.contains('paket data');
     }
-
-    // =======================================================
-    // TELP & SMS
-    // =======================================================
 
     if (requestedCategory == 'paket sms telepon') {
       return category.contains('sms') ||
@@ -169,18 +138,12 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           category.contains('voice');
     }
 
-    // =======================================================
-    // PLN TOKEN
-    // =======================================================
-
     if (requestedCategory == 'pln') {
-      final isPln =
-          category.contains('pln') ||
+      final isPln = category.contains('pln') ||
           name.contains('pln') ||
           brand == 'pln';
 
-      final isPasca =
-          category.contains('pascabayar') ||
+      final isPasca = category.contains('pascabayar') ||
           category.contains('pasca bayar') ||
           name.contains('pascabayar') ||
           name.contains('pasca bayar');
@@ -188,30 +151,13 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       return isPln && !isPasca;
     }
 
-    // =======================================================
-    // PLN PASCA
-    // =======================================================
-
     if (requestedCategory == 'pln pascabayar') {
       return category.contains('pascabayar') ||
           category.contains('pasca bayar');
     }
 
-    // =======================================================
-    // TELKOM / INDIHOME
-    // =======================================================
-    //
-    // JANGAN gunakan:
-    //
-    // combined.contains('telkom')
-    //
-    // karena bisa salah membaca Telkomsel.
-    //
-    // =======================================================
-
     if (requestedCategory == 'telkom') {
-      final isTelkom =
-          category.contains('telkom') ||
+      final isTelkom = category.contains('telkom') ||
           category.contains('indihome') ||
           category.contains('internet rumah') ||
           category.contains('wifi') ||
@@ -219,8 +165,7 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           brand == 'telkom' ||
           brand == 'indihome';
 
-      final isTelkomsel =
-          brand.contains('telkomsel') ||
+      final isTelkomsel = brand.contains('telkomsel') ||
           category.contains('telkomsel') ||
           name.contains('telkomsel') ||
           sku.contains('tsel');
@@ -228,41 +173,24 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       return isTelkom && !isTelkomsel;
     }
 
-    // =======================================================
-    // E-WALLET
-    // =======================================================
-
     if (requestedCategory == 'e money') {
       return category.contains('e money') ||
-          category.contains('e-money') ||
           category.contains('ewallet') ||
           category.contains('e wallet') ||
           category.contains('dompet digital') ||
           category.contains('wallet');
     }
 
-    // =======================================================
-    // GAME
-    // =======================================================
-
     if (requestedCategory == 'games') {
       return category.contains('game') ||
           category.contains('games');
     }
-
-    // =======================================================
-    // VOUCHER GAME
-    // =======================================================
 
     if (requestedCategory == 'voucher game') {
       return category.contains('voucher game') ||
           (category.contains('game') &&
               category.contains('voucher'));
     }
-
-    // =======================================================
-    // TOP UP GAME
-    // =======================================================
 
     if (requestedCategory == 'top up game') {
       return category.contains('top up game') ||
@@ -271,37 +199,21 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
               category.contains('topup'));
     }
 
-    // =======================================================
-    // PDAM
-    // =======================================================
-
     if (requestedCategory == 'pdam') {
       return category.contains('pdam') ||
           category.contains('air');
     }
-
-    // =======================================================
-    // BPJS
-    // =======================================================
 
     if (requestedCategory == 'bpjs kesehatan') {
       return category.contains('bpjs') ||
           category.contains('kesehatan');
     }
 
-    // =======================================================
-    // ANGsURAN
-    // =======================================================
-
     if (requestedCategory == 'angsuran kredit') {
       return category.contains('angsuran') ||
           category.contains('kredit') ||
           category.contains('cicilan');
     }
-
-    // =======================================================
-    // HP PASCA BAYAR
-    // =======================================================
 
     if (requestedCategory == 'hp pascabayar') {
       return category.contains('pascabayar') &&
@@ -310,28 +222,16 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
               category.contains('seluler'));
     }
 
-    // =======================================================
-    // TV BERLANGGANAN
-    // =======================================================
-
     if (requestedCategory == 'tv berlangganan') {
       return category.contains('tv') ||
           category.contains('televisi') ||
           category.contains('kabel');
     }
 
-    // =======================================================
-    // PBB
-    // =======================================================
-
     if (requestedCategory == 'pbb') {
       return category.contains('pbb') ||
           category.contains('pajak bumi');
     }
-
-    // =======================================================
-    // PGN
-    // =======================================================
 
     if (requestedCategory == 'pgn') {
       return category.contains('pgn') ||
@@ -339,18 +239,10 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           name.contains('pgn');
     }
 
-    // =======================================================
-    // E-SAMSAT
-    // =======================================================
-
     if (requestedCategory == 'e samsat') {
       return category.contains('samsat') ||
           category.contains('e samsat');
     }
-
-    // =======================================================
-    // TIKET
-    // =======================================================
 
     if (requestedCategory == 'tiket perjalanan') {
       return category.contains('tiket') ||
@@ -358,65 +250,45 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           category.contains('perjalanan');
     }
 
-    // =======================================================
-    // STREAMING
-    // =======================================================
-
     if (requestedCategory == 'streaming') {
       return category.contains('streaming') ||
           category.contains('digital');
     }
-
-    // =======================================================
-    // MASA AKTIF
-    // =======================================================
 
     if (requestedCategory == 'masa aktif') {
       return category.contains('masa aktif') ||
           category.contains('aktif');
     }
 
-    // =======================================================
-    // AKTIVASI VOUCHER
-    // =======================================================
-
     if (requestedCategory == 'aktivasi voucher') {
       return category.contains('aktivasi') ||
           category.contains('voucher');
     }
-
-    // =======================================================
-    // PAKET PERDANA
-    // =======================================================
 
     if (requestedCategory == 'paket perdana') {
       return category.contains('perdana') ||
           category.contains('starter');
     }
 
-    // =======================================================
-    // VOUCHER DIGITAL
-    // =======================================================
-
     if (requestedCategory == 'voucher digital') {
       return category.contains('voucher') ||
           category.contains('digital');
     }
 
-    // =======================================================
-    // FALLBACK
-    // =======================================================
-
     return category.contains(requestedCategory) ||
         brand.contains(requestedCategory);
   }
 
-  // =========================================================
-  // KATEGORI REQUEST
-  // =========================================================
+  // ==========================================================
+  // RESOLVE CATEGORY
+  // ==========================================================
 
   String _resolveRequestedCategory() {
     final kategori = _normalize(widget.kategori);
+
+    if (kategori.contains('pln pasca')) {
+      return 'pln pascabayar';
+    }
 
     if (kategori.contains('telkom') ||
         kategori.contains('indihome') ||
@@ -441,10 +313,6 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     if (kategori.contains('token') &&
         kategori.contains('pln')) {
       return 'pln';
-    }
-
-    if (kategori.contains('pln pasca')) {
-      return 'pln pascabayar';
     }
 
     if (kategori.contains('top up game') ||
@@ -525,9 +393,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     return kategori;
   }
 
-  // =========================================================
-  // AMBIL PRODUK FIRESTORE
-  // =========================================================
+  // ==========================================================
+  // LOAD PRODUCT
+  // ==========================================================
 
   Future<void> _fetchProdukDariFirestore() async {
     if (!mounted) return;
@@ -543,27 +411,20 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       final requestedCategory =
           _resolveRequestedCategory();
 
-      final filteredProducts =
-          allProducts.where((product) {
-        return _isProductMatch(
-          product,
-          requestedCategory,
-        );
-      }).toList();
+      final filteredProducts = allProducts
+          .where(
+            (product) => _isProductMatch(
+              product,
+              requestedCategory,
+            ),
+          )
+          .toList();
 
-      // =====================================================
-      // URUTKAN HARGA TERMURAH
-      // =====================================================
-
-      filteredProducts.sort((a, b) {
-        return _hargaJual(a).compareTo(
+      filteredProducts.sort(
+        (a, b) => _hargaJual(a).compareTo(
           _hargaJual(b),
-        );
-      });
-
-      // =====================================================
-      // AMBIL BRAND UNIK
-      // =====================================================
+        ),
+      );
 
       final brandSet = <String>{};
 
@@ -593,6 +454,14 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         _brands = brands;
         _selectedBrand = 'Semua';
         _isLoadingData = false;
+
+        if (_selectedSku != null &&
+            !_produkList.any(
+              (p) => _productSku(p) == _selectedSku,
+            )) {
+          _selectedSku = null;
+          _selectedProductData = null;
+        }
       });
 
       _filterProduk();
@@ -603,52 +472,51 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         _isLoadingData = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Gagal memuat produk: $e',
-          ),
-          backgroundColor:
-              WarnaDesaPay.danger,
-        ),
+      _showMessage(
+        'Gagal memuat produk.',
+        danger: true,
       );
     }
   }
 
-  // =========================================================
-  // FILTER PRODUK
-  // =========================================================
+  // ==========================================================
+  // FILTER
+  // ==========================================================
 
   void _filterProduk() {
-    final query =
-        _normalize(_searchController.text);
+    final query = _normalize(
+      _searchController.text,
+    );
 
-    final brand =
-        _normalize(_selectedBrand);
+    final brand = _normalize(
+      _selectedBrand,
+    );
 
-    final result =
-        _produkList.where((product) {
-      final nama =
-          _normalize(_productName(product));
+    final result = _produkList.where(
+      (product) {
+        final nama = _normalize(
+          _productName(product),
+        );
 
-      final sku =
-          _normalize(_productSku(product));
+        final sku = _normalize(
+          _productSku(product),
+        );
 
-      final productBrand =
-          _normalize(_productBrand(product));
+        final productBrand = _normalize(
+          _productBrand(product),
+        );
 
-      final searchMatch =
-          query.isEmpty ||
-          nama.contains(query) ||
-          sku.contains(query) ||
-          productBrand.contains(query);
+        final searchMatch = query.isEmpty ||
+            nama.contains(query) ||
+            sku.contains(query) ||
+            productBrand.contains(query);
 
-      final brandMatch =
-          _selectedBrand == 'Semua' ||
-          productBrand == brand;
+        final brandMatch = _selectedBrand == 'Semua' ||
+            productBrand == brand;
 
-      return searchMatch && brandMatch;
-    }).toList();
+        return searchMatch && brandMatch;
+      },
+    ).toList();
 
     if (!mounted) return;
 
@@ -657,28 +525,22 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     });
   }
 
-  // =========================================================
-  // PARSE DOUBLE
-  // =========================================================
+  // ==========================================================
+  // PRICE
+  // ==========================================================
 
   double _parseDouble(dynamic value) {
-    if (value == null) {
-      return 0;
-    }
+    if (value == null) return 0;
 
     if (value is num) {
       return value.toDouble();
     }
 
-    final text =
-        value.toString().trim();
+    final text = value.toString().trim();
 
-    if (text.isEmpty) {
-      return 0;
-    }
+    if (text.isEmpty) return 0;
 
-    final direct =
-        double.tryParse(text);
+    final direct = double.tryParse(text);
 
     if (direct != null) {
       return direct;
@@ -694,47 +556,30 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         0;
   }
 
-  // =========================================================
-  // HARGA JUAL
-  // =========================================================
-
-  int _hargaJual(
-    Map<String, dynamic> product,
-  ) {
-    // Jika admin sudah menyimpan harga jual,
-    // gunakan harga jual tersebut.
-
-    final harga =
-        product['harga_jual'] ??
+  int _hargaJual(Map<String, dynamic> product) {
+    final harga = product['harga_jual'] ??
         product['hargaJual'] ??
         product['selling_price'] ??
         product['sellingPrice'];
 
     if (harga != null) {
-      final parsed =
-          _parseDouble(harga);
+      final parsed = _parseDouble(harga);
 
       if (parsed > 0) {
         return parsed.round();
       }
     }
 
-    // Fallback:
-    //
-    // cost + margin
+    final cost = _parseDouble(
+      product['cost'],
+    );
 
-    final cost =
-        _parseDouble(product['cost']);
-
-    final margin =
-        _parseDouble(product['margin']);
+    final margin = _parseDouble(
+      product['margin'],
+    );
 
     return (cost + margin).round();
   }
-
-  // =========================================================
-  // FORMAT RUPIAH
-  // =========================================================
 
   String _formatRupiah(num nominal) {
     return NumberFormat.currency(
@@ -744,18 +589,61 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     ).format(nominal);
   }
 
-  // =========================================================
-  // PROSES TRANSAKSI
-  // =========================================================
+  // ==========================================================
+  // SELECT PRODUCT
+  // ==========================================================
+
+  void _pilihProduk(
+    Map<String, dynamic> product,
+  ) {
+    final sku = _productSku(product);
+
+    if (sku.isEmpty) {
+      _showMessage(
+        'SKU produk tidak valid.',
+        danger: true,
+      );
+      return;
+    }
+
+    final nama = _productName(product);
+    final brand = _productBrand(product);
+    final harga = _hargaJual(product);
+
+    _nomorFocus.unfocus();
+
+    setState(() {
+      _selectedSku = sku;
+
+      _selectedProductData = {
+        'sku': sku,
+        'nama': nama,
+        'harga': harga,
+        'brand': brand,
+        'category': _productCategory(product),
+        'cost': _parseDouble(product['cost']),
+        'margin': _parseDouble(product['margin']),
+      };
+    });
+  }
+
+  // ==========================================================
+  // EKSEKUSI PEMBELIAN
+  //
+  // FLUTTER -> transaction_requests
+  // BACKEND -> VALIDASI SALDO USER
+  // BACKEND -> DIGIFLAZZ
+  // BACKEND -> UPDATE STATUS
+  // ==========================================================
 
   Future<void> _prosesTransaksi() async {
-    final nomor =
-        _nomorController.text.trim();
+    final nomor = _nomorController.text.trim();
 
     if (nomor.isEmpty) {
       _showMessage(
         'Nomor / ID tujuan wajib diisi.',
       );
+      _nomorFocus.requestFocus();
       return;
     }
 
@@ -767,7 +655,35 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       return;
     }
 
-    if (_isProcessingTransaction) {
+    if (_isProcessingTransaction) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      _showMessage(
+        'Sesi login berakhir. Silakan login kembali.',
+        danger: true,
+      );
+      return;
+    }
+
+    final harga = _parseDouble(
+      _selectedProductData!['harga'],
+    );
+
+    final cost = _parseDouble(
+      _selectedProductData!['cost'],
+    );
+
+    final margin = _parseDouble(
+      _selectedProductData!['margin'],
+    );
+
+    if (harga <= 0) {
+      _showMessage(
+        'Harga produk tidak valid.',
+        danger: true,
+      );
       return;
     }
 
@@ -776,41 +692,214 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     });
 
     try {
-      final sku =
-          _selectedSku!;
+      // --------------------------------------------------------
+      // CEK MAINTENANCE APLIKASI
+      // --------------------------------------------------------
 
-      final nama =
-          _selectedProductData!['nama']
-                  ?.toString() ??
-              '-';
+      final maintenance =
+          await FirestoreService.ambilMaintenance();
 
-      final harga =
-          _parseDouble(
-        _selectedProductData!['harga'],
+      if (maintenance) {
+        _showMessage(
+          'Sistem sedang dalam pemeliharaan. Silakan coba lagi nanti.',
+          danger: true,
+        );
+        return;
+      }
+
+      // --------------------------------------------------------
+      // BUAT REQUEST TRANSAKSI
+      //
+      // BACKEND YANG AKAN MEMPROSES REQUEST INI.
+      // API KEY DIGIFLAZZ TIDAK PERNAH MASUK KE APK.
+      // --------------------------------------------------------
+
+      final requestRef = FirebaseFirestore.instance
+          .collection('transaction_requests')
+          .doc();
+
+      final requestId = requestRef.id;
+
+      await requestRef.set({
+        'requestId': requestId,
+
+        // USER
+        'uid': user.uid,
+
+        // PRODUK
+        'sku': _selectedSku,
+        'buyer_sku_code': _selectedSku,
+        'productName':
+            _selectedProductData!['nama']?.toString() ?? '-',
+        'category':
+            _selectedProductData!['category']?.toString() ??
+                widget.kategori,
+        'brand':
+            _selectedProductData!['brand']?.toString() ?? '',
+
+        // TUJUAN
+        'customerNo': nomor,
+        'customer_no': nomor,
+
+        // HARGA
+        'amount': harga.round(),
+        'sellingPrice': harga.round(),
+        'cost': cost.round(),
+        'margin': margin.round(),
+
+        // STATUS
+        'status': 'WAITING',
+        'isTest': false,
+        'testMode': false,
+        'digiflazzSent': false,
+
+        // SUMBER
+        'source': 'PPOB_GENERIC',
+        'categoryScreen': widget.kategori,
+
+        // WAKTU
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      _showMessage(
+        'Permintaan transaksi dikirim. Memproses...',
       );
 
-      await Future.delayed(
-        const Duration(
-          milliseconds: 500,
-        ),
+      // --------------------------------------------------------
+      // TUNGGU BACKEND MENGUBAH STATUS
+      // --------------------------------------------------------
+
+      final completer =
+          Completer<Map<String, dynamic>>();
+
+      await _transactionSubscription?.cancel();
+
+      _transactionSubscription = requestRef
+          .snapshots()
+          .listen(
+        (snapshot) {
+          if (!snapshot.exists) return;
+
+          final data = snapshot.data();
+
+          if (data == null) return;
+
+          final status =
+              data['status']?.toString().toUpperCase() ?? '';
+
+          // ----------------------------------------------------
+          // BERHASIL
+          // ----------------------------------------------------
+
+          if (status == 'SUCCESS' ||
+              status == 'SUKSES' ||
+              status == 'BERHASIL') {
+            if (!completer.isCompleted) {
+              completer.complete(data);
+            }
+            return;
+          }
+
+          // ----------------------------------------------------
+          // GAGAL
+          // ----------------------------------------------------
+
+          if (status == 'FAILED' ||
+              status == 'FAIL' ||
+              status == 'GAGAL' ||
+              status == 'ERROR' ||
+              status == 'CANCELLED' ||
+              status == 'CANCELED') {
+            if (!completer.isCompleted) {
+              completer.complete(data);
+            }
+          }
+        },
+        onError: (error) {
+          if (!completer.isCompleted) {
+            completer.completeError(error);
+          }
+        },
+      );
+
+      // --------------------------------------------------------
+      // BATAS TUNGGU
+      // --------------------------------------------------------
+
+      final result = await completer.future.timeout(
+        const Duration(seconds: 90),
+        onTimeout: () {
+          return {
+            'status': 'TIMEOUT',
+            'message':
+                'Transaksi masih diproses. Silakan cek riwayat transaksi.',
+          };
+        },
       );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '$nama ($sku) • ${_formatRupiah(harga)}',
-          ),
-          backgroundColor:
-              WarnaDesaPay.primary,
-        ),
+      final status =
+          result['status']?.toString().toUpperCase() ?? '';
+
+      final message =
+          result['message']?.toString() ??
+              result['msg']?.toString() ??
+              '';
+
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
+      if (status == 'SUCCESS' ||
+          status == 'SUKSES' ||
+          status == 'BERHASIL') {
+        _showTransactionSuccess(
+          productName:
+              _selectedProductData!['nama']?.toString() ?? '-',
+          nomor: nomor,
+          harga: harga,
+          message: message,
+        );
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // FAILED
+      // --------------------------------------------------------
+
+      if (status == 'FAILED' ||
+          status == 'FAIL' ||
+          status == 'GAGAL' ||
+          status == 'ERROR' ||
+          status == 'CANCELLED' ||
+          status == 'CANCELED') {
+        _showMessage(
+          message.isEmpty
+              ? 'Transaksi gagal diproses.'
+              : message,
+          danger: true,
+        );
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // TIMEOUT / MASIH DIPROSES
+      // --------------------------------------------------------
+
+      _showMessage(
+        'Transaksi masih diproses. Silakan cek riwayat transaksi.',
       );
     } catch (e) {
       if (!mounted) return;
 
       _showMessage(
-        'Gagal memproses transaksi: $e',
+        'Gagal membuat transaksi. Silakan coba lagi.',
         danger: true,
       );
     } finally {
@@ -822,40 +911,181 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     }
   }
 
-  // =========================================================
+  // ==========================================================
+  // SUCCESS DIALOG
+  // ==========================================================
+
+  void _showTransactionSuccess({
+    required String productName,
+    required String nomor,
+    required double harga,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.green,
+                  size: 27,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Transaksi Berhasil',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              _detailTransaksi(
+                'Produk',
+                productName,
+              ),
+              const SizedBox(height: 8),
+              _detailTransaksi(
+                'Tujuan',
+                nomor,
+              ),
+              const SizedBox(height: 8),
+              _detailTransaksi(
+                'Total',
+                _formatRupiah(harga),
+              ),
+              if (message.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: WarnaDesaPay.textSub,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+
+                setState(() {
+                  _selectedSku = null;
+                  _selectedProductData = null;
+                });
+
+                _nomorController.clear();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: WarnaDesaPay.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Selesai',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _detailTransaksi(
+    String label,
+    String value,
+  ) {
+    return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 65,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: WarnaDesaPay.textSub,
+            ),
+          ),
+        ),
+        const Text(': '),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: WarnaDesaPay.textMain,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================================
   // MESSAGE
-  // =========================================================
+  // ==========================================================
 
   void _showMessage(
     String message, {
     bool danger = false,
   }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: danger
-            ? WarnaDesaPay.danger
-            : WarnaDesaPay.primary,
-        behavior:
-            SnackBarBehavior.floating,
-        margin:
-            const EdgeInsets.all(16),
-        shape:
-            RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.circular(14),
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: danger
+              ? WarnaDesaPay.danger
+              : WarnaDesaPay.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
-      ),
-    );
+      );
   }
 
-  // =========================================================
-  // ICON KATEGORI
-  // =========================================================
+  // ==========================================================
+  // CATEGORY ICON
+  // ==========================================================
 
   IconData _categoryIcon() {
-    final category =
-        _resolveRequestedCategory();
+    final category = _resolveRequestedCategory();
 
     if (category == 'pulsa') {
       return Icons.phone_android_rounded;
@@ -909,22 +1139,18 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     return Icons.grid_view_rounded;
   }
 
-  // =========================================================
+  // ==========================================================
   // BUILD
-  // =========================================================
+  // ==========================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          WarnaDesaPay.lightBg,
-
+      backgroundColor: WarnaDesaPay.lightBg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor:
-            WarnaDesaPay.primary,
-        foregroundColor:
-            Colors.white,
+        backgroundColor: WarnaDesaPay.primary,
+        foregroundColor: Colors.white,
         centerTitle: true,
         title: Text(
           widget.kategori,
@@ -945,22 +1171,17 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           ),
         ],
       ),
-
       body: Stack(
         children: [
           RefreshIndicator(
             color: WarnaDesaPay.primary,
             backgroundColor: Colors.white,
-            onRefresh:
-                _fetchProdukDariFirestore,
+            onRefresh: _fetchProdukDariFirestore,
             child: SingleChildScrollView(
-              physics:
-                  const AlwaysScrollableScrollPhysics(
-                parent:
-                    BouncingScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-              padding:
-                  const EdgeInsets.fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 20,
                 18,
                 20,
@@ -970,74 +1191,27 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
-                  // =================================================
-                  // HEADER KATEGORI
-                  // =================================================
-
                   _buildCategoryHeader(),
-
-                  const SizedBox(
-                    height: 16,
-                  ),
-
-                  // =================================================
-                  // NOMOR TUJUAN
-                  // =================================================
-
+                  const SizedBox(height: 16),
                   _buildTargetField(),
-
-                  const SizedBox(
-                    height: 18,
-                  ),
-
-                  // =================================================
-                  // IKLAN PROMO
-                  // =================================================
-
+                  const SizedBox(height: 18),
                   _buildPromoBanner(),
-
-                  const SizedBox(
-                    height: 22,
-                  ),
-
-                  // =================================================
-                  // SEARCH
-                  // =================================================
-
+                  const SizedBox(height: 22),
                   _buildSearchField(),
-
-                  const SizedBox(
-                    height: 14,
-                  ),
-
-                  // =================================================
-                  // BRAND FILTER
-                  // =================================================
-
+                  const SizedBox(height: 14),
                   if (_brands.length > 1)
                     _buildBrandFilter(),
-
-                  const SizedBox(
-                    height: 18,
-                  ),
-
-                  // =================================================
-                  // TITLE PRODUK
-                  // =================================================
-
+                  const SizedBox(height: 18),
                   Row(
                     mainAxisAlignment:
                         MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
+                      const Text(
                         'Pilih Produk',
-                        style:
-                            const TextStyle(
+                        style: TextStyle(
                           fontSize: 17,
-                          fontWeight:
-                              FontWeight.w900,
-                          color:
-                              WarnaDesaPay.textMain,
+                          fontWeight: FontWeight.w900,
+                          color: WarnaDesaPay.textMain,
                         ),
                       ),
                       if (!_isLoadingData)
@@ -1047,25 +1221,17 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                             horizontal: 9,
                             vertical: 5,
                           ),
-                          decoration:
-                              BoxDecoration(
-                            color:
-                                WarnaDesaPay.primary
-                                    .withOpacity(
-                              0.08,
-                            ),
+                          decoration: BoxDecoration(
+                            color: WarnaDesaPay.primary
+                                .withOpacity(0.08),
                             borderRadius:
-                                BorderRadius.circular(
-                              20,
-                            ),
+                                BorderRadius.circular(20),
                           ),
                           child: Text(
                             '${_filteredProducts.length} produk',
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 11,
-                              fontWeight:
-                                  FontWeight.w800,
+                              fontWeight: FontWeight.w800,
                               color:
                                   WarnaDesaPay.primary,
                             ),
@@ -1073,80 +1239,47 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                         ),
                     ],
                   ),
-
-                  const SizedBox(
-                    height: 12,
-                  ),
-
-                  // =================================================
-                  // LOADING
-                  // =================================================
-
+                  const SizedBox(height: 12),
                   if (_isLoadingData)
                     _buildLoading()
-
-                  // =================================================
-                  // EMPTY
-                  // =================================================
-
                   else if (_filteredProducts.isEmpty)
                     _buildEmptyState()
-
-                  // =================================================
-                  // PRODUK
-                  // =================================================
-
                   else
                     _buildProductGrid(),
                 ],
               ),
             ),
           ),
-
-          // =======================================================
-          // BOTTOM PAYMENT PANEL
-          // =======================================================
-
           _buildBottomPayment(),
         ],
       ),
     );
   }
 
-  // =========================================================
-  // HEADER KATEGORI
-  // =========================================================
+  // ==========================================================
+  // CATEGORY HEADER
+  // ==========================================================
 
   Widget _buildCategoryHeader() {
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.all(18),
-      decoration:
-          BoxDecoration(
-        gradient:
-            LinearGradient(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
           colors: [
             WarnaDesaPay.primary,
             const Color(0xFF2563EB),
           ],
-          begin:
-              Alignment.topLeft,
-          end:
-              Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        borderRadius:
-            BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color:
-                WarnaDesaPay.primary
-                    .withOpacity(
-              0.18,
-            ),
+            color: WarnaDesaPay.primary
+                .withOpacity(0.18),
             blurRadius: 18,
-            offset:
-                const Offset(0, 8),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1155,27 +1288,18 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           Container(
             width: 52,
             height: 52,
-            decoration:
-                BoxDecoration(
-              color: Colors.white
-                  .withOpacity(
-                0.18,
-              ),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
               borderRadius:
-                  BorderRadius.circular(
-                16,
-              ),
+                  BorderRadius.circular(16),
             ),
             child: Icon(
               _categoryIcon(),
-              color:
-                  Colors.white,
+              color: Colors.white,
               size: 28,
             ),
           ),
-          const SizedBox(
-            width: 14,
-          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment:
@@ -1186,31 +1310,21 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                   maxLines: 1,
                   overflow:
                       TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(
-                    color:
-                        Colors.white,
+                  style: const TextStyle(
+                    color: Colors.white,
                     fontSize: 18,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(
-                  height: 4,
-                ),
+                const SizedBox(height: 4),
                 Text(
                   'Pilih layanan favoritmu dengan harga terbaik.',
                   maxLines: 2,
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     color:
-                        Colors.white
-                            .withOpacity(
-                      0.82,
-                    ),
+                        Colors.white.withOpacity(0.82),
                     fontSize: 11,
-                    fontWeight:
-                        FontWeight.w500,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -1221,97 +1335,65 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
-  // FIELD NOMOR
-  // =========================================================
+  // ==========================================================
+  // TARGET
+  // ==========================================================
 
   Widget _buildTargetField() {
     return Container(
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.white,
-        borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color:
-                Colors.black
-                    .withOpacity(
-              0.035,
-            ),
+                Colors.black.withOpacity(0.035),
             blurRadius: 12,
-            offset:
-                const Offset(0, 5),
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: TextField(
-        controller:
-            _nomorController,
-        focusNode:
-            _nomorFocus,
-        keyboardType:
-            TextInputType.phone,
+        controller: _nomorController,
+        focusNode: _nomorFocus,
+        keyboardType: TextInputType.phone,
         textInputAction:
             TextInputAction.done,
-        decoration:
-            InputDecoration(
+        decoration: InputDecoration(
           hintText:
               'Nomor HP / ID Pelanggan / Nomor Tujuan',
-          hintStyle:
-              const TextStyle(
-            color:
-                WarnaDesaPay.textSub,
+          hintStyle: const TextStyle(
+            color: WarnaDesaPay.textSub,
             fontSize: 12,
           ),
-          prefixIcon:
-              Container(
-            margin:
-                const EdgeInsets.all(
-              10,
-            ),
-            decoration:
-                BoxDecoration(
-              color:
-                  WarnaDesaPay.primary
-                      .withOpacity(
-                0.08,
-              ),
+          prefixIcon: Container(
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: WarnaDesaPay.primary
+                  .withOpacity(0.08),
               borderRadius:
-                  BorderRadius.circular(
-                11,
-              ),
+                  BorderRadius.circular(11),
             ),
-            child:
-                const Icon(
+            child: const Icon(
               Icons.person_search_rounded,
-              color:
-                  WarnaDesaPay.primary,
+              color: WarnaDesaPay.primary,
               size: 21,
             ),
           ),
           suffixIcon:
-              _nomorController
-                      .text
-                      .isNotEmpty
+              _nomorController.text.isNotEmpty
                   ? IconButton(
                       onPressed: () {
-                        _nomorController
-                            .clear();
+                        _nomorController.clear();
                         setState(() {});
                       },
-                      icon:
-                          const Icon(
+                      icon: const Icon(
                         Icons.close_rounded,
                         size: 19,
                       ),
                     )
                   : null,
-          border:
-              InputBorder.none,
+          border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(
             vertical: 17,
@@ -1325,41 +1407,31 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
-  // PROMO BANNER
-  // =========================================================
+  // ==========================================================
+  // PROMO
+  // ==========================================================
 
   Widget _buildPromoBanner() {
     return Container(
       height: 104,
       width: double.infinity,
-      decoration:
-          BoxDecoration(
-        gradient:
-            const LinearGradient(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
           colors: [
             Color(0xFF0F172A),
             Color(0xFF1E3A8A),
           ],
-          begin:
-              Alignment.centerLeft,
-          end:
-              Alignment.centerRight,
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
         borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
+            BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color:
-                WarnaDesaPay.primary
-                    .withOpacity(
-              0.15,
-            ),
+            color: WarnaDesaPay.primary
+                .withOpacity(0.15),
             blurRadius: 16,
-            offset:
-                const Offset(0, 7),
+            offset: const Offset(0, 7),
           ),
         ],
       ),
@@ -1368,36 +1440,26 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           Positioned(
             right: -12,
             top: -25,
-            child:
-                Container(
+            child: Container(
               width: 120,
               height: 120,
-              decoration:
-                  BoxDecoration(
-                shape:
-                    BoxShape.circle,
-                color: Colors.white
-                    .withOpacity(
-                  0.06,
-                ),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    Colors.white.withOpacity(0.06),
               ),
             ),
           ),
           Positioned(
             right: 28,
             bottom: -35,
-            child:
-                Container(
+            child: Container(
               width: 90,
               height: 90,
-              decoration:
-                  BoxDecoration(
-                shape:
-                    BoxShape.circle,
-                color: Colors.white
-                    .withOpacity(
-                  0.05,
-                ),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    Colors.white.withOpacity(0.05),
               ),
             ),
           ),
@@ -1412,31 +1474,21 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                 Container(
                   width: 54,
                   height: 54,
-                  decoration:
-                      BoxDecoration(
-                    color: Colors.white
-                        .withOpacity(
-                      0.12,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(
-                      16,
-                    ),
-                  ),
-                  child:
-                      const Icon(
-                    Icons.local_offer_rounded,
+                  decoration: BoxDecoration(
                     color:
-                        Colors.white,
+                        Colors.white.withOpacity(0.12),
+                    borderRadius:
+                        BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.local_offer_rounded,
+                    color: Colors.white,
                     size: 27,
                   ),
                 ),
-                const SizedBox(
-                  width: 13,
-                ),
+                const SizedBox(width: 13),
                 Expanded(
-                  child:
-                      Column(
+                  child: Column(
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     mainAxisAlignment:
@@ -1444,51 +1496,34 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                     children: [
                       const Text(
                         'PROMO DESAPAY',
-                        style:
-                            TextStyle(
-                          color:
-                              Colors.white,
-                          fontSize:
-                              10,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
                           fontWeight:
                               FontWeight.w900,
-                          letterSpacing:
-                              1,
+                          letterSpacing: 1,
                         ),
                       ),
-                      const SizedBox(
-                        height: 4,
-                      ),
+                      const SizedBox(height: 4),
                       const Text(
                         'Harga bersahabat, transaksi cepat.',
-                        maxLines:
-                            1,
+                        maxLines: 1,
                         overflow:
                             TextOverflow.ellipsis,
-                        style:
-                            TextStyle(
-                          color:
-                              Colors.white,
-                          fontSize:
-                              13,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
                           fontWeight:
                               FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(
-                        height: 3,
-                      ),
+                      const SizedBox(height: 3),
                       Text(
                         'Pilih layanan • cek harga • lanjutkan',
-                        style:
-                            TextStyle(
-                          color:
-                              Colors.white
-                                  .withOpacity(
-                            0.72,
-                          ),
-                          fontSize:
-                              9,
+                        style: TextStyle(
+                          color: Colors.white
+                              .withOpacity(0.72),
+                          fontSize: 9,
                         ),
                       ),
                     ],
@@ -1502,57 +1537,41 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
+  // ==========================================================
   // SEARCH
-  // =========================================================
+  // ==========================================================
 
   Widget _buildSearchField() {
     return TextField(
-      controller:
-          _searchController,
-      decoration:
-          InputDecoration(
+      controller: _searchController,
+      decoration: InputDecoration(
         hintText:
             'Cari produk atau nominal...',
-        hintStyle:
-            const TextStyle(
+        hintStyle: const TextStyle(
           fontSize: 12,
-          color:
-              WarnaDesaPay.textSub,
+          color: WarnaDesaPay.textSub,
         ),
-        prefixIcon:
-            const Icon(
+        prefixIcon: const Icon(
           Icons.search_rounded,
-          color:
-              WarnaDesaPay.primary,
+          color: WarnaDesaPay.primary,
         ),
         suffixIcon:
-            _searchController
-                    .text
-                    .isNotEmpty
+            _searchController.text.isNotEmpty
                 ? IconButton(
                     onPressed: () {
-                      _searchController
-                          .clear();
+                      _searchController.clear();
                     },
-                    icon:
-                        const Icon(
+                    icon: const Icon(
                       Icons.close_rounded,
                     ),
                   )
                 : null,
-        filled:
-            true,
-        fillColor:
-            Colors.white,
-        border:
-            OutlineInputBorder(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
           borderRadius:
-              BorderRadius.circular(
-            16,
-          ),
-          borderSide:
-              BorderSide.none,
+              BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
         contentPadding:
             const EdgeInsets.symmetric(
@@ -1562,9 +1581,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
-  // BRAND FILTER
-  // =========================================================
+  // ==========================================================
+  // BRAND
+  // ==========================================================
 
   Widget _buildBrandFilter() {
     return SizedBox(
@@ -1574,70 +1593,48 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
             Axis.horizontal,
         physics:
             const BouncingScrollPhysics(),
-        itemCount:
-            _brands.length,
-        itemBuilder:
-            (context, index) {
-          final brand =
-              _brands[index];
-
+        itemCount: _brands.length,
+        itemBuilder: (context, index) {
+          final brand = _brands[index];
           final selected =
-              brand ==
-                  _selectedBrand;
+              brand == _selectedBrand;
 
           return GestureDetector(
             onTap: () {
               setState(() {
-                _selectedBrand =
-                    brand;
+                _selectedBrand = brand;
               });
 
               _filterProduk();
             },
-            child:
-                AnimatedContainer(
+            child: AnimatedContainer(
               duration:
-                  const Duration(
-                milliseconds: 180,
-              ),
+                  const Duration(milliseconds: 180),
               margin:
-                  const EdgeInsets.only(
-                right: 8,
-              ),
+                  const EdgeInsets.only(right: 8),
               padding:
                   const EdgeInsets.symmetric(
                 horizontal: 15,
               ),
-              alignment:
-                  Alignment.center,
-              decoration:
-                  BoxDecoration(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
                 color: selected
-                    ? WarnaDesaPay
-                        .primary
+                    ? WarnaDesaPay.primary
                     : Colors.white,
                 borderRadius:
-                    BorderRadius.circular(
-                  20,
-                ),
-                border:
-                    Border.all(
+                    BorderRadius.circular(20),
+                border: Border.all(
                   color: selected
-                      ? WarnaDesaPay
-                          .primary
-                      : WarnaDesaPay
-                          .lightField,
+                      ? WarnaDesaPay.primary
+                      : WarnaDesaPay.lightField,
                 ),
               ),
-              child:
-                  Text(
+              child: Text(
                 brand,
-                style:
-                    TextStyle(
+                style: TextStyle(
                   color: selected
                       ? Colors.white
-                      : WarnaDesaPay
-                          .textMain,
+                      : WarnaDesaPay.textMain,
                   fontSize: 11,
                   fontWeight:
                       FontWeight.w700,
@@ -1650,9 +1647,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
+  // ==========================================================
   // LOADING
-  // =========================================================
+  // ==========================================================
 
   Widget _buildLoading() {
     return Column(
@@ -1665,19 +1662,13 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                 const EdgeInsets.only(
               bottom: 12,
             ),
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.white,
+            decoration: BoxDecoration(
+              color: Colors.white,
               borderRadius:
-                  BorderRadius.circular(
-                17,
-              ),
+                  BorderRadius.circular(17),
             ),
-            child:
-                const Center(
-              child:
-                  SizedBox(
+            child: const Center(
+              child: SizedBox(
                 width: 24,
                 height: 24,
                 child:
@@ -1694,9 +1685,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
-  // EMPTY STATE
-  // =========================================================
+  // ==========================================================
+  // EMPTY
+  // ==========================================================
 
   Widget _buildEmptyState() {
     return Container(
@@ -1706,45 +1697,32 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         horizontal: 25,
         vertical: 40,
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
+            BorderRadius.circular(20),
       ),
       child: Column(
         children: [
           Container(
             width: 70,
             height: 70,
-            decoration:
-                BoxDecoration(
-              color:
-                  WarnaDesaPay.primary
-                      .withOpacity(
-                0.07,
-              ),
-              shape:
-                  BoxShape.circle,
+            decoration: BoxDecoration(
+              color: WarnaDesaPay.primary
+                  .withOpacity(0.07),
+              shape: BoxShape.circle,
             ),
-            child:
-                const Icon(
+            child: const Icon(
               Icons.inventory_2_outlined,
               color:
                   WarnaDesaPay.primary,
               size: 34,
             ),
           ),
-          const SizedBox(
-            height: 15,
-          ),
+          const SizedBox(height: 15),
           const Text(
             'Produk belum tersedia',
-            style:
-                TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight:
                   FontWeight.w900,
@@ -1752,33 +1730,25 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                   WarnaDesaPay.textMain,
             ),
           ),
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
           Text(
             'Belum ada produk aktif untuk kategori ${widget.kategori}.',
-            textAlign:
-                TextAlign.center,
-            style:
-                const TextStyle(
+            textAlign: TextAlign.center,
+            style: const TextStyle(
               fontSize: 11,
               color:
                   WarnaDesaPay.textSub,
             ),
           ),
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed:
                 _fetchProdukDariFirestore,
-            icon:
-                const Icon(
+            icon: const Icon(
               Icons.refresh_rounded,
               size: 18,
             ),
-            label:
-                const Text(
+            label: const Text(
               'Muat Ulang',
             ),
           ),
@@ -1787,14 +1757,13 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
+  // ==========================================================
   // PRODUCT GRID
-  // =========================================================
+  // ==========================================================
 
   Widget _buildProductGrid() {
     return GridView.builder(
-      shrinkWrap:
-          true,
+      shrinkWrap: true,
       physics:
           const NeverScrollableScrollPhysics(),
       gridDelegate:
@@ -1806,26 +1775,18 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       ),
       itemCount:
           _filteredProducts.length,
-      itemBuilder:
-          (context, index) {
+      itemBuilder: (context, index) {
         final product =
             _filteredProducts[index];
 
         final sku =
             _productSku(product);
-
         final nama =
             _productName(product);
-
         final brand =
             _productBrand(product);
-
         final harga =
             _hargaJual(product);
-
-        final isSelected =
-            _selectedSku ==
-                sku;
 
         return _buildProductCard(
           product: product,
@@ -1833,15 +1794,16 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           nama: nama,
           brand: brand,
           harga: harga,
-          isSelected: isSelected,
+          isSelected:
+              _selectedSku == sku,
         );
       },
     );
   }
 
-  // =========================================================
+  // ==========================================================
   // PRODUCT CARD
-  // =========================================================
+  // ==========================================================
 
   Widget _buildProductCard({
     required Map<String, dynamic> product,
@@ -1852,135 +1814,74 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     required bool isSelected,
   }) {
     return Material(
-      color:
-          Colors.transparent,
-      child:
-          InkWell(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
-        onTap: () {
-          _nomorFocus.unfocus();
-
-          setState(() {
-            _selectedSku =
-                sku;
-
-            _selectedProductData =
-                {
-              'sku': sku,
-              'nama': nama,
-              'harga': harga,
-              'brand': brand,
-              'cost':
-                  _parseDouble(
-                product['cost'],
-              ),
-              'margin':
-                  _parseDouble(
-                product['margin'],
-              ),
-            };
-          });
-        },
-        child:
-            AnimatedContainer(
+            BorderRadius.circular(18),
+        onTap: () =>
+            _pilihProduk(product),
+        child: AnimatedContainer(
           duration:
-              const Duration(
-            milliseconds: 180,
-          ),
+              const Duration(milliseconds: 180),
           padding:
-              const EdgeInsets.all(
-            13,
-          ),
-          decoration:
-              BoxDecoration(
-            color:
-                isSelected
-                    ? WarnaDesaPay
-                        .primary
-                        .withOpacity(
-                      0.07,
-                    )
-                    : Colors.white,
+              const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? WarnaDesaPay.primary
+                    .withOpacity(0.07)
+                : Colors.white,
             borderRadius:
-                BorderRadius.circular(
-              18,
-            ),
-            border:
-                Border.all(
+                BorderRadius.circular(18),
+            border: Border.all(
               color: isSelected
-                  ? WarnaDesaPay
-                      .primary
-                  : WarnaDesaPay
-                      .lightField,
+                  ? WarnaDesaPay.primary
+                  : WarnaDesaPay.lightField,
               width:
-                  isSelected
-                      ? 1.8
-                      : 1,
+                  isSelected ? 1.8 : 1,
             ),
-            boxShadow:
-                isSelected
-                    ? [
-                        BoxShadow(
-                          color:
-                              WarnaDesaPay
-                                  .primary
-                                  .withOpacity(
-                            0.08,
-                          ),
-                          blurRadius:
-                              12,
-                          offset:
-                              const Offset(
-                            0,
-                            5,
-                          ),
-                        ),
-                      ]
-                    : null,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color:
+                          WarnaDesaPay.primary
+                              .withOpacity(0.08),
+                      blurRadius: 12,
+                      offset:
+                          const Offset(0, 5),
+                    ),
+                  ]
+                : null,
           ),
-          child:
-              Column(
+          child: Column(
             crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
+                CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width:
-                        30,
-                    height:
-                        30,
+                    width: 30,
+                    height: 30,
                     decoration:
                         BoxDecoration(
-                      color:
-                          isSelected
-                              ? WarnaDesaPay
-                                  .primary
-                                  .withOpacity(
-                                  0.12,
-                                )
-                              : WarnaDesaPay
-                                  .lightField,
+                      color: isSelected
+                          ? WarnaDesaPay
+                              .primary
+                              .withOpacity(
+                                  0.12)
+                          : WarnaDesaPay
+                              .lightField,
                       borderRadius:
-                          BorderRadius.circular(
-                        9,
-                      ),
+                          BorderRadius
+                              .circular(9),
                     ),
-                    child:
-                        Icon(
+                    child: Icon(
                       _categoryIcon(),
-                      size:
-                          17,
-                      color:
-                          isSelected
-                              ? WarnaDesaPay
-                                  .primary
-                              : WarnaDesaPay
-                                  .textSub,
+                      size: 17,
+                      color: isSelected
+                          ? WarnaDesaPay
+                              .primary
+                          : WarnaDesaPay
+                              .textSub,
                     ),
                   ),
                   const Spacer(),
@@ -1990,78 +1891,54 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                           .check_circle_rounded,
                       color:
                           WarnaDesaPay.primary,
-                      size:
-                          19,
+                      size: 19,
                     ),
                 ],
               ),
-
-              const SizedBox(
-                height: 8,
-              ),
-
+              const SizedBox(height: 8),
               Text(
                 nama,
-                maxLines:
-                    2,
+                maxLines: 2,
                 overflow:
                     TextOverflow.ellipsis,
-                style:
-                    TextStyle(
-                  fontSize:
-                      12,
+                style: TextStyle(
+                  fontSize: 12,
                   fontWeight:
                       FontWeight.w900,
-                  color:
-                      isSelected
-                          ? WarnaDesaPay
-                              .primary
-                          : WarnaDesaPay
-                              .textMain,
+                  color: isSelected
+                      ? WarnaDesaPay
+                          .primary
+                      : WarnaDesaPay
+                          .textMain,
                 ),
               ),
-
               const Spacer(),
-
               if (brand.isNotEmpty)
                 Text(
                   brand,
-                  maxLines:
-                      1,
+                  maxLines: 1,
                   overflow:
                       TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(
-                    fontSize:
-                        9,
+                  style: const TextStyle(
+                    fontSize: 9,
                     color:
-                        WarnaDesaPay
-                            .textSub,
+                        WarnaDesaPay.textSub,
                     fontWeight:
                         FontWeight.w600,
                   ),
                 ),
-
-              const SizedBox(
-                height: 3,
-              ),
-
+              const SizedBox(height: 3),
               Text(
-                _formatRupiah(
-                  harga,
-                ),
-                style:
-                    TextStyle(
-                  fontSize:
-                      13,
+                _formatRupiah(harga),
+                style: TextStyle(
+                  fontSize: 13,
                   fontWeight:
                       FontWeight.w900,
-                  color:
-                      isSelected
-                          ? WarnaDesaPay
-                              .primary
-                          : WarnaDesaPay
-                              .textMain,
+                  color: isSelected
+                      ? WarnaDesaPay
+                          .primary
+                      : WarnaDesaPay
+                          .textMain,
                 ),
               ),
             ],
@@ -2071,29 +1948,26 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
+  // ==========================================================
   // BOTTOM PAYMENT
-  // =========================================================
+  // ==========================================================
 
   Widget _buildBottomPayment() {
     final selected =
         _selectedProductData;
 
-    final harga =
-        selected == null
-            ? 0
-            : _parseDouble(
-                selected['harga'],
-              );
+    final harga = selected == null
+        ? 0
+        : _parseDouble(
+            selected['harga'],
+          );
 
     return Align(
       alignment:
           Alignment.bottomCenter,
-      child:
-          SafeArea(
+      child: SafeArea(
         top: false,
-        child:
-            Container(
+        child: Container(
           padding:
               const EdgeInsets.fromLTRB(
             20,
@@ -2101,74 +1975,52 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
             20,
             12,
           ),
-          decoration:
-              BoxDecoration(
-            color:
-                Colors.white,
+          decoration: BoxDecoration(
+            color: Colors.white,
             borderRadius:
                 const BorderRadius.vertical(
-              top:
-                  Radius.circular(
-                22,
-              ),
+              top: Radius.circular(22),
             ),
             boxShadow: [
               BoxShadow(
-                color:
-                    Colors.black
-                        .withOpacity(
-                  0.08,
-                ),
-                blurRadius:
-                    20,
+                color: Colors.black
+                    .withOpacity(0.08),
+                blurRadius: 20,
                 offset:
-                    const Offset(
-                  0,
-                  -7,
-                ),
+                    const Offset(0, -7),
               ),
             ],
           ),
-          child:
-              Row(
+          child: Row(
             children: [
-              // =================================================
-              // HARGA
-              // =================================================
-
               Expanded(
-                child:
-                    Column(
+                child: Column(
                   crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                      CrossAxisAlignment
+                          .start,
                   mainAxisSize:
                       MainAxisSize.min,
                   children: [
                     const Text(
                       'Total Pembayaran',
-                      style:
-                          TextStyle(
-                        fontSize:
-                            10,
+                      style: TextStyle(
+                        fontSize: 10,
                         color:
-                            WarnaDesaPay.textSub,
+                            WarnaDesaPay
+                                .textSub,
                         fontWeight:
                             FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(
-                      height: 2,
-                    ),
+                    const SizedBox(height: 2),
                     Text(
-                      _formatRupiah(
-                        harga,
-                      ),
+                      _formatRupiah(harga),
                       style:
                           const TextStyle(
-                        fontSize:
-                            17,
+                        fontSize: 17,
                         color:
-                            WarnaDesaPay.primary,
+                            WarnaDesaPay
+                                .primary,
                         fontWeight:
                             FontWeight.w900,
                       ),
@@ -2176,20 +2028,12 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                   ],
                 ),
               ),
-
-              // =================================================
-              // BUTTON
-              // =================================================
-
               SizedBox(
-                height:
-                    48,
-                child:
-                    ElevatedButton(
+                height: 48,
+                child: ElevatedButton(
                   onPressed:
-                      (_selectedSku ==
-                                  null ||
-                              _isProcessingTransaction)
+                      _selectedSku == null ||
+                              _isProcessingTransaction
                           ? null
                           : _prosesTransaksi,
                   style:
@@ -2202,59 +2046,53 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
                         Colors.white,
                     disabledForegroundColor:
                         Colors.grey.shade500,
-                    elevation:
-                        0,
+                    elevation: 0,
                     padding:
-                        const EdgeInsets.symmetric(
-                      horizontal:
-                          22,
+                        const EdgeInsets
+                            .symmetric(
+                      horizontal: 22,
                     ),
                     shape:
                         RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(
-                        15,
-                      ),
+                          BorderRadius
+                              .circular(15),
                     ),
                   ),
                   child:
                       _isProcessingTransaction
                           ? const SizedBox(
-                              width:
-                                  21,
-                              height:
-                                  21,
+                              width: 21,
+                              height: 21,
                               child:
                                   CircularProgressIndicator(
-                                strokeWidth:
-                                    2,
+                                strokeWidth: 2,
                                 color:
                                     Colors.white,
                               ),
                             )
                           : Row(
                               mainAxisSize:
-                                  MainAxisSize.min,
+                                  MainAxisSize
+                                      .min,
                               children: [
                                 const Text(
                                   'Lanjutkan',
                                   style:
                                       TextStyle(
                                     fontWeight:
-                                        FontWeight.w800,
-                                    fontSize:
-                                        13,
+                                        FontWeight
+                                            .w800,
+                                    fontSize: 13,
                                   ),
                                 ),
                                 const SizedBox(
-                                  width:
-                                      7,
+                                  width: 7,
                                 ),
                                 const Icon(
                                   Icons
                                       .arrow_forward_rounded,
-                                  size:
-                                      18,
+                                  size: 18,
                                 ),
                               ],
                             ),
@@ -2267,12 +2105,14 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     );
   }
 
-  // =========================================================
+  // ==========================================================
   // DISPOSE
-  // =========================================================
+  // ==========================================================
 
   @override
   void dispose() {
+    _transactionSubscription?.cancel();
+
     _nomorController.dispose();
     _searchController.dispose();
     _nomorFocus.dispose();
