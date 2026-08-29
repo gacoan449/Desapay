@@ -18,12 +18,12 @@ dependencies:
   shared_preferences: ^2.3.5
   intl: ^0.20.3
 
-  # Firebase Backend Services (Disinkronkan secara Valid & Stabil)
-  firebase_core: 3.6.0
-  firebase_auth: 6.4.2
-  cloud_firestore: 5.4.4
-  firebase_storage: 13.1.0     # <-- Menggunakan versi 13.1.0 yang valid di pub.dev
-  cloud_functions: 5.3.2
+  # Firebase Backend Services
+  firebase_core: ^3.11.0
+  firebase_auth: ^5.4.2
+  cloud_firestore: ^5.6.3
+  firebase_storage: ^12.3.4
+  cloud_functions: ^5.3.2
   local_auth: ^3.0.2
 
   # Scanner QRIS
