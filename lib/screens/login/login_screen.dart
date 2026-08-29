@@ -1,5 +1,10 @@
+// =====================================================================
+// FILE 1: lib/screens/login/login_screen.dart
+// =====================================================================
+
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
@@ -62,56 +67,61 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    setState(() {
-      loading = false;
-    });
-
     // =========================================================
     // LOGIN BERHASIL
     // =========================================================
 
     if (hasil == null) {
-      // =======================================================
-      // AKSES ADMIN
-      // =======================================================
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        
+        if (user != null) {
+          // Validasi Role Admin secara aman melalui Firestore
+          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          final userData = doc.data();
 
-      final adminEmail =
-          dotenv.env['ADMIN_EMAIL']?.trim() ??
-              'admin@desapay.local';
+          if (!mounted) return;
 
-      final adminPassword =
-          dotenv.env['ADMIN_PASSWORD']?.trim() ??
-              'annisaulinayah2506';
+          if (userData != null && userData['role'] == 'admin') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AdminDashboardScreen(),
+              ),
+            );
+            return;
+          }
+        }
 
-      if (emailInput.toLowerCase() ==
-              adminEmail.toLowerCase() &&
-          passwordInput == adminPassword) {
+        if (!mounted) return;
+
+        // Routing untuk User Biasa
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                const AdminDashboardScreen(),
+            builder: (_) => const BottomNav(),
           ),
         );
-
-        return;
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Terjadi kesalahan saat memverifikasi akun.")),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            loading = false;
+          });
+        }
       }
-
-      // =======================================================
-      // USER BIASA
-      // =======================================================
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const BottomNav(),
-        ),
-      );
     } else {
       // =======================================================
       // LOGIN GAGAL
       // =======================================================
-
+      setState(() {
+        loading = false;
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(hasil),
