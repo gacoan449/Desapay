@@ -32,7 +32,7 @@ jobs:
           channel: stable
           cache: true
 
-      # Langkah 1: Buat folder android dari nol jika tidak sengaja terhapus/tidak ada
+      # Langkah 1: Buat folder android dari nol jika tidak sengaja hilang
       - name: Generate Android Platform Folder
         run: |
           if [ ! -d "android" ]; then
