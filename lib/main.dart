@@ -1,5 +1,5 @@
 // =====================================================================
-// FILE 2: lib/main.dart
+// FILE: lib/main.dart
 // =====================================================================
 
 import 'package:flutter/material.dart';
@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'config/warna.dart';
 import 'firebase_options.dart';
@@ -30,27 +29,12 @@ Future<void> main() async {
   ]);
 
   // =========================================================
-  // ENV
-  // =========================================================
-
-  try {
-    await dotenv.load(
-      fileName: ".env",
-    );
-  } catch (e) {
-    debugPrint(
-      "⚠️ .env tidak berhasil dimuat: $e",
-    );
-  }
-
-  // =========================================================
   // FIREBASE
   // =========================================================
 
   try {
     await Firebase.initializeApp(
-      options:
-          DefaultFirebaseOptions.currentPlatform,
+      options: DefaultFirebaseOptions.currentPlatform,
     );
 
     debugPrint(
@@ -84,29 +68,16 @@ class DesaPayApp extends StatelessWidget {
 
       theme: ThemeData(
         useMaterial3: true,
-
-        colorScheme:
-            ColorScheme.fromSeed(
-          seedColor:
-              WarnaDesaPay.primary,
-          primary:
-              WarnaDesaPay.primary,
-          onPrimary:
-              Colors.white,
-          secondary:
-              WarnaDesaPay.secondary,
-          surface:
-              Colors.white,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: WarnaDesaPay.primary,
+          primary: WarnaDesaPay.primary,
+          onPrimary: Colors.white,
+          secondary: WarnaDesaPay.secondary,
+          surface: Colors.white,
         ),
-
-        scaffoldBackgroundColor:
-            WarnaDesaPay.lightBg,
-
-        fontFamily:
-            'Inter',
-
-        appBarTheme:
-            const AppBarTheme(
+        scaffoldBackgroundColor: WarnaDesaPay.lightBg,
+        fontFamily: 'Inter',
+        appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
         ),
@@ -117,12 +88,9 @@ class DesaPayApp extends StatelessWidget {
       // =======================================================
 
       home: StreamBuilder<User?>(
-        stream:
-            FirebaseAuth.instance
-                .authStateChanges(),
+        stream: FirebaseAuth.instance.authStateChanges(),
 
-        builder:
-            (context, snapshot) {
+        builder: (context, snapshot) {
           // ===================================================
           // FIREBASE SEDANG CEK SESSION
           // ===================================================
@@ -136,37 +104,50 @@ class DesaPayApp extends StatelessWidget {
           // BELUM LOGIN
           // ===================================================
 
-          final user =
-              snapshot.data;
+          final user = snapshot.data;
 
           if (user == null) {
             return const LoginScreen();
           }
 
           // ===================================================
-          // CEK ROLE DI FIRESTORE (AMAN DARI MANIPULASI KLIEN)
+          // CEK ROLE DI FIRESTORE
           // ===================================================
+
           return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+            future: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get(),
+
             builder: (context, userSnap) {
-              if (userSnap.connectionState == ConnectionState.waiting) {
+              if (userSnap.connectionState ==
+                  ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(
-                    child: CircularProgressIndicator(color: WarnaDesaPay.primary),
+                    child: CircularProgressIndicator(
+                      color: WarnaDesaPay.primary,
+                    ),
                   ),
                 );
               }
 
-              if (userSnap.hasData && userSnap.data!.exists) {
-                final userData = userSnap.data!.data() as Map<String, dynamic>?;
-                if (userData != null && userData['role'] == 'admin') {
+              if (userSnap.hasData &&
+                  userSnap.data!.exists) {
+                final userData =
+                    userSnap.data!.data()
+                        as Map<String, dynamic>?;
+
+                if (userData != null &&
+                    userData['role'] == 'admin') {
                   return const AdminDashboardScreen();
                 }
               }
 
-              // ===================================================
+              // =================================================
               // USER BIASA
-              // ===================================================
+              // =================================================
+
               return const BottomNav();
             },
           );
