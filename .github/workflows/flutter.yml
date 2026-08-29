@@ -32,7 +32,7 @@ jobs:
           channel: stable
           cache: true
 
-      # Langkah 1: Buat folder android dari nol jika tidak ada
+      # Langkah 1: Buat folder android dari nol jika tidak sengaja terhapus/tidak ada
       - name: Generate Android Platform Folder
         run: |
           if [ ! -d "android" ]; then
@@ -40,34 +40,24 @@ jobs:
             flutter create . --platforms=android
           fi
 
-      # Langkah 2: Intervensi pubspec.yaml untuk mengatasi konflik Firebase secara instan
-      - name: Align Firebase Package Versions
-        run: |
-          echo "Menyesuaikan versi Firebase di pubspec.yaml agar ramah compiler..."
-          # Mengganti versi Firebase ke versi stabil yang tidak merusak classpath checker-qual
-          sed -i 's/firebase_core: ^4.14.0/firebase_core: ^3.6.0/g' pubspec.yaml
-          sed -i 's/firebase_auth: ^6.6.0/firebase_auth: ^5.3.1/g' pubspec.yaml
-          sed -i 's/cloud_firestore: ^6.9.0/cloud_firestore: ^5.4.4/g' pubspec.yaml
-          sed -i 's/firebase_storage: ^13.5.0/firebase_storage: ^12.3.2/g' pubspec.yaml
-
-      # Langkah 3: Ambil seluruh dependensi aplikasi yang sudah diselaraskan
+      # Langkah 2: Ambil seluruh dependensi aplikasi secara bersih
       - name: Install Dependencies
-        run: flutter pub get
+        run: |
+          rm -f pubspec.lock
+          flutter pub get
 
-      # Langkah 4: Generate launcher icons (otomatis dilewati jika aset belum siap)
+      # Langkah 3: Generate launcher icons (otomatis dilewati jika aset belum siap)
       - name: Generate Launcher Icons
         run: dart run flutter_launcher_icons || echo "Launcher icons dilewati"
 
-      # Langkah 5: Bersihkan sisa build lama
+      # Langkah 4: Bersihkan sisa build peladen lama
       - name: Pre-Build Clean
         run: flutter clean
 
-      # ✅ LANGKAH EMAS: Kunci paksa resolusi compiler Kotlin agar tidak crash di modul eksternal
-      - name: Force Global Gradle Resolution Strategy
+      # Langkah 5: Suntik taktik intervensi compiler Kotlin di tingkat Gradle Proyek
+      - name: Inject Global Gradle Resolution Strategy
         run: |
-          # Ambil kembali dependensi pasca clean
           flutter pub get
-          
           BUILD_GRADLE="android/build.gradle"
           if [ -f "$BUILD_GRADLE" ]; then
             echo "Menyuntikkan aturan pengikat untuk menepis error checker-qual..."
@@ -76,8 +66,12 @@ jobs:
             allprojects {
                 configurations.all {
                     resolutionStrategy {
-                        // Memaksa Gradle menggunakan versi checker-qual stabil di tingkat root kompilasi
                         forcedModules = ['org.checkerframework:checker-qual:3.42.0']
+                    }
+                }
+                tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                    kotlinOptions {
+                        freeCompilerArgs += ["-Xskip-metadata-version-check"]
                     }
                 }
             }
