@@ -18,12 +18,12 @@ dependencies:
   shared_preferences: ^2.3.5
   intl: ^0.20.3
 
-  # Firebase Backend Services
-  firebase_core: ^4.14.0
+  # Firebase Backend Services (Versi Selaras Terbaru)
+  firebase_core: ^4.14.0       # Diperbarui agar cocok dengan cloud_functions
   firebase_auth: ^6.6.0
   cloud_firestore: ^6.9.0
   firebase_storage: ^13.5.0
-  cloud_functions: ^6.4.0   # <-- Paket yang tertinggal sudah ditambahkan di sini
+  cloud_functions: ^6.4.0      # Sekarang aman digunakan
   local_auth: ^3.0.2
 
   # Scanner QRIS
