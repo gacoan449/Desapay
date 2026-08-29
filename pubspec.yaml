@@ -18,12 +18,12 @@ dependencies:
   shared_preferences: ^2.3.5
   intl: ^0.20.3
 
-  # Firebase Backend Services (Disinkronkan Ketat ke v4.14.0)
-  firebase_core: 4.14.0
-  firebase_auth: 6.6.0
-  cloud_firestore: 6.9.0
-  firebase_storage: 13.5.0
-  cloud_functions: 6.4.0
+  # Firebase Backend Services (Versi Stabil Bebas Bug Kotlin)
+  firebase_core: 3.6.0
+  firebase_auth: 6.4.2
+  cloud_firestore: 5.4.4
+  firebase_storage: 13.1.2
+  cloud_functions: 5.3.2
   local_auth: ^3.0.2
 
   # Scanner QRIS
