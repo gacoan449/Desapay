@@ -1,19 +1,15 @@
 rules_version = '2';
 
 service firebase.storage {
+
   match /b/{bucket}/o {
 
-    // ============================================================
+    // =========================================================
     // HELPER
-    // ============================================================
+    // =========================================================
 
     function signedIn() {
       return request.auth != null;
-    }
-
-    function isOwner(uid) {
-      return signedIn()
-        && request.auth.uid == uid;
     }
 
     function isAdmin() {
@@ -27,65 +23,53 @@ service firebase.storage {
     }
 
 
-    // ============================================================
-    // USER FILES
-    // ============================================================
-    //
-    // Struktur yang digunakan aplikasi:
-    //
-    // users/{uid}/profil.jpg
-    // users/{uid}/ktp.jpg
-    // users/{uid}/selfie.jpg
-    //
-    // User hanya boleh mengakses folder miliknya.
-    // Admin boleh membaca dokumen untuk proses KYC.
-    //
-    // ============================================================
+    // =========================================================
+    // KYC
+    // =========================================================
 
-    match /users/{uid}/{fileName} {
+    match /kyc/{uid}/{fileName} {
 
-      // ----------------------------------------------------------
-      // READ
-      // ----------------------------------------------------------
+      // User hanya boleh upload file KYC miliknya.
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches(
+          'image/.*|application/pdf'
+        );
 
-      allow read: if isOwner(uid) || isAdmin();
-
-
-      // ----------------------------------------------------------
-      // CREATE / UPDATE
-      // ----------------------------------------------------------
-      //
-      // User boleh upload file miliknya sendiri.
-      //
-      // Maksimum 5 MB.
-      //
-      // Hanya file gambar.
-      //
-
-      allow create, update: if isOwner(uid)
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-
-
-      // ----------------------------------------------------------
-      // DELETE
-      // ----------------------------------------------------------
-      //
-      // User tidak boleh menghapus dokumen KYC.
-      //
-      // Foto profil boleh diganti melalui upload baru.
-      // Penghapusan manual hanya admin.
-      //
-
-      allow delete: if isAdmin();
+      // User hanya bisa membaca KYC miliknya.
+      // Admin bisa membaca semua.
+      allow read: if signedIn()
+        && (
+          request.auth.uid == uid
+          || isAdmin()
+        );
     }
 
 
-    // ============================================================
+    // =========================================================
+    // PROFILE
+    // =========================================================
+
+    match /profiles/{uid}/{fileName} {
+
+      allow read: if signedIn();
+
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches(
+          'image/.*'
+        );
+    }
+
+
+    // =========================================================
     // DEFAULT DENY
-    // ============================================================
+    // =========================================================
 
     match /{allPaths=**} {
+
       allow read, write: if false;
     }
   }
