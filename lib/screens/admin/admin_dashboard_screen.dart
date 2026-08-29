@@ -34,6 +34,10 @@ class _AdminDashboardScreenState
   }
 
   Future<void> loadAll() async {
+    setState(() {
+      loading = true;
+    });
+
     await Future.wait([
       loadSettings(),
       loadProducts(),
@@ -45,6 +49,12 @@ class _AdminDashboardScreenState
       loadAnnouncements(),
       loadSaldo(),
     ]);
+
+    if (!mounted) return;
+
+    setState(() {
+      loading = false;
+    });
   }
 
   Future<void> loadSettings() async {
@@ -58,6 +68,11 @@ class _AdminDashboardScreenState
   Future<void> loadProducts() async {
     try {
       products = await FirestoreService.ambilSemuaProduk();
+
+      // Produk TEST tidak ditampilkan di dashboard produksi.
+      products = products
+          .where((p) => p['isTest'] != true)
+          .toList();
     } catch (_) {}
 
     if (mounted) setState(() {});
@@ -66,6 +81,11 @@ class _AdminDashboardScreenState
   Future<void> loadTransactions() async {
     try {
       transactions = await FirestoreService.ambilSemuaTransaksi();
+
+      // Transaksi TEST tidak ditampilkan di dashboard produksi.
+      transactions = transactions
+          .where((trx) => trx['isTest'] != true)
+          .toList();
     } catch (_) {}
 
     if (mounted) setState(() {});
@@ -115,9 +135,6 @@ class _AdminDashboardScreenState
     try {
       final saldo = await DigiflazzService().cekSaldoModal();
 
-      // FIX:
-      // cekSaldoModal() mengembalikan int, sedangkan
-      // saldoDigiflazz adalah double.
       saldoDigiflazz = (saldo as num).toDouble();
     } catch (_) {}
 
@@ -144,10 +161,6 @@ class _AdminDashboardScreenState
         .where((x) => x['status'] == 'FAILED')
         .length;
 
-    final test = transactions
-        .where((x) => x['isTest'] == true)
-        .length;
-
     double profit = 0.0;
 
     for (final trx in transactions) {
@@ -169,12 +182,26 @@ class _AdminDashboardScreenState
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'DesaPay Command Center',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'DesaPay Command Center',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              if (loading)
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+            ],
           ),
 
           const SizedBox(height: 20),
@@ -193,13 +220,17 @@ class _AdminDashboardScreenState
             ),
             value: maintenance,
             onChanged: (value) async {
-              await FirestoreService.setMaintenance(value);
+              try {
+                await FirestoreService.setMaintenance(value);
 
-              if (!mounted) return;
+                if (!mounted) return;
 
-              setState(() {
-                maintenance = value;
-              });
+                setState(() {
+                  maintenance = value;
+                });
+              } catch (e) {
+                _msg('Gagal mengubah maintenance: $e');
+              }
             },
           ),
 
@@ -235,14 +266,14 @@ class _AdminDashboardScreenState
                 Icons.error,
               ),
               _card(
-                'TEST Sisa',
-                '$test',
-                Icons.science,
-              ),
-              _card(
                 'Pengguna',
                 '${users.length}',
                 Icons.people,
+              ),
+              _card(
+                'KYC Pending',
+                '${kyc.length}',
+                Icons.verified_user,
               ),
               _card(
                 'Profit Netto',
@@ -305,7 +336,8 @@ class _AdminDashboardScreenState
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(title),
                     const SizedBox(height: 5),
@@ -362,7 +394,7 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // PRODUK
+  // PRODUK PPOB
   // =========================================================
 
   Widget productsPage() {
@@ -374,93 +406,79 @@ class _AdminDashboardScreenState
             children: [
               const Expanded(
                 child: Text(
-                  'Manajemen Produk',
+                  'Manajemen Produk PPOB',
                   style: TextStyle(
                     fontSize: 27,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () async {
-                  // Tambahan Fitur Konfirmasi Hapus Produk Tes
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Bersihkan Produk TEST?'),
-                      content: const Text('Ini akan menghapus seluruh data produk TEST dari database untuk persiapan produksi.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Batal'),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Ya, Hapus'),
-                        ),
-                      ],
-                    ),
-                  );
-
-                  if (confirm != true) return;
-
-                  await FirestoreService.hapusSemuaProdukTest();
-                  await loadProducts();
-
-                  if (!mounted) return;
-
-                  _msg('Seluruh produk TEST berhasil dibersihkan.');
-                },
-                icon: const Icon(Icons.delete_sweep),
-                label: const Text('Bersihkan Produk TEST'),
+              IconButton(
+                onPressed: loadProducts,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh Produk',
               ),
             ],
           ),
         ),
 
+        const Divider(height: 1),
+
         Expanded(
           child: products.isEmpty
               ? const Center(
-                  child: Text('Produk belum ada.'),
+                  child: Text(
+                    'Produk PPOB belum tersedia.',
+                  ),
                 )
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SingleChildScrollView(
                     child: DataTable(
                       columns: const [
-                        DataColumn(label: Text('SKU')),
-                        DataColumn(label: Text('Produk')),
-                        DataColumn(label: Text('Kategori')),
-                        DataColumn(label: Text('Modal')),
-                        DataColumn(label: Text('Margin')),
-                        DataColumn(label: Text('Jual')),
-                        DataColumn(label: Text('TEST')),
-                        DataColumn(label: Text('Aktif')),
+                        DataColumn(
+                          label: Text('SKU'),
+                        ),
+                        DataColumn(
+                          label: Text('Produk'),
+                        ),
+                        DataColumn(
+                          label: Text('Kategori'),
+                        ),
+                        DataColumn(
+                          label: Text('Modal'),
+                        ),
+                        DataColumn(
+                          label: Text('Margin'),
+                        ),
+                        DataColumn(
+                          label: Text('Harga Jual'),
+                        ),
+                        DataColumn(
+                          label: Text('Aktif'),
+                        ),
                       ],
                       rows: products.map((p) {
-                        final cost =
-                            p['cost'] is num
-                                ? p['cost'] as num
-                                : 0;
+                        final cost = p['cost'] is num
+                            ? p['cost'] as num
+                            : 0;
 
-                        final margin =
-                            p['margin'] is num
-                                ? p['margin'] as num
-                                : 0;
+                        final margin = p['margin'] is num
+                            ? p['margin'] as num
+                            : 0;
+
+                        final jual = cost + margin;
 
                         return DataRow(
                           cells: [
                             DataCell(
-                              Text('${p['sku'] ?? '-'}'),
+                              Text(
+                                '${p['sku'] ?? '-'}',
+                              ),
                             ),
                             DataCell(
                               SizedBox(
-                                width: 200,
+                                width: 220,
                                 child: Text(
                                   '${p['name'] ?? '-'}',
                                 ),
@@ -476,46 +494,68 @@ class _AdminDashboardScreenState
                             ),
                             DataCell(
                               SizedBox(
-                                width: 110,
+                                width: 120,
                                 child: TextFormField(
                                   initialValue:
                                       margin.toString(),
                                   keyboardType:
-                                      TextInputType.number,
+                                      const TextInputType
+                                          .numberWithOptions(
+                                    decimal: false,
+                                  ),
                                   onFieldSubmitted:
-                                      (v) async {
+                                      (value) async {
                                     final sku =
-                                        p['sku']?.toString() ??
+                                        p['sku']
+                                                ?.toString() ??
                                             '';
 
-                                    if (sku.isEmpty) return;
+                                    if (sku.isEmpty) {
+                                      return;
+                                    }
 
-                                    await FirestoreService
-                                        .updateMargin(
-                                      sku,
-                                      num.tryParse(v) ?? 0,
-                                    );
+                                    final newMargin =
+                                        num.tryParse(
+                                              value,
+                                            ) ??
+                                            0;
 
-                                    await loadProducts();
+                                    try {
+                                      await FirestoreService
+                                          .updateMargin(
+                                        sku,
+                                        newMargin,
+                                      );
+
+                                      await loadProducts();
+
+                                      if (!mounted) return;
+
+                                      _msg(
+                                        'Margin produk berhasil diperbarui.',
+                                      );
+                                    } catch (e) {
+                                      _msg(
+                                        'Gagal update margin: $e',
+                                      );
+                                    }
                                   },
                                   decoration:
                                       const InputDecoration(
                                     prefixText: 'Rp ',
+                                    isDense: true,
                                   ),
                                 ),
                               ),
                             ),
                             DataCell(
                               Text(
-                                rp(cost + margin),
+                                rp(jual),
+                                style: const TextStyle(
+                                  fontWeight:
+                                      FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            DataCell(
-                              p['isTest'] == true
-                                  ? const Chip(
-                                      label: Text('TEST'),
-                                    )
-                                  : const SizedBox(),
                             ),
                             DataCell(
                               Switch(
@@ -524,18 +564,27 @@ class _AdminDashboardScreenState
                                 onChanged:
                                     (value) async {
                                   final sku =
-                                      p['sku']?.toString() ??
+                                      p['sku']
+                                              ?.toString() ??
                                           '';
 
-                                  if (sku.isEmpty) return;
+                                  if (sku.isEmpty) {
+                                    return;
+                                  }
 
-                                  await FirestoreService
-                                      .updateProductActive(
-                                    sku,
-                                    value,
-                                  );
+                                  try {
+                                    await FirestoreService
+                                        .updateProductActive(
+                                      sku,
+                                      value,
+                                    );
 
-                                  await loadProducts();
+                                    await loadProducts();
+                                  } catch (e) {
+                                    _msg(
+                                      'Gagal mengubah status produk: $e',
+                                    );
+                                  }
                                 },
                               ),
                             ),
@@ -591,17 +640,23 @@ class _AdminDashboardScreenState
               trailing: Wrap(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.add),
+                    icon: const Icon(
+                      Icons.add,
+                    ),
                     onPressed: () =>
                         _ubahSaldo(user, true),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.remove),
+                    icon: const Icon(
+                      Icons.remove,
+                    ),
                     onPressed: () =>
                         _ubahSaldo(user, false),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.tune),
+                    icon: const Icon(
+                      Icons.tune,
+                    ),
                     onPressed: () =>
                         _setLimitUser(user),
                   ),
@@ -635,12 +690,19 @@ class _AdminDashboardScreenState
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final nominal =
                   num.tryParse(c.text) ?? 0;
 
-              if (nominal <= 0) return;
+              if (nominal <= 0) {
+                _msg('Nominal harus lebih dari 0.');
+                return;
+              }
 
               try {
                 await FirestoreService.ubahSaldoUser(
@@ -653,10 +715,19 @@ class _AdminDashboardScreenState
 
                 Navigator.pop(context);
                 await loadUsers();
+
+                _msg(
+                  tambah
+                      ? 'Saldo berhasil ditambahkan.'
+                      : 'Saldo berhasil dikurangi.',
+                );
               } catch (e) {
                 if (!mounted) return;
 
-                _msg('Gagal mengubah saldo: $e');
+                Navigator.pop(context);
+                _msg(
+                  'Gagal mengubah saldo: $e',
+                );
               }
             },
             child: const Text('Simpan'),
@@ -674,7 +745,9 @@ class _AdminDashboardScreenState
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Limit Saldo User'),
+        title: const Text(
+          'Limit Saldo User',
+        ),
         content: TextField(
           controller: c,
           keyboardType: TextInputType.number,
@@ -684,10 +757,21 @@ class _AdminDashboardScreenState
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final limit =
                   num.tryParse(c.text) ?? 0;
+
+              if (limit < 0) {
+                _msg(
+                  'Limit tidak boleh negatif.',
+                );
+                return;
+              }
 
               try {
                 await FirestoreService.setLimitSaldo(
@@ -699,10 +783,17 @@ class _AdminDashboardScreenState
 
                 Navigator.pop(context);
                 await loadUsers();
+
+                _msg(
+                  'Limit saldo berhasil disimpan.',
+                );
               } catch (e) {
                 if (!mounted) return;
 
-                _msg('Gagal mengatur limit: $e');
+                Navigator.pop(context);
+                _msg(
+                  'Gagal mengatur limit: $e',
+                );
               }
             },
             child: const Text('Simpan'),
@@ -725,14 +816,26 @@ class _AdminDashboardScreenState
           controller: c,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
+            labelText: 'Limit Saldo',
             prefixText: 'Rp ',
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final limit =
                   num.tryParse(c.text) ?? 0;
+
+              if (limit < 0) {
+                _msg(
+                  'Limit tidak boleh negatif.',
+                );
+                return;
+              }
 
               try {
                 await FirestoreService
@@ -741,11 +844,18 @@ class _AdminDashboardScreenState
                 if (!mounted) return;
 
                 Navigator.pop(context);
-                _msg('Limit berhasil disimpan.');
+
+                _msg(
+                  'Limit berhasil disimpan.',
+                );
               } catch (e) {
                 if (!mounted) return;
 
-                _msg('Gagal menyimpan limit: $e');
+                Navigator.pop(context);
+
+                _msg(
+                  'Gagal menyimpan limit: $e',
+                );
               }
             },
             child: const Text('Simpan'),
@@ -798,7 +908,9 @@ class _AdminDashboardScreenState
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text('UID: ${user['id']}'),
+                  Text(
+                    'UID: ${user['id']}',
+                  ),
                   const SizedBox(height: 10),
                   if (user['ktpUrl'] != null &&
                       user['ktpUrl']
@@ -818,28 +930,58 @@ class _AdminDashboardScreenState
                     children: [
                       ElevatedButton(
                         onPressed: () async {
-                          await FirestoreService.prosesKyc(
-                            user['id'],
-                            true,
-                            'Disetujui Admin',
-                          );
+                          try {
+                            await FirestoreService
+                                .prosesKyc(
+                              user['id'],
+                              true,
+                              'Disetujui Admin',
+                            );
 
-                          await loadKyc();
+                            await loadKyc();
+
+                            if (!mounted) return;
+
+                            _msg(
+                              'KYC berhasil disetujui.',
+                            );
+                          } catch (e) {
+                            _msg(
+                              'Gagal memproses KYC: $e',
+                            );
+                          }
                         },
-                        child: const Text('SETUJUI'),
+                        child: const Text(
+                          'SETUJUI',
+                        ),
                       ),
                       const SizedBox(width: 10),
                       OutlinedButton(
                         onPressed: () async {
-                          await FirestoreService.prosesKyc(
-                            user['id'],
-                            false,
-                            'Ditolak Admin',
-                          );
+                          try {
+                            await FirestoreService
+                                .prosesKyc(
+                              user['id'],
+                              false,
+                              'Ditolak Admin',
+                            );
 
-                          await loadKyc();
+                            await loadKyc();
+
+                            if (!mounted) return;
+
+                            _msg(
+                              'KYC berhasil ditolak.',
+                            );
+                          } catch (e) {
+                            _msg(
+                              'Gagal memproses KYC: $e',
+                            );
+                          }
                         },
-                        child: const Text('TOLAK'),
+                        child: const Text(
+                          'TOLAK',
+                        ),
                       ),
                     ],
                   ),
@@ -860,12 +1002,22 @@ class _AdminDashboardScreenState
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Device Management',
-          style: TextStyle(
-            fontSize: 27,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Device Management',
+                style: TextStyle(
+                  fontSize: 27,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: loadDevices,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
 
         const SizedBox(height: 15),
@@ -873,8 +1025,9 @@ class _AdminDashboardScreenState
         ...devices.map(
           (device) => Card(
             child: ListTile(
-              leading:
-                  const Icon(Icons.phone_android),
+              leading: const Icon(
+                Icons.phone_android,
+              ),
               title: Text(
                 '${device['deviceName'] ?? 'Device'}',
               ),
@@ -885,12 +1038,18 @@ class _AdminDashboardScreenState
               trailing: Switch(
                 value: device['blocked'] != true,
                 onChanged: (value) async {
-                  await FirestoreService.blokirDevice(
-                    device['id'],
-                    !value,
-                  );
+                  try {
+                    await FirestoreService.blokirDevice(
+                      device['id'],
+                      !value,
+                    );
 
-                  await loadDevices();
+                    await loadDevices();
+                  } catch (e) {
+                    _msg(
+                      'Gagal mengubah status device: $e',
+                    );
+                  }
                 },
               ),
             ),
@@ -932,11 +1091,22 @@ class _AdminDashboardScreenState
 
         const SizedBox(height: 15),
 
+        if (mutations.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Belum ada mutasi bank.',
+              ),
+            ),
+          ),
+
         ...mutations.map(
           (m) => Card(
             child: ListTile(
-              leading:
-                  const Icon(Icons.account_balance),
+              leading: const Icon(
+                Icons.account_balance,
+              ),
               title: Text(
                 '${m['description'] ?? '-'}',
               ),
@@ -944,21 +1114,37 @@ class _AdminDashboardScreenState
                 'Nominal: ${rp(m['amount'] ?? 0)}\n'
                 'Status: ${m['status'] ?? 'PENDING'}',
               ),
-              trailing: m['status'] == 'PENDING'
-                  ? ElevatedButton(
-                      onPressed: () async {
-                        await FirestoreService.tandaiMutasi(
-                          m['id'],
-                          'PROCESSED',
-                        );
+              trailing:
+                  m['status'] == 'PENDING'
+                      ? ElevatedButton(
+                          onPressed: () async {
+                            try {
+                              await FirestoreService
+                                  .tandaiMutasi(
+                                m['id'],
+                                'PROCESSED',
+                              );
 
-                        await loadMutations();
-                      },
-                      child: const Text('Proses'),
-                    )
-                  : const Icon(
-                      Icons.check_circle,
-                    ),
+                              await loadMutations();
+
+                              if (!mounted) return;
+
+                              _msg(
+                                'Mutasi berhasil diproses.',
+                              );
+                            } catch (e) {
+                              _msg(
+                                'Gagal memproses mutasi: $e',
+                              );
+                            }
+                          },
+                          child: const Text(
+                            'Proses',
+                          ),
+                        )
+                      : const Icon(
+                          Icons.check_circle,
+                        ),
             ),
           ),
         ),
@@ -988,28 +1174,49 @@ class _AdminDashboardScreenState
             ElevatedButton.icon(
               onPressed: addAnnouncement,
               icon: const Icon(Icons.add),
-              label: const Text('Tambah'),
+              label: const Text(
+                'Tambah',
+              ),
             ),
           ],
         ),
 
         const SizedBox(height: 15),
 
+        if (announcements.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Belum ada pengumuman.',
+              ),
+            ),
+          ),
+
         ...announcements.map(
           (a) => Card(
             child: SwitchListTile(
-              title: Text('${a['title'] ?? '-'}'),
+              title: Text(
+                '${a['title'] ?? '-'}',
+              ),
               subtitle: Text(
                 '${a['message'] ?? '-'}',
               ),
               value: a['active'] == true,
               onChanged: (v) async {
-                await FirestoreService.togglePengumuman(
-                  a['id'],
-                  v,
-                );
+                try {
+                  await FirestoreService
+                      .togglePengumuman(
+                    a['id'],
+                    v,
+                  );
 
-                await loadAnnouncements();
+                  await loadAnnouncements();
+                } catch (e) {
+                  _msg(
+                    'Gagal mengubah pengumuman: $e',
+                  );
+                }
               },
             ),
           ),
@@ -1025,40 +1232,75 @@ class _AdminDashboardScreenState
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Pengumuman Baru'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(
-                labelText: 'Judul',
+        title: const Text(
+          'Pengumuman Baru',
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                decoration: const InputDecoration(
+                  labelText: 'Judul',
+                ),
               ),
-            ),
-            TextField(
-              controller: message,
-              decoration: const InputDecoration(
-                labelText: 'Isi',
+              const SizedBox(height: 10),
+              TextField(
+                controller: message,
+                decoration: const InputDecoration(
+                  labelText: 'Isi',
+                ),
+                maxLines: 3,
               ),
-              maxLines: 3,
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () async {
-              await FirestoreService.tambahPengumuman(
-                title: title.text,
-                message: message.text,
-                active: true,
-              );
+              if (title.text.trim().isEmpty ||
+                  message.text.trim().isEmpty) {
+                _msg(
+                  'Judul dan isi wajib diisi.',
+                );
+                return;
+              }
 
-              if (!mounted) return;
+              try {
+                await FirestoreService
+                    .tambahPengumuman(
+                  title: title.text.trim(),
+                  message: message.text.trim(),
+                  active: true,
+                );
 
-              Navigator.pop(context);
-              await loadAnnouncements();
+                if (!mounted) return;
+
+                Navigator.pop(context);
+
+                await loadAnnouncements();
+
+                _msg(
+                  'Pengumuman berhasil dipublikasikan.',
+                );
+              } catch (e) {
+                if (!mounted) return;
+
+                Navigator.pop(context);
+
+                _msg(
+                  'Gagal membuat pengumuman: $e',
+                );
+              }
             },
-            child: const Text('Publikasikan'),
+            child: const Text(
+              'Publikasikan',
+            ),
           ),
         ],
       ),
@@ -1066,7 +1308,7 @@ class _AdminDashboardScreenState
   }
 
   // =========================================================
-  // TRANSAKSI
+  // TRANSAKSI PPOB
   // =========================================================
 
   Widget transactionPage() {
@@ -1077,76 +1319,80 @@ class _AdminDashboardScreenState
           children: [
             const Expanded(
               child: Text(
-                'Monitor Transaksi',
+                'Monitor Transaksi PPOB',
                 style: TextStyle(
                   fontSize: 27,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                // Tambahan Fitur Konfirmasi Hapus Transaksi Tes
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Bersihkan Transaksi TEST?'),
-                    content: const Text('Ini akan menghapus seluruh data riwayat transaksi TEST dari database.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Batal'),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Ya, Hapus'),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirm != true) return;
-
-                await FirestoreService.hapusSemuaTransaksiTest();
-                await loadTransactions();
-
-                if (!mounted) return;
-
-                _msg('Riwayat transaksi TEST berhasil dibersihkan.');
-              },
-              icon: const Icon(Icons.delete_sweep),
-              label: const Text('Bersihkan Transaksi TEST'),
+            IconButton(
+              onPressed: loadTransactions,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh Transaksi',
             ),
           ],
         ),
 
         const SizedBox(height: 15),
 
-        ...transactions.map(
-          (trx) => Card(
-            child: ListTile(
-              leading: Icon(
-                trx['status'] == 'SUCCESS'
-                    ? Icons.check_circle
-                    : Icons.error,
-              ),
-              title: Text(
-                '${trx['productName'] ?? trx['product'] ?? '-'}',
-              ),
-              subtitle: Text(
-                'Ref: ${trx['ref_id'] ?? '-'}\n'
-                'Nominal: ${rp(trx['amount'] ?? 0)}',
-              ),
-              trailing: Text(
-                '${trx['status'] ?? '-'}',
+        if (transactions.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Belum ada transaksi PPOB.',
               ),
             ),
           ),
+
+        ...transactions.map(
+          (trx) {
+            final status =
+                '${trx['status'] ?? '-'}';
+
+            final isSuccess =
+                status == 'SUCCESS';
+
+            final isPending =
+                status == 'PENDING';
+
+            return Card(
+              child: ListTile(
+                leading: Icon(
+                  isSuccess
+                      ? Icons.check_circle
+                      : isPending
+                          ? Icons.pending
+                          : Icons.error,
+                  color: isSuccess
+                      ? Colors.green
+                      : isPending
+                          ? Colors.orange
+                          : Colors.red,
+                ),
+                title: Text(
+                  '${trx['productName'] ?? trx['product'] ?? '-'}',
+                ),
+                subtitle: Text(
+                  'Ref: ${trx['ref_id'] ?? '-'}\n'
+                  'Nominal: ${rp(trx['amount'] ?? 0)}\n'
+                  'User: ${trx['uid'] ?? trx['userId'] ?? '-'}',
+                ),
+                trailing: Text(
+                  status,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isSuccess
+                        ? Colors.green
+                        : isPending
+                            ? Colors.orange
+                            : Colors.red,
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -1189,7 +1435,9 @@ class _AdminDashboardScreenState
       leading: Icon(icon),
       title: Text(title),
       onTap: () {
-        setState(() => menu = index);
+        setState(() {
+          menu = index;
+        });
 
         if (MediaQuery.of(context).size.width < 700) {
           Navigator.pop(context);
@@ -1198,11 +1446,6 @@ class _AdminDashboardScreenState
     );
   }
 
-  // FIX:
-  // Jangan return Drawer untuk desktop lalu mengambil .child,
-  // karena Widget/Drawer tidak memiliki getter child.
-  //
-  // Menu sekarang dipisahkan menjadi widget ListView biasa.
   Widget adminMenu() {
     return Material(
       child: SafeArea(
@@ -1219,41 +1462,49 @@ class _AdminDashboardScreenState
                 ),
               ),
             ),
+
             menuItem(
               Icons.dashboard,
               'Dashboard',
               0,
             ),
+
             menuItem(
               Icons.inventory,
-              'Produk',
+              'Produk PPOB',
               1,
             ),
+
             menuItem(
               Icons.receipt_long,
-              'Transaksi',
+              'Transaksi PPOB',
               2,
             ),
+
             menuItem(
               Icons.people,
               'Pengguna & Saldo',
               3,
             ),
+
             menuItem(
               Icons.verified_user,
               'KYC',
               4,
             ),
+
             menuItem(
               Icons.devices,
               'Device Management',
               5,
             ),
+
             menuItem(
               Icons.account_balance,
               'Mutasi Bank',
               6,
             ),
+
             menuItem(
               Icons.campaign,
               'Pengumuman / Promo',
@@ -1275,7 +1526,9 @@ class _AdminDashboardScreenState
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
+      SnackBar(
+        content: Text(text),
+      ),
     );
   }
 
@@ -1283,7 +1536,8 @@ class _AdminDashboardScreenState
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (_, constraints) {
-        final mobile = constraints.maxWidth < 700;
+        final mobile =
+            constraints.maxWidth < 700;
 
         if (mobile) {
           return Scaffold(
@@ -1291,8 +1545,8 @@ class _AdminDashboardScreenState
               title: Text(
                 [
                   'Dashboard',
-                  'Produk',
-                  'Transaksi',
+                  'Produk PPOB',
+                  'Transaksi PPOB',
                   'Pengguna & Saldo',
                   'KYC',
                   'Device Management',
@@ -1300,6 +1554,14 @@ class _AdminDashboardScreenState
                   'Pengumuman / Promo',
                 ][menu],
               ),
+              actions: [
+                IconButton(
+                  onPressed: loadAll,
+                  icon: const Icon(
+                    Icons.refresh,
+                  ),
+                ),
+              ],
             ),
             drawer: drawer(),
             body: content(),
