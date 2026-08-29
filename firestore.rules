@@ -1,11 +1,12 @@
 rules_version = '2';
 
 service cloud.firestore {
+
   match /databases/{database}/documents {
 
-    // ============================================================
+    // =========================================================
     // HELPER
-    // ============================================================
+    // =========================================================
 
     function signedIn() {
       return request.auth != null;
@@ -27,158 +28,68 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
+    // =========================================================
     // USERS
-    // ============================================================
+    // =========================================================
 
     match /users/{uid} {
-
-      // ----------------------------------------------------------
-      // READ
-      // ----------------------------------------------------------
 
       allow read: if isOwner(uid) || isAdmin();
 
 
-      // ----------------------------------------------------------
+      // -------------------------------------------------------
       // CREATE
-      // ----------------------------------------------------------
-      //
-      // Sesuai AuthService:
-      //
-      // balance = 0
-      // poin = 0
-      // member = Silver
-      //
+      // -------------------------------------------------------
 
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.balance == 0
         && request.resource.data.poin == 0
-        && request.resource.data.member == "Silver";
+        && request.resource.data.member == "Silver"
+        && request.resource.data.role == "user";
 
 
-      // ----------------------------------------------------------
+      // -------------------------------------------------------
       // UPDATE
-      // ----------------------------------------------------------
+      // -------------------------------------------------------
       //
-      // Admin boleh mengubah data user.
+      // Admin boleh update.
       //
-      // User hanya boleh mengubah data profil miliknya.
+      // User hanya boleh mengubah field profil non-finansial.
       //
-      // Field finansial / keamanan tidak boleh disentuh user.
-      //
+      // -------------------------------------------------------
 
       allow update: if isAdmin()
 
         || (
           isOwner(uid)
 
-          && !request.resource.data.diff(resource.data)
+          && request.resource.data.diff(resource.data)
               .affectedKeys()
-              .hasAny([
-                "balance",
-                "saldo",
-                "poin",
-                "member",
-                "role",
-                "uid",
-
-                "pinHash",
-                "pinFailedAttempts",
-                "pinLockedUntil",
-
-                "saldoLimit",
-
-                "status",
-
-                "kycReason",
-                "kycReviewedAt"
+              .hasOnly([
+                "name",
+                "displayName",
+                "photoUrl",
+                "phone",
+                "email",
+                "updatedAt"
               ])
-
-          // User tidak boleh membuat KYC menjadi
-          // APPROVED atau REJECTED.
-          //
-          // Jika user mengubah kycStatus,
-          // nilainya hanya boleh PENDING.
-          //
-          && (
-            !request.resource.data.diff(resource.data)
-              .affectedKeys()
-              .hasAny(["kycStatus"])
-
-            ||
-
-            request.resource.data.kycStatus == "PENDING"
-          )
         );
 
 
-      // ----------------------------------------------------------
+      // -------------------------------------------------------
       // DELETE
-      // ----------------------------------------------------------
+      // -------------------------------------------------------
 
       allow delete: if isAdmin();
     }
 
 
-    // ============================================================
-    // PRODUCTS
-    // ============================================================
+    // =========================================================
+    // BALANCE LEDGER
+    // =========================================================
 
-    match /products/{productId} {
-
-      allow read: if signedIn();
-
-      allow create, update, delete: if isAdmin();
-    }
-
-
-    // ============================================================
-    // TRANSACTION REQUESTS
-    // ============================================================
-    //
-    // Untuk kondisi kode sekarang:
-    //
-    // Flutter membuat transaction_requests.
-    //
-    // Backend nantinya mengambil request tersebut
-    // dan memproses Digiflazz.
-    //
-    // User TIDAK boleh update setelah dibuat.
-    //
-    // ============================================================
-
-    match /transaction_requests/{transactionId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "WAITING"
-        && request.resource.data.digiflazzSent == false
-        && request.resource.data.amount is number
-        && request.resource.data.amount > 0
-        && request.resource.data.sellingPrice is number
-        && request.resource.data.sellingPrice > 0
-        && request.resource.data.sku is string
-        && request.resource.data.customerNo is string;
-
-
-      allow update, delete: if false;
-    }
-
-
-    // ============================================================
-    // FINAL TRANSACTIONS
-    // ============================================================
-
-    match /transactions/{transactionId} {
+    match /balance_ledger/{ledgerId} {
 
       allow read: if isAdmin()
         || (
@@ -191,49 +102,9 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
-    // TOP UP TRANSACTIONS
-    // ============================================================
-
-    match /topup_transactions/{transactionId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      // Hanya backend.
-      allow create, update, delete: if false;
-    }
-
-
-    // ============================================================
-    // BALANCE LEDGER
-    // ============================================================
-    //
-    // Catatan perubahan saldo.
-    //
-    // TIDAK boleh ditulis Flutter.
-    //
-    // Hanya backend/Admin SDK.
-    //
-
-    match /balance_ledger/{ledgerId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      allow create, update, delete: if false;
-    }
-
-
-    // ============================================================
+    // =========================================================
     // MUTASI SALDO
-    // ============================================================
+    // =========================================================
 
     match /mutasi_saldo/{mutasiId} {
 
@@ -247,36 +118,76 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
+    // =========================================================
+    // TOP UP TRANSACTIONS
+    // =========================================================
+
+    match /topup_transactions/{transactionId} {
+
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.uid == request.auth.uid
+        );
+
+      allow create, update, delete: if false;
+    }
+
+
+    // =========================================================
+    // PPOB TRANSACTIONS
+    // =========================================================
+
+    match /transactions/{transactionId} {
+
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.uid == request.auth.uid
+        );
+
+      // Tidak boleh dimanipulasi client.
+      allow create, update, delete: if false;
+    }
+
+
+    // =========================================================
+    // PRODUCTS
+    // =========================================================
+
+    match /products/{productId} {
+
+      // User boleh membaca produk.
+      allow read: if signedIn();
+
+      // Perubahan produk hanya admin.
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // =========================================================
     // KYC
-    // ============================================================
+    // =========================================================
+    //
+    // CATATAN:
+    // Sistem Anda sekarang menyimpan KYC di users/{uid}
+    // melalui field kycStatus.
+    //
+    // Collection kyc tetap ditutup kecuali nanti benar-benar
+    // digunakan.
+    // =========================================================
 
     match /kyc/{uid} {
 
       allow read: if isOwner(uid) || isAdmin();
 
-
-      allow create: if isOwner(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.status == "PENDING";
-
-
-      allow update: if isAdmin()
-
-        || (
-          isOwner(uid)
-          && resource.data.status == "PENDING"
-          && request.resource.data.status == "PENDING"
-        );
-
-
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
 
-    // ============================================================
-    // PROMOS
-    // ============================================================
+    // =========================================================
+    // PROMO
+    // =========================================================
 
     match /promos/{promoId} {
 
@@ -286,9 +197,9 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
+    // =========================================================
     // SETTINGS
-    // ============================================================
+    // =========================================================
 
     match /settings/{settingId} {
 
@@ -298,9 +209,9 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
+    // =========================================================
     // DEVICES
-    // ============================================================
+    // =========================================================
 
     match /devices/{deviceId} {
 
@@ -310,40 +221,21 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
-    // NOTIFIKASI
-    // ============================================================
+    // =========================================================
+    // BANK MUTATIONS
+    // =========================================================
 
-    match /notifikasi/{notificationId} {
+    match /bank_mutations/{mutationId} {
 
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && (
-            resource.data.uid == request.auth.uid
-            || resource.data.uid == "ALL"
-          )
-        );
+      allow read: if isAdmin();
 
       allow create, update, delete: if isAdmin();
     }
 
 
-    // ============================================================
-    // PENGUMUMAN
-    // ============================================================
-
-    match /pengumuman/{announcementId} {
-
-      allow read: if signedIn();
-
-      allow create, update, delete: if isAdmin();
-    }
-
-
-    // ============================================================
+    // =========================================================
     // ANNOUNCEMENTS
-    // ============================================================
+    // =========================================================
 
     match /announcements/{announcementId} {
 
@@ -353,72 +245,12 @@ service cloud.firestore {
     }
 
 
-    // ============================================================
-    // KELUHAN PELANGGAN
-    // ============================================================
-
-    match /keluhan_pelanggan/{keluhanId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid;
-
-      allow update: if isAdmin();
-
-      allow delete: if isAdmin();
-    }
-
-
-    // ============================================================
-    // BANK MUTATIONS
-    // ============================================================
-
-    match /bank_mutations/{mutationId} {
-
-      allow read: if isAdmin();
-
-      allow create, update, delete: if false;
-    }
-
-
-    // ============================================================
-    // LEGACY: PRODUK
-    // ============================================================
-
-    match /produk/{productId} {
-
-      allow read: if signedIn();
-
-      allow create, update, delete: if isAdmin();
-    }
-
-
-    // ============================================================
-    // LEGACY: TRANSAKSI
-    // ============================================================
-
-    match /transaksi/{transactionId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      allow create, update, delete: if false;
-    }
-
-
-    // ============================================================
+    // =========================================================
     // DEFAULT DENY
-    // ============================================================
+    // =========================================================
 
     match /{document=**} {
+
       allow read, write: if false;
     }
   }
