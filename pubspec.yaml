@@ -23,6 +23,7 @@ dependencies:
   firebase_auth: ^6.6.0
   cloud_firestore: ^6.9.0
   firebase_storage: ^13.5.0
+  cloud_functions: ^6.4.0   # <-- Paket yang tertinggal sudah ditambahkan di sini
   local_auth: ^3.0.2
 
   # Scanner QRIS
@@ -57,7 +58,7 @@ flutter:
     - .env
 
 flutter_launcher_icons:
-  android: launcher_icon
+  android: "launcher_icon"
   ios: false
-  image_path: assets/logo/logo.png
+  image_path: "assets/logo/logo.png"
   min_sdk_android: 21
