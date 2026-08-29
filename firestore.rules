@@ -44,11 +44,11 @@ service cloud.firestore {
       // CREATE
       // ----------------------------------------------------------
       //
-      // User baru hanya boleh membuat dokumen miliknya sendiri.
-      // Saldo awal HARUS 0.
+      // Sesuai AuthService:
       //
-      // PENTING:
-      // field aplikasi menggunakan "balance", bukan "saldo".
+      // balance = 0
+      // poin = 0
+      // member = Silver
       //
 
       allow create: if isOwner(uid)
@@ -62,25 +62,11 @@ service cloud.firestore {
       // UPDATE
       // ----------------------------------------------------------
       //
-      // Admin boleh melakukan perubahan administrasi.
+      // Admin boleh mengubah data user.
       //
-      // User hanya boleh mengubah field profil yang aman.
+      // User hanya boleh mengubah data profil miliknya.
       //
-      // FIELD YANG DILARANG USER:
-      // - balance
-      // - poin
-      // - member
-      // - role
-      // - uid
-      // - pinHash
-      // - pinFailedAttempts
-      // - pinLockedUntil
-      // - saldoLimit
-      // - status
-      // - kycReason
-      // - kycReviewedAt
-      //
-      // kycStatus boleh berubah oleh user HANYA menjadi PENDING.
+      // Field finansial / keamanan tidak boleh disentuh user.
       //
 
       allow update: if isAdmin()
@@ -92,19 +78,30 @@ service cloud.firestore {
               .affectedKeys()
               .hasAny([
                 "balance",
+                "saldo",
                 "poin",
                 "member",
                 "role",
                 "uid",
+
                 "pinHash",
                 "pinFailedAttempts",
                 "pinLockedUntil",
+
                 "saldoLimit",
+
                 "status",
+
                 "kycReason",
                 "kycReviewedAt"
               ])
 
+          // User tidak boleh membuat KYC menjadi
+          // APPROVED atau REJECTED.
+          //
+          // Jika user mengubah kycStatus,
+          // nilainya hanya boleh PENDING.
+          //
           && (
             !request.resource.data.diff(resource.data)
               .affectedKeys()
@@ -117,7 +114,10 @@ service cloud.firestore {
         );
 
 
-      // User tidak boleh menghapus akun melalui client.
+      // ----------------------------------------------------------
+      // DELETE
+      // ----------------------------------------------------------
+
       allow delete: if isAdmin();
     }
 
@@ -125,13 +125,6 @@ service cloud.firestore {
     // ============================================================
     // PRODUCTS
     // ============================================================
-    //
-    // User hanya membaca produk aktif.
-    // Admin dapat membaca dan mengelola produk.
-    //
-    // Backend/service admin tetap dapat menggunakan Admin SDK
-    // tanpa terpengaruh security rules.
-    //
 
     match /products/{productId} {
 
@@ -145,21 +138,18 @@ service cloud.firestore {
     // TRANSACTION REQUESTS
     // ============================================================
     //
-    // Client BOLEH membuat request transaksi miliknya sendiri.
+    // Untuk kondisi kode sekarang:
     //
-    // CLIENT TIDAK BOLEH:
-    // - mengubah status
-    // - mengubah uid
-    // - mengubah nominal setelah dibuat
-    // - menghapus request
+    // Flutter membuat transaction_requests.
     //
-    // Backend kemudian memproses request tersebut.
+    // Backend nantinya mengambil request tersebut
+    // dan memproses Digiflazz.
     //
+    // User TIDAK boleh update setelah dibuat.
+    //
+    // ============================================================
 
     match /transaction_requests/{transactionId} {
-
-      // User dapat melihat request miliknya.
-      // Admin dapat melihat semua.
 
       allow read: if isAdmin()
         || (
@@ -167,14 +157,6 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
         );
 
-
-      // User hanya dapat membuat request atas namanya sendiri.
-      //
-      // Status awal wajib WAITING.
-      // digiflazzSent wajib false.
-      //
-      // amount dan sellingPrice harus positif.
-      //
 
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
@@ -188,25 +170,13 @@ service cloud.firestore {
         && request.resource.data.customerNo is string;
 
 
-      // CLIENT TIDAK BOLEH UPDATE.
-      //
-      // Backend / Cloud Functions menggunakan Admin SDK,
-      // sehingga tetap dapat mengubah dokumen.
-      //
-
       allow update, delete: if false;
     }
 
 
     // ============================================================
-    // TRANSACTIONS
+    // FINAL TRANSACTIONS
     // ============================================================
-    //
-    // Ini adalah RIWAYAT FINAL transaksi.
-    //
-    // Tidak boleh dibuat/diedit/dihapus oleh APK.
-    // Hanya backend/Admin SDK.
-    //
 
     match /transactions/{transactionId} {
 
@@ -216,6 +186,7 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
         );
 
+      // Hanya backend/Admin SDK.
       allow create, update, delete: if false;
     }
 
@@ -223,10 +194,6 @@ service cloud.firestore {
     // ============================================================
     // TOP UP TRANSACTIONS
     // ============================================================
-    //
-    // Client hanya boleh membaca miliknya.
-    // Pembuatan invoice dan perubahan status dilakukan backend.
-    //
 
     match /topup_transactions/{transactionId} {
 
@@ -236,6 +203,7 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
         );
 
+      // Hanya backend.
       allow create, update, delete: if false;
     }
 
@@ -244,12 +212,11 @@ service cloud.firestore {
     // BALANCE LEDGER
     // ============================================================
     //
-    // LEDGER ADALAH CATATAN FINANSIAL.
+    // Catatan perubahan saldo.
     //
-    // Client TIDAK BOLEH MENULIS.
-    // Admin client juga tidak boleh menulis langsung.
+    // TIDAK boleh ditulis Flutter.
     //
-    // Hanya Cloud Functions / Admin SDK.
+    // Hanya backend/Admin SDK.
     //
 
     match /balance_ledger/{ledgerId} {
@@ -265,7 +232,7 @@ service cloud.firestore {
 
 
     // ============================================================
-    // MUTASI SALDO LAMA
+    // MUTASI SALDO
     // ============================================================
 
     match /mutasi_saldo/{mutasiId} {
@@ -283,20 +250,6 @@ service cloud.firestore {
     // ============================================================
     // KYC
     // ============================================================
-    //
-    // KYC memiliki collection sendiri.
-    //
-    // User:
-    // - create miliknya
-    // - membaca miliknya
-    // - update selama PENDING
-    //
-    // Admin:
-    // - membaca
-    // - update/review
-    //
-    // User tidak boleh mengubah status menjadi APPROVED/REJECTED.
-    //
 
     match /kyc/{uid} {
 
@@ -348,10 +301,6 @@ service cloud.firestore {
     // ============================================================
     // DEVICES
     // ============================================================
-    //
-    // Data device adalah data keamanan.
-    // User tidak boleh mengubah status block.
-    //
 
     match /devices/{deviceId} {
 
@@ -367,11 +316,13 @@ service cloud.firestore {
 
     match /notifikasi/{notificationId} {
 
-      allow read: if signedIn()
-        && (
-          resource.data.uid == request.auth.uid
-          || resource.data.uid == "ALL"
-          || isAdmin()
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.uid == request.auth.uid
+            || resource.data.uid == "ALL"
+          )
         );
 
       allow create, update, delete: if isAdmin();
@@ -436,15 +387,8 @@ service cloud.firestore {
 
 
     // ============================================================
-    // LEGACY COLLECTIONS
+    // LEGACY: PRODUK
     // ============================================================
-    //
-    // "produk" dan "transaksi" masih ada di kode lama.
-    //
-    // JANGAN beri akses tulis kepada user.
-    //
-    // Kita akan hapus/migrasikan pemakaiannya pada tahap berikutnya.
-    //
 
     match /produk/{productId} {
 
@@ -453,6 +397,10 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+
+    // ============================================================
+    // LEGACY: TRANSAKSI
+    // ============================================================
 
     match /transaksi/{transactionId} {
 
