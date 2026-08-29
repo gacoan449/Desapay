@@ -1,7 +1,12 @@
+// =====================================================================
+// FILE 2: lib/main.dart
+// =====================================================================
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'config/warna.dart';
@@ -71,16 +76,6 @@ class DesaPayApp extends StatelessWidget {
     super.key,
   });
 
-  // =========================================================
-  // ADMIN EMAIL
-  //
-  // Tidak menggunakan password admin di APK.
-  // Password tetap diverifikasi Firebase Authentication.
-  // =========================================================
-
-  static const String adminEmail =
-      'fikri.admin.desapay@gmail.com';
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -149,32 +144,32 @@ class DesaPayApp extends StatelessWidget {
           }
 
           // ===================================================
-          // ADMIN
+          // CEK ROLE DI FIRESTORE (AMAN DARI MANIPULASI KLIEN)
           // ===================================================
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+            builder: (context, userSnap) {
+              if (userSnap.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(
+                    child: CircularProgressIndicator(color: WarnaDesaPay.primary),
+                  ),
+                );
+              }
 
-          final email =
-              user.email
-                  ?.trim()
-                  .toLowerCase();
+              if (userSnap.hasData && userSnap.data!.exists) {
+                final userData = userSnap.data!.data() as Map<String, dynamic>?;
+                if (userData != null && userData['role'] == 'admin') {
+                  return const AdminDashboardScreen();
+                }
+              }
 
-          if (email ==
-              adminEmail.toLowerCase()) {
-            debugPrint(
-              "✅ Admin terdeteksi: $email",
-            );
-
-            return const AdminDashboardScreen();
-          }
-
-          // ===================================================
-          // USER BIASA
-          // ===================================================
-
-          debugPrint(
-            "✅ User terdeteksi: $email",
+              // ===================================================
+              // USER BIASA
+              // ===================================================
+              return const BottomNav();
+            },
           );
-
-          return const BottomNav();
         },
       ),
     );
