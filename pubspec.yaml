@@ -55,7 +55,6 @@ flutter:
 
   assets:
     - assets/logo/logo.png
-    - .env
 
 flutter_launcher_icons:
   android: "launcher_icon"
