@@ -8,13 +8,20 @@ const {
   HttpsError,
 } = require("firebase-functions/v2/https");
 
-const { defineSecret } = require("firebase-functions/params");
-const logger = require("firebase-functions/logger");
-const admin = require("firebase-admin");
+const {
+  defineSecret,
+} = require("firebase-functions/params");
+
+const logger =
+  require("firebase-functions/logger");
+
+const admin =
+  require("firebase-admin");
 
 admin.initializeApp();
 
-const db = admin.firestore();
+const db =
+  admin.firestore();
 
 /*
 |--------------------------------------------------------------------------
@@ -25,21 +32,34 @@ const db = admin.firestore();
 const TRIPAY_PRIVATE_KEY =
   defineSecret("TRIPAY_PRIVATE_KEY");
 
+const DIGIFLAZZ_USERNAME =
+  defineSecret("DIGIFLAZZ_USERNAME");
+
+const DIGIFLAZZ_API_KEY =
+  defineSecret("DIGIFLAZZ_API_KEY");
+
 /*
 |--------------------------------------------------------------------------
 | KONSTANTA
 |--------------------------------------------------------------------------
 */
 
-const REGION = "asia-southeast2";
-const BALANCE_FIELD = "balance";
+const REGION =
+  "asia-southeast2";
 
-const ALLOWED_STATUS = new Set([
-  "PAID",
-  "UNPAID",
-  "EXPIRED",
-  "FAILED",
-]);
+const DIGIFLAZZ_BASE_URL =
+  "https://api.digiflazz.com/v1";
+
+const BALANCE_FIELD =
+  "balance";
+
+const ALLOWED_STATUS =
+  new Set([
+    "PAID",
+    "UNPAID",
+    "EXPIRED",
+    "FAILED",
+  ]);
 
 /*
 |--------------------------------------------------------------------------
@@ -47,24 +67,116 @@ const ALLOWED_STATUS = new Set([
 |--------------------------------------------------------------------------
 */
 
-function sendJson(res, statusCode, data) {
-  return res.status(statusCode).json(data);
+function sendJson(
+  res,
+  statusCode,
+  data
+) {
+  return res
+    .status(statusCode)
+    .json(data);
 }
 
 function toSafeInteger(value) {
-  const number = Number(value);
+  const number =
+    Number(value);
 
-  if (!Number.isSafeInteger(number)) {
+  if (
+    !Number.isSafeInteger(number)
+  ) {
     return null;
   }
 
   return number;
 }
 
-function generateSignature(rawBody, privateKey) {
+function md5(value) {
   return crypto
-    .createHmac("sha256", privateKey)
-    .update(rawBody, "utf8")
+    .createHash("md5")
+    .update(value, "utf8")
+    .digest("hex");
+}
+
+async function digiflazzRequest(
+  endpoint,
+  body
+) {
+  const response =
+    await fetch(
+      `${DIGIFLAZZ_BASE_URL}/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+  const text =
+    await response.text();
+
+  let data;
+
+  try {
+    data =
+      JSON.parse(text);
+  } catch (_) {
+    throw new Error(
+      "Response Digiflazz bukan JSON."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `HTTP Digiflazz ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+function digiflazzCredentials() {
+  const username =
+    DIGIFLAZZ_USERNAME.value();
+
+  const apiKey =
+    DIGIFLAZZ_API_KEY.value();
+
+  if (!username || !apiKey) {
+    throw new Error(
+      "Credential Digiflazz belum dikonfigurasi."
+    );
+  }
+
+  return {
+    username,
+    apiKey,
+  };
+}
+
+function generateRefId(uid) {
+  const random =
+    crypto.randomBytes(6)
+      .toString("hex");
+
+  return `dp-${Date.now()}-${uid.slice(0, 8)}-${random}`;
+}
+
+function generateSignature(
+  rawBody,
+  privateKey
+) {
+  return crypto
+    .createHmac(
+      "sha256",
+      privateKey
+    )
+    .update(
+      rawBody,
+      "utf8"
+    )
     .digest("hex");
 }
 
@@ -73,25 +185,34 @@ function verifySignature(
   receivedSignature,
   privateKey
 ) {
-  if (!rawBody || !receivedSignature || !privateKey) {
+  if (
+    !rawBody ||
+    !receivedSignature ||
+    !privateKey
+  ) {
     return false;
   }
 
   try {
-    const expected = generateSignature(
-      rawBody,
-      privateKey
-    );
+    const expected =
+      generateSignature(
+        rawBody,
+        privateKey
+      );
 
-    const expectedBuffer = Buffer.from(
-      expected,
-      "hex"
-    );
+    const expectedBuffer =
+      Buffer.from(
+        expected,
+        "hex"
+      );
 
-    const receivedBuffer = Buffer.from(
-      receivedSignature.trim().toLowerCase(),
-      "hex"
-    );
+    const receivedBuffer =
+      Buffer.from(
+        receivedSignature
+          .trim()
+          .toLowerCase(),
+        "hex"
+      );
 
     if (
       expectedBuffer.length !==
@@ -120,16 +241,18 @@ async function checkAdmin(uid) {
     return false;
   }
 
-  const snap = await db
-    .collection("users")
-    .doc(uid)
-    .get();
+  const snap =
+    await db
+      .collection("users")
+      .doc(uid)
+      .get();
 
   if (!snap.exists) {
     return false;
   }
 
-  const data = snap.data() || {};
+  const data =
+    snap.data() || {};
 
   return data.role === "admin";
 }
@@ -138,334 +261,857 @@ async function checkAdmin(uid) {
 |--------------------------------------------------------------------------
 | ADMIN UBah SALDO
 |--------------------------------------------------------------------------
-|
-| Flutter TIDAK PERNAH menulis users.balance langsung.
-|
-| Alur:
-|
-| Admin Flutter
-|      ↓
-| adminAdjustBalance
-|      ↓
-| Firestore Transaction
-|      ├── users/{uid}.balance
-|      └── balance_ledger/{id}
-|
+*/
+
+exports.adminAdjustBalance =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Admin harus login."
+        );
+      }
+
+      const adminUid =
+        request.auth.uid;
+
+      if (
+        !(await checkAdmin(
+          adminUid
+        ))
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Akses hanya untuk admin."
+        );
+      }
+
+      const data =
+        request.data || {};
+
+      const uid =
+        typeof data.uid ===
+        "string"
+          ? data.uid.trim()
+          : "";
+
+      const alasan =
+        typeof data.alasan ===
+        "string"
+          ? data.alasan.trim()
+          : "";
+
+      const amount =
+        toSafeInteger(
+          data.amount
+        );
+
+      if (!uid) {
+        throw new HttpsError(
+          "invalid-argument",
+          "UID user wajib diisi."
+        );
+      }
+
+      if (!alasan) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Alasan perubahan saldo wajib diisi."
+        );
+      }
+
+      if (
+        amount === null ||
+        amount === 0
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Nominal saldo tidak valid."
+        );
+      }
+
+      const MAX_ADJUSTMENT =
+        100000000;
+
+      if (
+        Math.abs(amount) >
+        MAX_ADJUSTMENT
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Nominal perubahan saldo terlalu besar."
+        );
+      }
+
+      const userRef =
+        db
+          .collection("users")
+          .doc(uid);
+
+      try {
+        const result =
+          await db.runTransaction(
+            async (transaction) => {
+              const userSnap =
+                await transaction.get(
+                  userRef
+                );
+
+              if (!userSnap.exists) {
+                throw new Error(
+                  "USER_NOT_FOUND"
+                );
+              }
+
+              const userData =
+                userSnap.data() || {};
+
+              const before =
+                toSafeInteger(
+                  userData[
+                    BALANCE_FIELD
+                  ]
+                );
+
+              if (
+                before === null ||
+                before < 0
+              ) {
+                throw new Error(
+                  "INVALID_BALANCE"
+                );
+              }
+
+              const after =
+                before + amount;
+
+              if (
+                !Number.isSafeInteger(
+                  after
+                )
+              ) {
+                throw new Error(
+                  "BALANCE_OVERFLOW"
+                );
+              }
+
+              if (after < 0) {
+                throw new Error(
+                  "NEGATIVE_BALANCE"
+                );
+              }
+
+              transaction.update(
+                userRef,
+                {
+                  [BALANCE_FIELD]:
+                    after,
+
+                  updatedAt:
+                    admin.firestore
+                      .FieldValue
+                      .serverTimestamp(),
+                }
+              );
+
+              const ledgerRef =
+                db
+                  .collection(
+                    "balance_ledger"
+                  )
+                  .doc();
+
+              transaction.set(
+                ledgerRef,
+                {
+                  uid,
+
+                  type:
+                    amount > 0
+                      ? "CREDIT"
+                      : "DEBIT",
+
+                  amount:
+                    Math.abs(amount),
+
+                  before,
+                  after,
+
+                  reason:
+                    alasan,
+
+                  source:
+                    "ADMIN",
+
+                  adminUid,
+
+                  createdAt:
+                    admin.firestore
+                      .FieldValue
+                      .serverTimestamp(),
+                }
+              );
+
+              return {
+                uid,
+                before,
+                after,
+                amount,
+                ledgerId:
+                  ledgerRef.id,
+              };
+            }
+          );
+
+        return {
+          success: true,
+          ...result,
+        };
+      } catch (error) {
+        logger.error(
+          "ADMIN SALDO GAGAL",
+          error
+        );
+
+        switch (
+          error.message
+        ) {
+          case "USER_NOT_FOUND":
+            throw new HttpsError(
+              "not-found",
+              "User tidak ditemukan."
+            );
+
+          case "INVALID_BALANCE":
+            throw new HttpsError(
+              "failed-precondition",
+              "Saldo user tidak valid."
+            );
+
+          case "NEGATIVE_BALANCE":
+            throw new HttpsError(
+              "failed-precondition",
+              "Saldo tidak boleh negatif."
+            );
+
+          case "BALANCE_OVERFLOW":
+            throw new HttpsError(
+              "out-of-range",
+              "Saldo melebihi batas aman."
+            );
+
+          default:
+            throw new HttpsError(
+              "internal",
+              "Gagal mengubah saldo."
+            );
+        }
+      }
+    }
+  );
+
+/*
+|--------------------------------------------------------------------------
+| DIGIFLAZZ - PRICE LIST
 |--------------------------------------------------------------------------
 */
 
-exports.adminAdjustBalance = onCall(
-  {
-    region: REGION,
-    timeoutSeconds: 30,
-    memory: "256MiB",
-  },
+exports.digiflazzPriceList =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 60,
+      memory: "256MiB",
+      secrets: [
+        DIGIFLAZZ_USERNAME,
+        DIGIFLAZZ_API_KEY,
+      ],
+    },
 
-  async (request) => {
-    /*
-    |--------------------------------------------------------------------------
-    | 1. WAJIB LOGIN
-    |--------------------------------------------------------------------------
-    */
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Harus login."
+        );
+      }
 
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Admin harus login."
-      );
-    }
+      if (
+        !(await checkAdmin(
+          request.auth.uid
+        ))
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Hanya admin."
+        );
+      }
 
-    const adminUid = request.auth.uid;
+      try {
+        const {
+          username,
+          apiKey,
+        } =
+          digiflazzCredentials();
 
-    /*
-    |--------------------------------------------------------------------------
-    | 2. WAJIB ADMIN
-    |--------------------------------------------------------------------------
-    */
+        const result =
+          await digiflazzRequest(
+            "price-list",
+            {
+              cmd: "prepaid",
+              username,
 
-    const adminIsValid =
-      await checkAdmin(adminUid);
-
-    if (!adminIsValid) {
-      throw new HttpsError(
-        "permission-denied",
-        "Akses hanya untuk admin."
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | 3. VALIDASI INPUT
-    |--------------------------------------------------------------------------
-    */
-
-    const data = request.data || {};
-
-    const uid =
-      typeof data.uid === "string"
-        ? data.uid.trim()
-        : "";
-
-    const alasan =
-      typeof data.alasan === "string"
-        ? data.alasan.trim()
-        : "";
-
-    const amount =
-      toSafeInteger(data.amount);
-
-    if (!uid) {
-      throw new HttpsError(
-        "invalid-argument",
-        "UID user wajib diisi."
-      );
-    }
-
-    if (!alasan) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Alasan perubahan saldo wajib diisi."
-      );
-    }
-
-    if (
-      amount === null ||
-      amount === 0
-    ) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Nominal saldo tidak valid."
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | 4. BATAS NOMINAL
-    |--------------------------------------------------------------------------
-    |
-    | Maksimum perubahan sekali transaksi:
-    | Rp100.000.000
-    |
-    */
-
-    const MAX_ADJUSTMENT = 100000000;
-
-    if (
-      Math.abs(amount) >
-      MAX_ADJUSTMENT
-    ) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Nominal perubahan saldo terlalu besar."
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | 5. REFERENSI USER
-    |--------------------------------------------------------------------------
-    */
-
-    const userRef =
-      db.collection("users").doc(uid);
-
-    try {
-      const result =
-        await db.runTransaction(
-          async (transaction) => {
-            /*
-            |--------------------------------------------------------------------------
-            | AMBIL USER
-            |--------------------------------------------------------------------------
-            */
-
-            const userSnap =
-              await transaction.get(userRef);
-
-            if (!userSnap.exists) {
-              throw new Error(
-                "USER_NOT_FOUND"
-              );
+              sign: md5(
+                username +
+                  apiKey +
+                  "pricelist"
+              ),
             }
+          );
 
-            const userData =
-              userSnap.data() || {};
+        return result;
+      } catch (error) {
+        logger.error(
+          "DIGIFLAZZ PRICE LIST GAGAL",
+          error
+        );
 
-            /*
-            |--------------------------------------------------------------------------
-            | SALDO LAMA
-            |--------------------------------------------------------------------------
-            */
+        throw new HttpsError(
+          "internal",
+          "Gagal mengambil daftar produk."
+        );
+      }
+    }
+  );
 
-            const before =
-              toSafeInteger(
-                userData[BALANCE_FIELD]
-              );
+/*
+|--------------------------------------------------------------------------
+| DIGIFLAZZ - CEK SALDO
+|--------------------------------------------------------------------------
+*/
 
-            if (
-              before === null ||
-              before < 0
-            ) {
-              throw new Error(
-                "INVALID_BALANCE"
-              );
+exports.digiflazzCekSaldo =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 30,
+      memory: "256MiB",
+      secrets: [
+        DIGIFLAZZ_USERNAME,
+        DIGIFLAZZ_API_KEY,
+      ],
+    },
+
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Harus login."
+        );
+      }
+
+      if (
+        !(await checkAdmin(
+          request.auth.uid
+        ))
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Hanya admin."
+        );
+      }
+
+      try {
+        const {
+          username,
+          apiKey,
+        } =
+          digiflazzCredentials();
+
+        return await digiflazzRequest(
+          "cek-saldo",
+          {
+            cmd: "deposit",
+            username,
+
+            sign: md5(
+              username +
+                apiKey +
+                "depo"
+            ),
+          }
+        );
+      } catch (error) {
+        logger.error(
+          "DIGIFLAZZ CEK SALDO GAGAL",
+          error
+        );
+
+        throw new HttpsError(
+          "internal",
+          "Gagal mengambil saldo Digiflazz."
+        );
+      }
+    }
+  );
+
+/*
+|--------------------------------------------------------------------------
+| DIGIFLAZZ - KIRIM TRANSAKSI
+|--------------------------------------------------------------------------
+*/
+
+exports.digiflazzKirimTransaksi =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 60,
+      memory: "256MiB",
+      secrets: [
+        DIGIFLAZZ_USERNAME,
+        DIGIFLAZZ_API_KEY,
+      ],
+    },
+
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Harus login."
+        );
+      }
+
+      const uid =
+        request.auth.uid;
+
+      const data =
+        request.data || {};
+
+      const buyerSkuCode =
+        typeof data.buyer_sku_code ===
+        "string"
+          ? data.buyer_sku_code.trim()
+          : "";
+
+      const customerNo =
+        typeof data.customer_no ===
+        "string"
+          ? data.customer_no.trim()
+          : "";
+
+      if (
+        !buyerSkuCode ||
+        !customerNo
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Kode produk dan nomor pelanggan wajib diisi."
+        );
+      }
+
+      if (
+        buyerSkuCode.length >
+        100 ||
+        customerNo.length >
+        100
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Input transaksi tidak valid."
+        );
+      }
+
+      try {
+        const {
+          username,
+          apiKey,
+        } =
+          digiflazzCredentials();
+
+        const refId =
+          generateRefId(uid);
+
+        const transaksiRef =
+          db
+            .collection(
+              "digiflazz_transactions"
+            )
+            .doc(refId);
+
+        await transaksiRef.set({
+          uid,
+
+          refId,
+
+          buyerSkuCode,
+
+          customerNo,
+
+          status:
+            "PROCESSING",
+
+          createdAt:
+            admin.firestore
+              .FieldValue
+              .serverTimestamp(),
+        });
+
+        const result =
+          await digiflazzRequest(
+            "transaction",
+            {
+              username,
+
+              buyer_sku_code:
+                buyerSkuCode,
+
+              customer_no:
+                customerNo,
+
+              ref_id:
+                refId,
+
+              sign: md5(
+                username +
+                  apiKey +
+                  refId
+              ),
             }
+          );
 
-            /*
-            |--------------------------------------------------------------------------
-            | SALDO BARU
-            |--------------------------------------------------------------------------
-            */
+        const resultData =
+          result.data || {};
 
-            const after =
-              before + amount;
+        await transaksiRef.set(
+          {
+            response:
+              resultData,
 
-            if (
-              !Number.isSafeInteger(after)
-            ) {
-              throw new Error(
-                "BALANCE_OVERFLOW"
-              );
-            }
+            status:
+              resultData.status ||
+              "UNKNOWN",
 
-            if (after < 0) {
-              throw new Error(
-                "NEGATIVE_BALANCE"
-              );
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | UPDATE USER
-            |--------------------------------------------------------------------------
-            */
-
-            transaction.update(
-              userRef,
-              {
-                [BALANCE_FIELD]: after,
-
-                updatedAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-              }
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | LEDGER
-            |--------------------------------------------------------------------------
-            */
-
-            const ledgerRef =
-              db
-                .collection("balance_ledger")
-                .doc();
-
-            transaction.set(
-              ledgerRef,
-              {
-                uid,
-
-                type:
-                  amount > 0
-                    ? "CREDIT"
-                    : "DEBIT",
-
-                amount:
-                  Math.abs(amount),
-
-                before,
-
-                after,
-
-                reason: alasan,
-
-                source: "ADMIN",
-
-                adminUid,
-
-                createdAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-              }
-            );
-
-            return {
-              uid,
-              before,
-              after,
-              amount,
-              ledgerId: ledgerRef.id,
-            };
+            updatedAt:
+              admin.firestore
+                .FieldValue
+                .serverTimestamp(),
+          },
+          {
+            merge: true,
           }
         );
 
-      logger.info(
-        "ADMIN SALDO BERHASIL",
-        {
-          adminUid,
-          uid: result.uid,
-          amount: result.amount,
-          before: result.before,
-          after: result.after,
-        }
-      );
+        return result;
+      } catch (error) {
+        logger.error(
+          "DIGIFLAZZ TRANSAKSI GAGAL",
+          error
+        );
 
-      return {
-        success: true,
-        uid: result.uid,
-        amount: result.amount,
-        before: result.before,
-        after: result.after,
-        ledgerId: result.ledgerId,
-      };
-    } catch (error) {
-      logger.error(
-        "ADMIN SALDO GAGAL",
-        {
-          adminUid,
-          uid,
-          error: error.message,
-        }
-      );
-
-      switch (error.message) {
-        case "USER_NOT_FOUND":
-          throw new HttpsError(
-            "not-found",
-            "User tidak ditemukan."
-          );
-
-        case "INVALID_BALANCE":
-          throw new HttpsError(
-            "failed-precondition",
-            "Saldo user tidak valid."
-          );
-
-        case "NEGATIVE_BALANCE":
-          throw new HttpsError(
-            "failed-precondition",
-            "Saldo tidak boleh negatif."
-          );
-
-        case "BALANCE_OVERFLOW":
-          throw new HttpsError(
-            "out-of-range",
-            "Saldo melebihi batas aman."
-          );
-
-        default:
-          throw new HttpsError(
-            "internal",
-            "Gagal mengubah saldo."
-          );
+        throw new HttpsError(
+          "internal",
+          "Transaksi Digiflazz gagal diproses."
+        );
       }
     }
-  }
-);
+  );
+
+/*
+|--------------------------------------------------------------------------
+| DIGIFLAZZ - CEK STATUS PREPAID
+|--------------------------------------------------------------------------
+*/
+
+exports.digiflazzCekTransaksi =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 60,
+      memory: "256MiB",
+      secrets: [
+        DIGIFLAZZ_USERNAME,
+        DIGIFLAZZ_API_KEY,
+      ],
+    },
+
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Harus login."
+        );
+      }
+
+      const refId =
+        typeof request.data?.ref_id ===
+        "string"
+          ? request.data.ref_id.trim()
+          : "";
+
+      if (!refId) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Ref ID wajib diisi."
+        );
+      }
+
+      try {
+        const transaksiRef =
+          db
+            .collection(
+              "digiflazz_transactions"
+            )
+            .doc(refId);
+
+        const transaksiSnap =
+          await transaksiRef.get();
+
+        if (
+          !transaksiSnap.exists
+        ) {
+          throw new HttpsError(
+            "not-found",
+            "Transaksi tidak ditemukan."
+          );
+        }
+
+        const transaksi =
+          transaksiSnap.data() ||
+          {};
+
+        const isAdmin =
+          await checkAdmin(
+            request.auth.uid
+          );
+
+        if (
+          transaksi.uid !==
+            request.auth.uid &&
+          !isAdmin
+        ) {
+          throw new HttpsError(
+            "permission-denied",
+            "Tidak memiliki akses transaksi ini."
+          );
+        }
+
+        const {
+          username,
+          apiKey,
+        } =
+          digiflazzCredentials();
+
+        const result =
+          await digiflazzRequest(
+            "transaction",
+            {
+              username,
+
+              buyer_sku_code:
+                transaksi.buyerSkuCode,
+
+              customer_no:
+                transaksi.customerNo,
+
+              ref_id:
+                refId,
+
+              sign: md5(
+                username +
+                  apiKey +
+                  refId
+              ),
+            }
+          );
+
+        await transaksiRef.set(
+          {
+            response:
+              result.data || {},
+
+            status:
+              result.data?.status ||
+              "UNKNOWN",
+
+            updatedAt:
+              admin.firestore
+                .FieldValue
+                .serverTimestamp(),
+          },
+          {
+            merge: true,
+          }
+        );
+
+        return result;
+      } catch (error) {
+        if (
+          error instanceof
+          HttpsError
+        ) {
+          throw error;
+        }
+
+        logger.error(
+          "DIGIFLAZZ CEK STATUS GAGAL",
+          error
+        );
+
+        throw new HttpsError(
+          "internal",
+          "Gagal mengecek status transaksi."
+        );
+      }
+    }
+  );
+
+/*
+|--------------------------------------------------------------------------
+| DIGIFLAZZ - MINTA TIKET DEPOSIT
+|--------------------------------------------------------------------------
+*/
+
+exports.digiflazzMintaDeposit =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 60,
+      memory: "256MiB",
+      secrets: [
+        DIGIFLAZZ_USERNAME,
+        DIGIFLAZZ_API_KEY,
+      ],
+    },
+
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Harus login."
+        );
+      }
+
+      if (
+        !(await checkAdmin(
+          request.auth.uid
+        ))
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Hanya admin."
+        );
+      }
+
+      const data =
+        request.data || {};
+
+      const amount =
+        toSafeInteger(
+          data.amount
+        );
+
+      const bank =
+        typeof data.Bank ===
+        "string"
+          ? data.Bank.trim()
+          : "";
+
+      const ownerName =
+        typeof data.owner_name ===
+        "string"
+          ? data.owner_name.trim()
+          : "";
+
+      if (
+        amount === null ||
+        amount <= 0
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Nominal deposit tidak valid."
+        );
+      }
+
+      if (!bank || !ownerName) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Bank dan nama pemilik wajib diisi."
+        );
+      }
+
+      try {
+        const {
+          username,
+          apiKey,
+        } =
+          digiflazzCredentials();
+
+        const result =
+          await digiflazzRequest(
+            "deposit",
+            {
+              username,
+
+              amount,
+
+              Bank:
+                bank,
+
+              owner_name:
+                ownerName,
+
+              sign: md5(
+                username +
+                  apiKey +
+                  "deposit"
+              ),
+            }
+          );
+
+        await db
+          .collection(
+            "digiflazz_deposits"
+          )
+          .add({
+            adminUid:
+              request.auth.uid,
+
+            amount,
+
+            bank,
+
+            ownerName,
+
+            response:
+              result.data || {},
+
+            createdAt:
+              admin.firestore
+                .FieldValue
+                .serverTimestamp(),
+          });
+
+        return result;
+      } catch (error) {
+        logger.error(
+          "DIGIFLAZZ DEPOSIT GAGAL",
+          error
+        );
+
+        throw new HttpsError(
+          "internal",
+          "Gagal membuat tiket deposit."
+        );
+      }
+    }
+  );
 
 /*
 |--------------------------------------------------------------------------
@@ -473,354 +1119,520 @@ exports.adminAdjustBalance = onCall(
 |--------------------------------------------------------------------------
 */
 
-exports.tripayCallback = onRequest(
-  {
-    region: REGION,
-    secrets: [TRIPAY_PRIVATE_KEY],
-    cors: false,
-    timeoutSeconds: 30,
-    memory: "256MiB",
-  },
+exports.tripayCallback =
+  onRequest(
+    {
+      region: REGION,
+      secrets: [
+        TRIPAY_PRIVATE_KEY,
+      ],
+      cors: false,
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
 
-  async (req, res) => {
-    /*
-    |--------------------------------------------------------------------------
-    | 1. POST ONLY
-    |--------------------------------------------------------------------------
-    */
+    async (req, res) => {
+      if (
+        req.method !== "POST"
+      ) {
+        return sendJson(
+          res,
+          405,
+          {
+            success: false,
+            message:
+              "Method Not Allowed",
+          }
+        );
+      }
 
-    if (req.method !== "POST") {
-      return sendJson(res, 405, {
-        success: false,
-        message: "Method Not Allowed",
-      });
-    }
+      let rawBody = "";
 
-    /*
-    |--------------------------------------------------------------------------
-    | 2. RAW BODY
-    |--------------------------------------------------------------------------
-    */
+      if (
+        Buffer.isBuffer(
+          req.rawBody
+        )
+      ) {
+        rawBody =
+          req.rawBody.toString(
+            "utf8"
+          );
+      } else if (
+        typeof req.rawBody ===
+        "string"
+      ) {
+        rawBody =
+          req.rawBody;
+      } else {
+        rawBody =
+          JSON.stringify(
+            req.body || {}
+          );
+      }
 
-    let rawBody = "";
+      if (!rawBody.trim()) {
+        return sendJson(
+          res,
+          400,
+          {
+            success: false,
+            message:
+              "Empty callback body.",
+          }
+        );
+      }
 
-    if (Buffer.isBuffer(req.rawBody)) {
-      rawBody =
-        req.rawBody.toString("utf8");
-    } else if (
-      typeof req.rawBody === "string"
-    ) {
-      rawBody = req.rawBody;
-    } else {
-      rawBody = JSON.stringify(
-        req.body || {}
-      );
-    }
+      const receivedSignature =
+        req.get(
+          "X-Callback-Signature"
+        ) ||
+        req.get(
+          "x-callback-signature"
+        ) ||
+        req.get(
+          "Signature"
+        );
 
-    if (!rawBody.trim()) {
-      logger.warn(
-        "Callback ditolak: body kosong."
-      );
+      if (!receivedSignature) {
+        return sendJson(
+          res,
+          401,
+          {
+            success: false,
+            message:
+              "Invalid callback signature.",
+          }
+        );
+      }
 
-      return sendJson(res, 400, {
-        success: false,
-        message: "Empty callback body.",
-      });
-    }
+      const privateKey =
+        TRIPAY_PRIVATE_KEY.value();
 
-    /*
-    |--------------------------------------------------------------------------
-    | 3. SIGNATURE
-    |--------------------------------------------------------------------------
-    */
+      if (!privateKey) {
+        return sendJson(
+          res,
+          500,
+          {
+            success: false,
+            message:
+              "Payment gateway belum dikonfigurasi.",
+          }
+        );
+      }
 
-    const receivedSignature =
-      req.get("X-Callback-Signature") ||
-      req.get("x-callback-signature") ||
-      req.get("Signature");
+      if (
+        !verifySignature(
+          rawBody,
+          receivedSignature,
+          privateKey
+        )
+      ) {
+        return sendJson(
+          res,
+          401,
+          {
+            success: false,
+            message:
+              "Invalid callback signature.",
+          }
+        );
+      }
 
-    if (!receivedSignature) {
-      logger.warn(
-        "Callback ditolak: signature tidak ditemukan."
-      );
+      let payload;
 
-      return sendJson(res, 401, {
-        success: false,
-        message:
-          "Invalid callback signature.",
-      });
-    }
+      try {
+        payload =
+          JSON.parse(
+            rawBody
+          );
+      } catch (_) {
+        return sendJson(
+          res,
+          400,
+          {
+            success: false,
+            message:
+              "Invalid JSON.",
+          }
+        );
+      }
 
-    /*
-    |--------------------------------------------------------------------------
-    | 4. PRIVATE KEY
-    |--------------------------------------------------------------------------
-    */
+      const reference =
+        String(
+          payload.reference || ""
+        ).trim();
 
-    const privateKey =
-      TRIPAY_PRIVATE_KEY.value();
+      const merchantRef =
+        String(
+          payload.merchant_ref || ""
+        ).trim();
 
-    if (!privateKey) {
-      logger.error(
-        "TRIPAY_PRIVATE_KEY belum dikonfigurasi."
-      );
+      const status =
+        String(
+          payload.status || ""
+        )
+          .trim()
+          .toUpperCase();
 
-      return sendJson(res, 500, {
-        success: false,
-        message:
-          "Payment gateway belum dikonfigurasi.",
-      });
-    }
+      const totalAmount =
+        toSafeInteger(
+          payload.total_amount
+        );
 
-    /*
-    |--------------------------------------------------------------------------
-    | 5. VERIFY SIGNATURE
-    |--------------------------------------------------------------------------
-    */
+      const amountReceived =
+        toSafeInteger(
+          payload.amount_received
+        );
 
-    if (
-      !verifySignature(
-        rawBody,
-        receivedSignature,
-        privateKey
-      )
-    ) {
-      logger.warn(
-        "Callback ditolak: signature tidak valid."
-      );
+      if (
+        !reference ||
+        !merchantRef ||
+        !status
+      ) {
+        return sendJson(
+          res,
+          400,
+          {
+            success: false,
+            message:
+              "Callback data tidak lengkap.",
+          }
+        );
+      }
 
-      return sendJson(res, 401, {
-        success: false,
-        message:
-          "Invalid callback signature.",
-      });
-    }
+      if (
+        !ALLOWED_STATUS.has(
+          status
+        )
+      ) {
+        return sendJson(
+          res,
+          400,
+          {
+            success: false,
+            message:
+              "Status transaksi tidak dikenal.",
+          }
+        );
+      }
 
-    /*
-    |--------------------------------------------------------------------------
-    | 6. PARSE
-    |--------------------------------------------------------------------------
-    */
+      if (
+        totalAmount === null ||
+        totalAmount <= 0
+      ) {
+        return sendJson(
+          res,
+          400,
+          {
+            success: false,
+            message:
+              "Nominal transaksi tidak valid.",
+          }
+        );
+      }
 
-    let payload;
+      const transaksiRef =
+        db
+          .collection(
+            "topup_transactions"
+          )
+          .doc(
+            merchantRef
+          );
 
-    try {
-      payload = JSON.parse(rawBody);
-    } catch (error) {
-      logger.error(
-        "Callback JSON tidak valid.",
-        error
-      );
+      try {
+        const result =
+          await db.runTransaction(
+            async (transaction) => {
+              const transaksiSnap =
+                await transaction.get(
+                  transaksiRef
+                );
 
-      return sendJson(res, 400, {
-        success: false,
-        message: "Invalid JSON.",
-      });
-    }
+              if (
+                !transaksiSnap.exists
+              ) {
+                throw new Error(
+                  "TRANSACTION_NOT_FOUND"
+                );
+              }
 
-    /*
-    |--------------------------------------------------------------------------
-    | 7. DATA
-    |--------------------------------------------------------------------------
-    */
+              const transaksi =
+                transaksiSnap.data() ||
+                {};
 
-    const reference =
-      String(
-        payload.reference || ""
-      ).trim();
+              const uid =
+                String(
+                  transaksi.uid || ""
+                ).trim();
 
-    const merchantRef =
-      String(
-        payload.merchant_ref || ""
-      ).trim();
+              if (!uid) {
+                throw new Error(
+                  "TRANSACTION_UID_MISSING"
+                );
+              }
 
-    const status =
-      String(
-        payload.status || ""
-      )
-        .trim()
-        .toUpperCase();
+              const savedMerchantRef =
+                String(
+                  transaksi.merchantRef ||
+                    ""
+                ).trim();
 
-    const totalAmount =
-      toSafeInteger(
-        payload.total_amount
-      );
+              if (
+                savedMerchantRef !==
+                merchantRef
+              ) {
+                throw new Error(
+                  "MERCHANT_REFERENCE_MISMATCH"
+                );
+              }
 
-    const amountReceived =
-      toSafeInteger(
-        payload.amount_received
-      );
+              const expectedAmount =
+                toSafeInteger(
+                  transaksi.amount
+                );
 
-    /*
-    |--------------------------------------------------------------------------
-    | 8. VALIDASI
-    |--------------------------------------------------------------------------
-    */
+              if (
+                expectedAmount === null ||
+                expectedAmount <= 0
+              ) {
+                throw new Error(
+                  "INVALID_TRANSACTION_AMOUNT"
+                );
+              }
 
-    if (
-      !reference ||
-      !merchantRef ||
-      !status
-    ) {
-      return sendJson(res, 400, {
-        success: false,
-        message:
-          "Callback data tidak lengkap.",
-      });
-    }
+              if (
+                expectedAmount !==
+                totalAmount
+              ) {
+                throw new Error(
+                  "AMOUNT_MISMATCH"
+                );
+              }
 
-    if (!ALLOWED_STATUS.has(status)) {
-      return sendJson(res, 400, {
-        success: false,
-        message:
-          "Status transaksi tidak dikenal.",
-      });
-    }
+              const currentStatus =
+                String(
+                  transaksi.status ||
+                    "UNPAID"
+                ).toUpperCase();
 
-    if (
-      totalAmount === null ||
-      totalAmount <= 0
-    ) {
-      return sendJson(res, 400, {
-        success: false,
-        message:
-          "Nominal transaksi tidak valid.",
-      });
-    }
+              if (
+                currentStatus ===
+                "PAID"
+              ) {
+                return {
+                  alreadyPaid: true,
+                };
+              }
 
-    /*
-    |--------------------------------------------------------------------------
-    | 9. TRANSAKSI TOP UP
-    |--------------------------------------------------------------------------
-    */
+              if (
+                status !== "PAID"
+              ) {
+                transaction.update(
+                  transaksiRef,
+                  {
+                    status,
 
-    const transaksiRef =
-      db
-        .collection("topup_transactions")
-        .doc(merchantRef);
+                    reference,
 
-    try {
-      const result =
-        await db.runTransaction(
-          async (transaction) => {
-            const transaksiSnap =
-              await transaction.get(
-                transaksiRef
-              );
+                    totalAmount,
 
-            if (!transaksiSnap.exists) {
-              throw new Error(
-                "TRANSACTION_NOT_FOUND"
-              );
-            }
+                    amountReceived:
+                      amountReceived ??
+                      0,
 
-            const transaksi =
-              transaksiSnap.data() || {};
+                    updatedAt:
+                      admin.firestore
+                        .FieldValue
+                        .serverTimestamp(),
+                  }
+                );
 
-            const uid =
-              String(
-                transaksi.uid || ""
-              ).trim();
-
-            if (!uid) {
-              throw new Error(
-                "TRANSACTION_UID_MISSING"
-              );
-            }
-
-            const savedMerchantRef =
-              String(
-                transaksi.merchantRef || ""
-              ).trim();
-
-            if (
-              savedMerchantRef !==
-              merchantRef
-            ) {
-              throw new Error(
-                "MERCHANT_REFERENCE_MISMATCH"
-              );
-            }
-
-            const savedReference =
-              String(
-                transaksi.reference || ""
-              ).trim();
-
-            if (
-              savedReference &&
-              savedReference !== reference
-            ) {
-              throw new Error(
-                "TRIPAY_REFERENCE_MISMATCH"
-              );
-            }
-
-            const expectedAmount =
-              toSafeInteger(
-                transaksi.amount
-              );
-
-            if (
-              expectedAmount === null ||
-              expectedAmount <= 0
-            ) {
-              throw new Error(
-                "INVALID_TRANSACTION_AMOUNT"
-              );
-            }
-
-            if (
-              expectedAmount !==
-              totalAmount
-            ) {
-              throw new Error(
-                "AMOUNT_MISMATCH"
-              );
-            }
-
-            const currentStatus =
-              String(
-                transaksi.status ||
-                  "UNPAID"
-              ).toUpperCase();
-
-            /*
-            |--------------------------------------------------------------------------
-            | SUDAH PAID
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-              currentStatus === "PAID"
-            ) {
-              return {
-                alreadyPaid: true,
-                credited: false,
-                uid,
-              };
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | NON PAID
-            |--------------------------------------------------------------------------
-            */
-
-            if (status !== "PAID") {
-              transaction.update(
-                transaksiRef,
-                {
+                return {
+                  alreadyPaid: false,
+                  credited: false,
                   status,
+                };
+              }
+
+              const userRef =
+                db
+                  .collection(
+                    "users"
+                  )
+                  .doc(uid);
+
+              const userSnap =
+                await transaction.get(
+                  userRef
+                );
+
+              if (
+                !userSnap.exists
+              ) {
+                throw new Error(
+                  "USER_NOT_FOUND"
+                );
+              }
+
+              const userData =
+                userSnap.data() ||
+                {};
+
+              const saldoSebelumnya =
+                toSafeInteger(
+                  userData[
+                    BALANCE_FIELD
+                  ]
+                );
+
+              if (
+                saldoSebelumnya ===
+                  null ||
+                saldoSebelumnya < 0
+              ) {
+                throw new Error(
+                  "INVALID_USER_BALANCE"
+                );
+              }
+
+              const saldoBaru =
+                saldoSebelumnya +
+                expectedAmount;
+
+              if (
+                !Number.isSafeInteger(
+                  saldoBaru
+                )
+              ) {
+                throw new Error(
+                  "BALANCE_OVERFLOW"
+                );
+              }
+
+              transaction.update(
+                userRef,
+                {
+                  [BALANCE_FIELD]:
+                    saldoBaru,
+
+                  updatedAt:
+                    admin.firestore
+                      .FieldValue
+                      .serverTimestamp(),
+                }
+              );
+
+              const ledgerRef =
+                db
+                  .collection(
+                    "balance_ledger"
+                  )
+                  .doc();
+
+              transaction.set(
+                ledgerRef,
+                {
+                  uid,
+
+                  type:
+                    "CREDIT",
+
+                  amount:
+                    expectedAmount,
+
+                  before:
+                    saldoSebelumnya,
+
+                  after:
+                    saldoBaru,
+
+                  reason:
+                    "Top Up Saldo via TriPay",
+
+                  source:
+                    "TRIPAY_CALLBACK",
+
+                  merchantRef,
 
                   reference,
 
-                  totalAmount,
+                  createdAt:
+                    admin.firestore
+                      .FieldValue
+                      .serverTimestamp(),
+                }
+              );
+
+              const mutasiRef =
+                db
+                  .collection(
+                    "mutasi_saldo"
+                  )
+                  .doc();
+
+              transaction.set(
+                mutasiRef,
+                {
+                  uid,
+
+                  tipe:
+                    "MASUK",
+
+                  nominal:
+                    expectedAmount,
+
+                  saldoAwal:
+                    saldoSebelumnya,
+
+                  saldoAkhir:
+                    saldoBaru,
+
+                  keterangan:
+                    "Top Up Saldo via TriPay",
+
+                  sumber:
+                    "TRIPAY_CALLBACK",
+
+                  merchantRef,
+
+                  reference,
+
+                  waktu:
+                    admin.firestore
+                      .FieldValue
+                      .serverTimestamp(),
+                }
+              );
+
+              transaction.update(
+                transaksiRef,
+                {
+                  status:
+                    "PAID",
+
+                  reference,
+
+                  totalAmount:
+                    expectedAmount,
 
                   amountReceived:
-                    amountReceived ?? 0,
+                    amountReceived ??
+                    0,
 
-                  callbackReceivedAt:
+                  creditedAmount:
+                    expectedAmount,
+
+                  saldoAwal:
+                    saldoSebelumnya,
+
+                  saldoAkhir:
+                    saldoBaru,
+
+                  credited:
+                    true,
+
+                  creditedAt:
                     admin.firestore
                       .FieldValue
                       .serverTimestamp(),
@@ -833,273 +1645,43 @@ exports.tripayCallback = onRequest(
               );
 
               return {
-                alreadyPaid: false,
-                credited: false,
+                alreadyPaid:
+                  false,
+
+                credited:
+                  true,
+
                 uid,
-                status,
+
+                saldoAkhir:
+                  saldoBaru,
               };
             }
+          );
 
-            /*
-            |--------------------------------------------------------------------------
-            | USER
-            |--------------------------------------------------------------------------
-            */
-
-            const userRef =
-              db
-                .collection("users")
-                .doc(uid);
-
-            const userSnap =
-              await transaction.get(
-                userRef
-              );
-
-            if (!userSnap.exists) {
-              throw new Error(
-                "USER_NOT_FOUND"
-              );
-            }
-
-            const userData =
-              userSnap.data() || {};
-
-            /*
-            |--------------------------------------------------------------------------
-            | BALANCE
-            |--------------------------------------------------------------------------
-            */
-
-            const saldoSebelumnya =
-              toSafeInteger(
-                userData[BALANCE_FIELD]
-              );
-
-            if (
-              saldoSebelumnya === null ||
-              saldoSebelumnya < 0
-            ) {
-              throw new Error(
-                "INVALID_USER_BALANCE"
-              );
-            }
-
-            const saldoBaru =
-              saldoSebelumnya +
-              expectedAmount;
-
-            if (
-              !Number.isSafeInteger(
-                saldoBaru
-              )
-            ) {
-              throw new Error(
-                "BALANCE_OVERFLOW"
-              );
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | UPDATE USER
-            |--------------------------------------------------------------------------
-            */
-
-            transaction.update(
-              userRef,
-              {
-                [BALANCE_FIELD]:
-                  saldoBaru,
-
-                updatedAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-              }
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | LEDGER
-            |--------------------------------------------------------------------------
-            */
-
-            const ledgerRef =
-              db
-                .collection(
-                  "balance_ledger"
-                )
-                .doc();
-
-            transaction.set(
-              ledgerRef,
-              {
-                uid,
-
-                type: "CREDIT",
-
-                amount:
-                  expectedAmount,
-
-                before:
-                  saldoSebelumnya,
-
-                after:
-                  saldoBaru,
-
-                reason:
-                  "Top Up Saldo via TriPay",
-
-                source:
-                  "TRIPAY_CALLBACK",
-
-                merchantRef,
-
-                reference,
-
-                createdAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-              }
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | MUTASI SALDO
-            |--------------------------------------------------------------------------
-            */
-
-            const mutasiRef =
-              db
-                .collection(
-                  "mutasi_saldo"
-                )
-                .doc();
-
-            transaction.set(
-              mutasiRef,
-              {
-                uid,
-
-                tipe: "MASUK",
-
-                nominal:
-                  expectedAmount,
-
-                saldoAwal:
-                  saldoSebelumnya,
-
-                saldoAkhir:
-                  saldoBaru,
-
-                keterangan:
-                  "Top Up Saldo via TriPay",
-
-                sumber:
-                  "TRIPAY_CALLBACK",
-
-                merchantRef,
-
-                reference,
-
-                waktu:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-              }
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | TANDAI PAID
-            |--------------------------------------------------------------------------
-            */
-
-            transaction.update(
-              transaksiRef,
-              {
-                status: "PAID",
-
-                reference,
-
-                totalAmount:
-                  expectedAmount,
-
-                amountReceived:
-                  amountReceived ?? 0,
-
-                creditedAmount:
-                  expectedAmount,
-
-                saldoAwal:
-                  saldoSebelumnya,
-
-                saldoAkhir:
-                  saldoBaru,
-
-                credited: true,
-
-                creditedAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-
-                callbackReceivedAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-
-                updatedAt:
-                  admin.firestore
-                    .FieldValue
-                    .serverTimestamp(),
-              }
-            );
-
-            return {
-              alreadyPaid: false,
-              credited: true,
-              uid,
-              saldoAkhir: saldoBaru,
-            };
+        return sendJson(
+          res,
+          200,
+          {
+            success: true,
+            ...result,
           }
         );
-
-      if (result.alreadyPaid) {
-        return sendJson(res, 200, {
-          success: true,
-          message:
-            "Transaction already processed.",
-        });
-      }
-
-      if (result.credited) {
-        logger.info(
-          `TOP UP BERHASIL | ${merchantRef} | UID: ${result.uid} | SALDO: ${result.saldoAkhir}`
+      } catch (error) {
+        logger.error(
+          "CALLBACK TRIPAY GAGAL",
+          error
         );
 
-        return sendJson(res, 200, {
-          success: true,
-        });
+        return sendJson(
+          res,
+          500,
+          {
+            success: false,
+            message:
+              "Callback processing failed.",
+          }
+        );
       }
-
-      return sendJson(res, 200, {
-        success: true,
-        message:
-          `Transaction status updated to ${result.status}.`,
-      });
-    } catch (error) {
-      logger.error(
-        `Gagal memproses callback ${merchantRef}`,
-        error
-      );
-
-      return sendJson(res, 500, {
-        success: false,
-        message:
-          "Callback processing failed.",
-      });
     }
-  }
-);
+  );
