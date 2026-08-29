@@ -6,7 +6,8 @@ concurrency:
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -23,8 +24,13 @@ jobs:
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -32,57 +38,48 @@ jobs:
           channel: stable
           cache: true
 
-      # Langkah 1: Buat folder android dari nol jika tidak sengaja hilang
-      - name: Generate Android Platform Folder
+      - name: Check Flutter source tree
+        run: |
+          test -f pubspec.yaml
+          test -d lib
+          test -f lib/main.dart
+          test -d functions
+          test -f functions/index.js
+          test -f functions/package.json
+          test -f firebase.json
+          echo "Source tree valid."
+
+      - name: Install Flutter dependencies
+        run: |
+          flutter pub get
+
+      - name: Generate Launcher Icons
+        run: |
+          dart run flutter_launcher_icons || echo "Launcher icons dilewati"
+
+      - name: Clean Flutter
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Prepare Android platform
         run: |
           if [ ! -d "android" ]; then
-            echo "Folder android tidak ditemukan, membuat platform Android..."
+            echo "Folder android tidak ditemukan."
             flutter create . --platforms=android
           fi
 
-      # Langkah 2: Ambil seluruh dependensi aplikasi secara bersih
-      - name: Install Dependencies
+      - name: Verify Firebase Functions
+        working-directory: functions
         run: |
-          rm -f pubspec.lock
-          flutter pub get
+          npm install
+          node --check index.js
 
-      # Langkah 3: Generate launcher icons (otomatis dilewati jika aset belum siap)
-      - name: Generate Launcher Icons
-        run: dart run flutter_launcher_icons || echo "Launcher icons dilewati"
-
-      # Langkah 4: Bersihkan sisa build peladen lama
-      - name: Pre-Build Clean
-        run: flutter clean
-
-      # Langkah 5: Suntik taktik intervensi compiler Kotlin di tingkat Gradle Proyek
-      - name: Inject Global Gradle Resolution Strategy
+      - name: Build APK Release
         run: |
-          flutter pub get
-          BUILD_GRADLE="android/build.gradle"
-          if [ -f "$BUILD_GRADLE" ]; then
-            echo "Menyuntikkan aturan pengikat untuk menepis error checker-qual..."
-            cat << 'EOF' >> "$BUILD_GRADLE"
+          flutter build apk --release --no-tree-shake-icons
 
-            allprojects {
-                configurations.all {
-                    resolutionStrategy {
-                        forcedModules = ['org.checkerframework:checker-qual:3.42.0']
-                    }
-                }
-                tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                    kotlinOptions {
-                        freeCompilerArgs += ["-Xskip-metadata-version-check"]
-                    }
-                }
-            }
-          EOF
-          fi
-
-      # Langkah 6: Proses Kompilasi Akhir Menjadi APK Rilis
-      - name: Build APK Final
-        run: flutter build apk --release --no-tree-shake-icons
-
-      - name: Cek hasil APK
+      - name: Check APK
         run: |
           echo "=== HASIL BUILD ==="
           ls -lh build/app/outputs/flutter-apk/
