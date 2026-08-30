@@ -1,0 +1,92 @@
+name: Deploy Firebase Functions
+
+concurrency:
+  group: firebase-functions-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "functions/**"
+      - "firebase.json"
+      - ".firebaserc"
+      - ".github/workflows/deploy-functions.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Verify Firebase CLI
+        run: firebase --version
+
+      - name: Verify Functions source
+        run: |
+          test -f functions/index.js
+          test -f functions/package.json
+          test -f firebase.json
+          echo "Firebase Functions source valid."
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm install
+
+      - name: Check Functions JavaScript
+        working-directory: functions
+        run: node --check index.js
+
+      - name: Authenticate Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Verify Firebase project
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          test -n "$FIREBASE_PROJECT_ID"
+          firebase projects:list --json > /tmp/firebase-projects.json
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('/tmp/firebase-projects.json', 'utf8'));
+            const id = process.env.FIREBASE_PROJECT_ID;
+            const projects = data.result?.projects || [];
+            if (!projects.some(p => p.projectId === id)) {
+              console.error('Firebase project tidak ditemukan atau service account tidak memiliki akses.');
+              process.exit(1);
+            }
+            console.log('Firebase project terverifikasi:', id);
+          "
+
+      - name: Deploy Firebase Functions
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          firebase deploy \
+            --only functions \
+            --project "$FIREBASE_PROJECT_ID" \
+            --non-interactive
+
+      - name: Cleanup credentials
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/firebase-service-account.json"
