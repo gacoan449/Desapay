@@ -32,17 +32,26 @@ Future<void> main() async {
   // FIREBASE
   // =========================================================
 
+  FirebaseApp? firebaseApp;
+  String? firebaseError;
+
   try {
-    await Firebase.initializeApp(
+    firebaseApp = await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
     debugPrint(
-      "✅ DesaPay Firebase berhasil terhubung.",
+      'DesaPay Firebase berhasil terhubung: ${firebaseApp.name}',
     );
-  } catch (e) {
+  } catch (e, stackTrace) {
+    firebaseError = e.toString();
+
     debugPrint(
-      "❌ Firebase initialization gagal: $e",
+      'Firebase initialization gagal: $e',
+    );
+
+    debugPrint(
+      stackTrace.toString(),
     );
   }
 
@@ -51,13 +60,21 @@ Future<void> main() async {
   // =========================================================
 
   runApp(
-    const DesaPayApp(),
+    DesaPayApp(
+      firebaseReady: firebaseApp != null,
+      firebaseError: firebaseError,
+    ),
   );
 }
 
 class DesaPayApp extends StatelessWidget {
+  final bool firebaseReady;
+  final String? firebaseError;
+
   const DesaPayApp({
     super.key,
+    required this.firebaseReady,
+    this.firebaseError,
   });
 
   @override
@@ -83,75 +100,261 @@ class DesaPayApp extends StatelessWidget {
         ),
       ),
 
-      // =======================================================
-      // AUTH STATE
-      // =======================================================
+      home: !firebaseReady
+          ? FirebaseErrorScreen(
+              error: firebaseError ?? 'Unknown Firebase error',
+            )
+          : const DesaPayHome(),
+    );
+  }
+}
 
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
+// =====================================================================
+// FIREBASE ERROR SCREEN
+// =====================================================================
 
-        builder: (context, snapshot) {
-          // ===================================================
-          // FIREBASE SEDANG CEK SESSION
-          // ===================================================
+class FirebaseErrorScreen extends StatelessWidget {
+  final String error;
 
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
-            return const SplashScreen();
-          }
+  const FirebaseErrorScreen({
+    super.key,
+    required this.error,
+  });
 
-          // ===================================================
-          // BELUM LOGIN
-          // ===================================================
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: WarnaDesaPay.lightBg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.cloud_off,
+                  size: 72,
+                  color: Colors.red,
+                ),
 
-          final user = snapshot.data;
+                const SizedBox(height: 20),
 
-          if (user == null) {
-            return const LoginScreen();
-          }
+                const Text(
+                  'DesaPay gagal memulai',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
 
-          // ===================================================
-          // CEK ROLE DI FIRESTORE
-          // ===================================================
+                const SizedBox(height: 12),
 
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get(),
+                const Text(
+                  'Firebase tidak berhasil diinisialisasi.',
+                  textAlign: TextAlign.center,
+                ),
 
-            builder: (context, userSnap) {
-              if (userSnap.connectionState ==
-                  ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(
-                    child: CircularProgressIndicator(
-                      color: WarnaDesaPay.primary,
+                const SizedBox(height: 20),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SelectableText(
+                    error,
+                    style: const TextStyle(
+                      fontSize: 12,
                     ),
                   ),
-                );
-              }
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-              if (userSnap.hasData &&
-                  userSnap.data!.exists) {
-                final userData =
-                    userSnap.data!.data()
-                        as Map<String, dynamic>?;
+// =====================================================================
+// DESAPAY HOME
+// =====================================================================
 
-                if (userData != null &&
-                    userData['role'] == 'admin') {
+class DesaPayHome extends StatelessWidget {
+  const DesaPayHome({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+
+      builder: (context, snapshot) {
+        // ===================================================
+        // FIREBASE AUTH SEDANG CEK SESSION
+        // ===================================================
+
+        if (snapshot.connectionState ==
+            ConnectionState.waiting) {
+          return const SplashScreen();
+        }
+
+        // ===================================================
+        // AUTH ERROR
+        // ===================================================
+
+        if (snapshot.hasError) {
+          return AuthErrorScreen(
+            error: snapshot.error.toString(),
+          );
+        }
+
+        // ===================================================
+        // BELUM LOGIN
+        // ===================================================
+
+        final user = snapshot.data;
+
+        if (user == null) {
+          return const LoginScreen();
+        }
+
+        // ===================================================
+        // CEK ROLE FIRESTORE
+        // ===================================================
+
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get(),
+
+          builder: (context, userSnap) {
+            // =================================================
+            // FIRESTORE SEDANG MEMUAT
+            // =================================================
+
+            if (userSnap.connectionState ==
+                ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(
+                    color: WarnaDesaPay.primary,
+                  ),
+                ),
+              );
+            }
+
+            // =================================================
+            // FIRESTORE ERROR
+            // =================================================
+
+            if (userSnap.hasError) {
+              return AuthErrorScreen(
+                error: userSnap.error.toString(),
+              );
+            }
+
+            // =================================================
+            // USER ADA
+            // =================================================
+
+            if (userSnap.hasData &&
+                userSnap.data!.exists) {
+              final rawData = userSnap.data!.data();
+
+              if (rawData is Map<String, dynamic>) {
+                if (rawData['role'] == 'admin') {
                   return const AdminDashboardScreen();
                 }
               }
+            }
 
-              // =================================================
-              // USER BIASA
-              // =================================================
+            // =================================================
+            // USER BIASA
+            // =================================================
 
-              return const BottomNav();
-            },
-          );
-        },
+            return const BottomNav();
+          },
+        );
+      },
+    );
+  }
+}
+
+// =====================================================================
+// AUTH / FIRESTORE ERROR SCREEN
+// =====================================================================
+
+class AuthErrorScreen extends StatelessWidget {
+  final String error;
+
+  const AuthErrorScreen({
+    super.key,
+    required this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: WarnaDesaPay.lightBg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 72,
+                  color: Colors.red,
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Terjadi kesalahan',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                const Text(
+                  'DesaPay tidak dapat mengambil data akun.',
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 20),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SelectableText(
+                    error,
+                    style: const TextStyle(
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
