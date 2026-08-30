@@ -201,7 +201,7 @@ class DesaPayHome extends StatelessWidget {
         
         // Jika pengguna sudah login, arahkan ke BottomNav utama aplikasi
         if (snapshot.hasData && snapshot.data != null) {
-          return MainBottomNav(); // -> PERBAIKAN: Kata 'const' telah dihapus untuk menghindari error non-constant expression
+          return BottomNav(); // -> PERBAIKAN: Diubah dari MainBottomNav() menjadi BottomNav() agar sesuai dengan import
         }
         
         // Jika belum login, tampilkan layar Login utama
