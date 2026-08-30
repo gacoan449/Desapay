@@ -86,7 +86,7 @@ class DesaPayApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: WarnaDesaPay.primary,
-          primary: WarnaWarnaDesaPay.primary,
+          primary: WarnaDesaPay.primary, // -> SUDAH DIPERBAIKI (TIDAK TYPO LAGI)
           onPrimary: Colors.white,
           secondary: WarnaDesaPay.secondary,
           surface: Colors.white,
@@ -194,4 +194,19 @@ class DesaPayHome extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Lanjutkan sisa logic builder Anda di sini...
+        // Jika status otentikasi masih dimuat, tampilkan layar Splash
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashScreen();
+        }
+        
+        // Jika pengguna sudah login, arahkan ke BottomNav utama aplikasi
+        if (snapshot.hasData && snapshot.data != null) {
+          return const MainBottomNav();
+        }
+        
+        // Jika belum login, tampilkan layar Login utama
+        return const LoginScreen();
+      },
+    );
+  }
+}
