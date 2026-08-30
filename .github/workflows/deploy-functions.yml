@@ -9,6 +9,9 @@ on:
       - "firebase.json"
       - ".github/workflows/deploy-functions.yml"
 
+  # Bisa menjalankan deploy manual dari commit main terbaru.
+  workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
