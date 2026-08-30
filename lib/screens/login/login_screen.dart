@@ -1,7 +1,4 @@
-// =====================================================================
-// FILE 1: lib/screens/login/login_screen.dart
-// =====================================================================
-
+```dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../config/warna.dart';
 import '../../services/auth_service.dart';
 
-// Import Navigasi Pengguna Biasa & Admin
+// Import tetap dipertahankan agar struktur proyek tidak berubah.
 import '../../widgets/bottom_nav.dart';
 import '../admin/admin_dashboard_screen.dart';
 
@@ -20,14 +17,20 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() =>
+      _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
+class _LoginScreenState
+    extends State<LoginScreen> {
+  final emailController =
+      TextEditingController();
 
-  final AuthService auth = AuthService();
+  final passwordController =
+      TextEditingController();
+
+  final AuthService auth =
+      AuthService();
 
   bool loading = false;
   bool hidePassword = true;
@@ -40,15 +43,28 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> login() async {
-    final emailInput = emailController.text.trim();
-    final passwordInput = passwordController.text.trim();
+    final emailInput =
+        emailController.text.trim();
 
-    if (emailInput.isEmpty || passwordInput.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    final passwordInput =
+        passwordController.text.trim();
+
+    if (emailInput.isEmpty ||
+        passwordInput.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content: Text("Email dan password wajib diisi"),
+          content:
+              Text(
+            "Email dan password wajib diisi",
+          ),
         ),
       );
+
+      return;
+    }
+
+    if (loading) {
       return;
     }
 
@@ -56,342 +72,533 @@ class _LoginScreenState extends State<LoginScreen> {
       loading = true;
     });
 
-    // =========================================================
-    // LOGIN FIREBASE
-    // =========================================================
-
     final hasil = await auth.login(
       email: emailInput,
       password: passwordInput,
     );
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
+
+    // =========================================================
+    // LOGIN GAGAL
+    // =========================================================
+
+    if (hasil != null) {
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(hasil),
+        ),
+      );
+
+      return;
+    }
 
     // =========================================================
     // LOGIN BERHASIL
     // =========================================================
+    //
+    // Routing utama sekarang ditangani oleh:
+    //
+    // lib/main.dart
+    //
+    // melalui authStateChanges().
+    //
+    // Dengan begitu hanya ada SATU sumber keputusan
+    // untuk:
+    //
+    // USER  -> BottomNav
+    // ADMIN -> AdminDashboard
+    //
+    // Tidak ada lagi dua router yang berjalan bersamaan.
+    //
+    // =========================================================
 
-    if (hasil == null) {
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        
-        if (user != null) {
-          // Validasi Role Admin secara aman melalui Firestore
-          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-          final userData = doc.data();
+    try {
+      final user =
+          FirebaseAuth.instance.currentUser;
 
-          if (!mounted) return;
-
-          if (userData != null && userData['role'] == 'admin') {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const AdminDashboardScreen(),
-              ),
-            );
-            return;
-          }
-        }
-
-        if (!mounted) return;
-
-        // Routing untuk User Biasa
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const BottomNav(),
-          ),
+      if (user == null) {
+        throw Exception(
+          'USER_SESSION_NOT_FOUND',
         );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Terjadi kesalahan saat memverifikasi akun.")),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            loading = false;
-          });
-        }
       }
-    } else {
-      // =======================================================
-      // LOGIN GAGAL
-      // =======================================================
+
+      // -------------------------------------------------------
+      // Verifikasi ringan bahwa dokumen user tersedia.
+      // Tidak menentukan routing di sini.
+      // -------------------------------------------------------
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!mounted) {
+        return;
+      }
+
+      // Main.dart akan menerima perubahan authState dan
+      // mengarahkan user ke screen yang benar.
       setState(() {
         loading = false;
       });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
+
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        loading = false;
+      });
+
+      // Jika autentikasi berhasil tetapi dokumen user
+      // bermasalah, beri pesan jelas dan jangan memaksa
+      // masuk ke dashboard/user screen secara manual.
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
-          content: Text(hasil),
+          content: Text(
+            'Login berhasil, tetapi data akun belum dapat diverifikasi.',
+          ),
         ),
       );
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor:
+          Colors.white,
 
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+        child:
+            SingleChildScrollView(
+          padding:
+              const EdgeInsets.all(24),
 
-          child: Column(
+          child:
+              Column(
             children: [
-              const SizedBox(height: 40),
-
-              const Icon(
-                Icons.account_balance_wallet,
-                size: 90,
-                color: WarnaDesaPay.primary,
+              const SizedBox(
+                height: 40,
               ),
 
-              const SizedBox(height: 20),
+              const Icon(
+                Icons
+                    .account_balance_wallet,
+                size: 90,
+                color:
+                    WarnaDesaPay.primary,
+              ),
+
+              const SizedBox(
+                height: 20,
+              ),
 
               const Text(
                 "DesaPay",
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                style:
+                    TextStyle(
+                  fontSize:
+                      32,
+                  fontWeight:
+                      FontWeight.bold,
+                  color:
+                      Colors.black87,
                 ),
               ),
 
               const Text(
                 "Masuk ke akun Anda",
-                style: TextStyle(
-                  color: Colors.black54,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                style:
+                    TextStyle(
+                  color:
+                      Colors.black54,
+                  fontSize:
+                      16,
+                  fontWeight:
+                      FontWeight.w500,
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(
+                height: 40,
+              ),
 
               TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(
-                  color: Colors.black87,
+                controller:
+                    emailController,
+                keyboardType:
+                    TextInputType
+                        .emailAddress,
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.black87,
                 ),
-                decoration: InputDecoration(
-                  labelText: "Email",
-                  labelStyle: const TextStyle(
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w500,
+                decoration:
+                    InputDecoration(
+                  labelText:
+                      "Email",
+                  labelStyle:
+                      const TextStyle(
+                    color:
+                        Colors.black54,
+                    fontWeight:
+                        FontWeight.w500,
                   ),
-                  prefixIcon: const Icon(
+                  prefixIcon:
+                      const Icon(
                     Icons.email,
-                    color: WarnaDesaPay.primary,
+                    color:
+                        WarnaDesaPay
+                            .primary,
                   ),
-                  floatingLabelStyle: const TextStyle(
-                    color: WarnaDesaPay.primary,
+                  floatingLabelStyle:
+                      const TextStyle(
+                    color:
+                        WarnaDesaPay
+                            .primary,
                   ),
-                  enabledBorder: OutlineInputBorder(
+                  enabledBorder:
+                      OutlineInputBorder(
                     borderRadius:
-                        BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: Colors.black26,
-                      width: 1.5,
+                        BorderRadius
+                            .circular(
+                      14,
+                    ),
+                    borderSide:
+                        const BorderSide(
+                      color:
+                          Colors
+                              .black26,
+                      width:
+                          1.5,
                     ),
                   ),
-                  focusedBorder: OutlineInputBorder(
+                  focusedBorder:
+                      OutlineInputBorder(
                     borderRadius:
-                        BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: WarnaDesaPay.primary,
-                      width: 2,
+                        BorderRadius
+                            .circular(
+                      14,
+                    ),
+                    borderSide:
+                        const BorderSide(
+                      color:
+                          WarnaDesaPay
+                              .primary,
+                      width:
+                          2,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
 
               TextField(
-                controller: passwordController,
-                obscureText: hidePassword,
-                style: const TextStyle(
-                  color: Colors.black87,
+                controller:
+                    passwordController,
+                obscureText:
+                    hidePassword,
+                style:
+                    const TextStyle(
+                  color:
+                      Colors.black87,
                 ),
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  labelStyle: const TextStyle(
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w500,
+                decoration:
+                    InputDecoration(
+                  labelText:
+                      "Password",
+                  labelStyle:
+                      const TextStyle(
+                    color:
+                        Colors.black54,
+                    fontWeight:
+                        FontWeight.w500,
                   ),
-                  prefixIcon: const Icon(
+                  prefixIcon:
+                      const Icon(
                     Icons.lock,
-                    color: WarnaDesaPay.primary,
+                    color:
+                        WarnaDesaPay
+                            .primary,
                   ),
-                  suffixIcon: IconButton(
-                    icon: Icon(
+                  suffixIcon:
+                      IconButton(
+                    icon:
+                        Icon(
                       hidePassword
-                          ? Icons.visibility
-                          : Icons.visibility_off,
-                      color: WarnaDesaPay.primary,
+                          ? Icons
+                              .visibility
+                          : Icons
+                              .visibility_off,
+                      color:
+                          WarnaDesaPay
+                              .primary,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        hidePassword =
-                            !hidePassword;
-                      });
+                    onPressed:
+                        () {
+                      setState(
+                        () {
+                          hidePassword =
+                              !hidePassword;
+                        },
+                      );
                     },
                   ),
-                  floatingLabelStyle: const TextStyle(
-                    color: WarnaDesaPay.primary,
+                  floatingLabelStyle:
+                      const TextStyle(
+                    color:
+                        WarnaDesaPay
+                            .primary,
                   ),
-                  enabledBorder: OutlineInputBorder(
+                  enabledBorder:
+                      OutlineInputBorder(
                     borderRadius:
-                        BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: Colors.black26,
-                      width: 1.5,
+                        BorderRadius
+                            .circular(
+                      14,
+                    ),
+                    borderSide:
+                        const BorderSide(
+                      color:
+                          Colors
+                              .black26,
+                      width:
+                          1.5,
                     ),
                   ),
-                  focusedBorder: OutlineInputBorder(
+                  focusedBorder:
+                      OutlineInputBorder(
                     borderRadius:
-                        BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: WarnaDesaPay.primary,
-                      width: 2,
+                        BorderRadius
+                            .circular(
+                      14,
+                    ),
+                    borderSide:
+                        const BorderSide(
+                      color:
+                          WarnaDesaPay
+                              .primary,
+                      width:
+                          2,
                     ),
                   ),
                 ),
               ),
 
               Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const ForgotPasswordScreen(),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    "Lupa Password?",
-                    style: TextStyle(
-                      color: WarnaDesaPay.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
+                alignment:
+                    Alignment.centerRight,
+                child:
+                    TextButton(
                   onPressed:
-                      loading ? null : login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        WarnaDesaPay.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(14),
-                    ),
-                    textStyle:
-                        const TextStyle(
-                      fontWeight:
-                          FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  child: loading
-                      ? const CircularProgressIndicator(
-                          color: Colors.white,
-                        )
-                      : const Text("MASUK"),
-                ),
-              ),
-
-              const SizedBox(height: 15),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
+                      () {
+                    Navigator
+                        .push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            const RegisterScreen(),
+                        builder:
+                            (_) =>
+                                const ForgotPasswordScreen(),
                       ),
                     );
                   },
-                  style:
-                      OutlinedButton.styleFrom(
-                    side: const BorderSide(
+                  child:
+                      const Text(
+                    "Lupa Password?",
+                    style:
+                        TextStyle(
                       color:
-                          WarnaDesaPay.primary,
-                      width: 1.5,
+                          WarnaDesaPay
+                              .primary,
+                      fontWeight:
+                          FontWeight
+                              .bold,
                     ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+
+              SizedBox(
+                width:
+                    double.infinity,
+                height:
+                    55,
+                child:
+                    ElevatedButton(
+                  onPressed:
+                      loading
+                          ? null
+                          : login,
+                  style:
+                      ElevatedButton.styleFrom(
+                    backgroundColor:
+                        WarnaDesaPay
+                            .primary,
                     foregroundColor:
-                        WarnaDesaPay.primary,
+                        Colors
+                            .white,
                     shape:
                         RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(
+                          BorderRadius
+                              .circular(
                         14,
                       ),
                     ),
                     textStyle:
                         const TextStyle(
                       fontWeight:
-                          FontWeight.bold,
-                      fontSize: 16,
+                          FontWeight
+                              .bold,
+                      fontSize:
+                          16,
                     ),
                   ),
                   child:
-                      const Text("DAFTAR AKUN"),
+                      loading
+                          ? const CircularProgressIndicator(
+                              color:
+                                  Colors.white,
+                            )
+                          : const Text(
+                              "MASUK",
+                            ),
                 ),
               ),
 
-              const SizedBox(height: 30),
-
-              const Divider(
-                color: Colors.black12,
-                thickness: 1,
+              const SizedBox(
+                height: 15,
               ),
 
-              const SizedBox(height: 20),
+              SizedBox(
+                width:
+                    double.infinity,
+                height:
+                    55,
+                child:
+                    OutlinedButton(
+                  onPressed:
+                      () {
+                    Navigator
+                        .push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (_) =>
+                                const RegisterScreen(),
+                      ),
+                    );
+                  },
+                  style:
+                      OutlinedButton
+                          .styleFrom(
+                    side:
+                        const BorderSide(
+                      color:
+                          WarnaDesaPay
+                              .primary,
+                      width:
+                          1.5,
+                    ),
+                    foregroundColor:
+                        WarnaDesaPay
+                            .primary,
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius
+                              .circular(
+                        14,
+                      ),
+                    ),
+                    textStyle:
+                        const TextStyle(
+                      fontWeight:
+                          FontWeight
+                              .bold,
+                      fontSize:
+                          16,
+                    ),
+                  ),
+                  child:
+                      const Text(
+                    "DAFTAR AKUN",
+                  ),
+                ),
+              ),
+
+              const SizedBox(
+                height: 30,
+              ),
+
+              const Divider(
+                color:
+                    Colors.black12,
+                thickness:
+                    1,
+              ),
+
+              const SizedBox(
+                height: 20,
+              ),
 
               const Text(
                 "Butuh Bantuan?",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.black87,
+                style:
+                    TextStyle(
+                  fontWeight:
+                      FontWeight.bold,
+                  fontSize:
+                      16,
+                  color:
+                      Colors.black87,
                 ),
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(
+                height: 8,
+              ),
 
               const Text(
                 "WhatsApp: 085642131263",
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w500,
+                style:
+                    TextStyle(
+                  color:
+                      Colors.black87,
+                  fontWeight:
+                      FontWeight.w500,
                 ),
               ),
 
               const Text(
                 "Email: gacoan449@gmail.com",
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w500,
+                style:
+                    TextStyle(
+                  color:
+                      Colors.black87,
+                  fontWeight:
+                      FontWeight.w500,
                 ),
               ),
             ],
@@ -401,3 +608,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+```
