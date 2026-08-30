@@ -1,22 +1,25 @@
-import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       throw UnsupportedError(
-        'DefaultFirebaseOptions belum sepenuhnya dikonfigurasi untuk platform Web.',
+        'DefaultFirebaseOptions belum dikonfigurasi untuk platform Web.',
       );
     }
-    
+
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
+
       case TargetPlatform.iOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions belum dikonfigurasi untuk platform iOS.',
         );
+
       default:
         throw UnsupportedError(
           'Platform ini tidak didukung oleh Firebase DesaPay.',
@@ -24,13 +27,12 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // DIKOREKSI: Membaca kredensial sensitif dari .env agar aman dari pembajakan repositori Git
-  static FirebaseOptions get android => FirebaseOptions(
-    apiKey: dotenv.get('FIREBASE_API_KEY', fallback: 'KEY_NOT_FOUND'),
-    appId: dotenv.get('FIREBASE_APP_ID_ANDROID', fallback: 'APP_ID_NOT_FOUND'),
-    messagingSenderId: dotenv.get('FIREBASE_SENDER_ID', fallback: ''),
-    projectId: dotenv.get('FIREBASE_PROJECT_ID', fallback: ''),
-    storageBucket: '${dotenv.get('FIREBASE_PROJECT_ID', fallback: '')}.firebasestorage.app',
-    authDomain: '${dotenv.get('FIREBASE_PROJECT_ID', fallback: '')}.firebaseapp.com',
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: String.fromEnvironment('FIREBASE_API_KEY'),
+    appId: String.fromEnvironment('FIREBASE_APP_ID_ANDROID'),
+    messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID'),
+    projectId: String.fromEnvironment('FIREBASE_PROJECT_ID'),
+    storageBucket: String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
+    authDomain: String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
   );
 }
