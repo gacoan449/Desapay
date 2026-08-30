@@ -12,16 +12,12 @@ const {
   defineSecret,
 } = require("firebase-functions/params");
 
-const logger =
-  require("firebase-functions/logger");
-
-const admin =
-  require("firebase-admin");
+const logger = require("firebase-functions/logger");
+const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-const db =
-  admin.firestore();
+const db = admin.firestore();
 
 /*
 |--------------------------------------------------------------------------
@@ -44,22 +40,19 @@ const DIGIFLAZZ_API_KEY =
 |--------------------------------------------------------------------------
 */
 
-const REGION =
-  "asia-southeast2";
+const REGION = "asia-southeast2";
 
 const DIGIFLAZZ_BASE_URL =
   "https://api.digiflazz.com/v1";
 
-const BALANCE_FIELD =
-  "balance";
+const BALANCE_FIELD = "balance";
 
-const ALLOWED_STATUS =
-  new Set([
-    "PAID",
-    "UNPAID",
-    "EXPIRED",
-    "FAILED",
-  ]);
+const ALLOWED_STATUS = new Set([
+  "PAID",
+  "UNPAID",
+  "EXPIRED",
+  "FAILED",
+]);
 
 /*
 |--------------------------------------------------------------------------
@@ -67,23 +60,14 @@ const ALLOWED_STATUS =
 |--------------------------------------------------------------------------
 */
 
-function sendJson(
-  res,
-  statusCode,
-  data
-) {
-  return res
-    .status(statusCode)
-    .json(data);
+function sendJson(res, statusCode, data) {
+  return res.status(statusCode).json(data);
 }
 
 function toSafeInteger(value) {
-  const number =
-    Number(value);
+  const number = Number(value);
 
-  if (
-    !Number.isSafeInteger(number)
-  ) {
+  if (!Number.isSafeInteger(number)) {
     return null;
   }
 
@@ -97,31 +81,24 @@ function md5(value) {
     .digest("hex");
 }
 
-async function digiflazzRequest(
-  endpoint,
-  body
-) {
-  const response =
-    await fetch(
-      `${DIGIFLAZZ_BASE_URL}/${endpoint}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify(body),
-      }
-    );
+async function digiflazzRequest(endpoint, body) {
+  const response = await fetch(
+    `${DIGIFLAZZ_BASE_URL}/${endpoint}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
 
-  const text =
-    await response.text();
+  const text = await response.text();
 
   let data;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch (_) {
     throw new Error(
       "Response Digiflazz bukan JSON."
@@ -157,9 +134,9 @@ function digiflazzCredentials() {
 }
 
 function generateRefId(uid) {
-  const random =
-    crypto.randomBytes(6)
-      .toString("hex");
+  const random = crypto
+    .randomBytes(6)
+    .toString("hex");
 
   return `dp-${Date.now()}-${uid.slice(0, 8)}-${random}`;
 }
@@ -169,14 +146,8 @@ function generateSignature(
   privateKey
 ) {
   return crypto
-    .createHmac(
-      "sha256",
-      privateKey
-    )
-    .update(
-      rawBody,
-      "utf8"
-    )
+    .createHmac("sha256", privateKey)
+    .update(rawBody, "utf8")
     .digest("hex");
 }
 
@@ -201,10 +172,7 @@ function verifySignature(
       );
 
     const expectedBuffer =
-      Buffer.from(
-        expected,
-        "hex"
-      );
+      Buffer.from(expected, "hex");
 
     const receivedBuffer =
       Buffer.from(
@@ -241,281 +209,266 @@ async function checkAdmin(uid) {
     return false;
   }
 
-  const snap =
-    await db
-      .collection("users")
-      .doc(uid)
-      .get();
+  const snap = await db
+    .collection("users")
+    .doc(uid)
+    .get();
 
   if (!snap.exists) {
     return false;
   }
 
-  const data =
-    snap.data() || {};
+  const data = snap.data() || {};
 
   return data.role === "admin";
 }
 
 /*
 |--------------------------------------------------------------------------
-| ADMIN UBah SALDO
+| ADMIN UBAH SALDO
 |--------------------------------------------------------------------------
 */
 
-exports.adminAdjustBalance =
-  onCall(
-    {
-      region: REGION,
-      timeoutSeconds: 30,
-      memory: "256MiB",
-    },
+exports.adminAdjustBalance = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 30,
+    memory: "256MiB",
+  },
 
-    async (request) => {
-      if (!request.auth) {
-        throw new HttpsError(
-          "unauthenticated",
-          "Admin harus login."
-        );
-      }
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Admin harus login."
+      );
+    }
 
-      const adminUid =
-        request.auth.uid;
+    const adminUid =
+      request.auth.uid;
 
-      if (
-        !(await checkAdmin(
-          adminUid
-        ))
-      ) {
-        throw new HttpsError(
-          "permission-denied",
-          "Akses hanya untuk admin."
-        );
-      }
+    if (
+      !(await checkAdmin(adminUid))
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Akses hanya untuk admin."
+      );
+    }
 
-      const data =
-        request.data || {};
+    const data = request.data || {};
 
-      const uid =
-        typeof data.uid ===
-        "string"
-          ? data.uid.trim()
-          : "";
+    const uid =
+      typeof data.uid === "string"
+        ? data.uid.trim()
+        : "";
 
-      const alasan =
-        typeof data.alasan ===
-        "string"
-          ? data.alasan.trim()
-          : "";
+    const alasan =
+      typeof data.alasan === "string"
+        ? data.alasan.trim()
+        : "";
 
-      const amount =
-        toSafeInteger(
-          data.amount
-        );
+    const amount =
+      toSafeInteger(data.amount);
 
-      if (!uid) {
-        throw new HttpsError(
-          "invalid-argument",
-          "UID user wajib diisi."
-        );
-      }
+    if (!uid) {
+      throw new HttpsError(
+        "invalid-argument",
+        "UID user wajib diisi."
+      );
+    }
 
-      if (!alasan) {
-        throw new HttpsError(
-          "invalid-argument",
-          "Alasan perubahan saldo wajib diisi."
-        );
-      }
+    if (!alasan) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Alasan perubahan saldo wajib diisi."
+      );
+    }
 
-      if (
-        amount === null ||
-        amount === 0
-      ) {
-        throw new HttpsError(
-          "invalid-argument",
-          "Nominal saldo tidak valid."
-        );
-      }
+    if (
+      amount === null ||
+      amount === 0
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Nominal saldo tidak valid."
+      );
+    }
 
-      const MAX_ADJUSTMENT =
-        100000000;
+    const MAX_ADJUSTMENT =
+      100000000;
 
-      if (
-        Math.abs(amount) >
-        MAX_ADJUSTMENT
-      ) {
-        throw new HttpsError(
-          "invalid-argument",
-          "Nominal perubahan saldo terlalu besar."
-        );
-      }
+    if (
+      Math.abs(amount) >
+      MAX_ADJUSTMENT
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Nominal perubahan saldo terlalu besar."
+      );
+    }
 
-      const userRef =
-        db
-          .collection("users")
-          .doc(uid);
+    const userRef = db
+      .collection("users")
+      .doc(uid);
 
-      try {
-        const result =
-          await db.runTransaction(
-            async (transaction) => {
-              const userSnap =
-                await transaction.get(
-                  userRef
-                );
-
-              if (!userSnap.exists) {
-                throw new Error(
-                  "USER_NOT_FOUND"
-                );
-              }
-
-              const userData =
-                userSnap.data() || {};
-
-              const before =
-                toSafeInteger(
-                  userData[
-                    BALANCE_FIELD
-                  ]
-                );
-
-              if (
-                before === null ||
-                before < 0
-              ) {
-                throw new Error(
-                  "INVALID_BALANCE"
-                );
-              }
-
-              const after =
-                before + amount;
-
-              if (
-                !Number.isSafeInteger(
-                  after
-                )
-              ) {
-                throw new Error(
-                  "BALANCE_OVERFLOW"
-                );
-              }
-
-              if (after < 0) {
-                throw new Error(
-                  "NEGATIVE_BALANCE"
-                );
-              }
-
-              transaction.update(
-                userRef,
-                {
-                  [BALANCE_FIELD]:
-                    after,
-
-                  updatedAt:
-                    admin.firestore
-                      .FieldValue
-                      .serverTimestamp(),
-                }
+    try {
+      const result =
+        await db.runTransaction(
+          async (transaction) => {
+            const userSnap =
+              await transaction.get(
+                userRef
               );
 
-              const ledgerRef =
-                db
-                  .collection(
-                    "balance_ledger"
-                  )
-                  .doc();
+            if (!userSnap.exists) {
+              throw new Error(
+                "USER_NOT_FOUND"
+              );
+            }
 
-              transaction.set(
-                ledgerRef,
-                {
-                  uid,
+            const userData =
+              userSnap.data() || {};
 
-                  type:
-                    amount > 0
-                      ? "CREDIT"
-                      : "DEBIT",
+            const before =
+              toSafeInteger(
+                userData[BALANCE_FIELD]
+              );
 
-                  amount:
-                    Math.abs(amount),
+            if (
+              before === null ||
+              before < 0
+            ) {
+              throw new Error(
+                "INVALID_BALANCE"
+              );
+            }
 
-                  before,
+            const after =
+              before + amount;
+
+            if (
+              !Number.isSafeInteger(
+                after
+              )
+            ) {
+              throw new Error(
+                "BALANCE_OVERFLOW"
+              );
+            }
+
+            if (after < 0) {
+              throw new Error(
+                "NEGATIVE_BALANCE"
+              );
+            }
+
+            transaction.update(
+              userRef,
+              {
+                [BALANCE_FIELD]:
                   after,
 
-                  reason:
-                    alasan,
+                updatedAt:
+                  admin.firestore
+                    .FieldValue
+                    .serverTimestamp(),
+              }
+            );
 
-                  source:
-                    "ADMIN",
+            const ledgerRef =
+              db
+                .collection(
+                  "balance_ledger"
+                )
+                .doc();
 
-                  adminUid,
-
-                  createdAt:
-                    admin.firestore
-                      .FieldValue
-                      .serverTimestamp(),
-                }
-              );
-
-              return {
+            transaction.set(
+              ledgerRef,
+              {
                 uid,
+
+                type:
+                  amount > 0
+                    ? "CREDIT"
+                    : "DEBIT",
+
+                amount:
+                  Math.abs(amount),
+
                 before,
                 after,
-                amount,
-                ledgerId:
-                  ledgerRef.id,
-              };
-            }
-          );
 
-        return {
-          success: true,
-          ...result,
-        };
-      } catch (error) {
-        logger.error(
-          "ADMIN SALDO GAGAL",
-          error
+                reason:
+                  alasan,
+
+                source:
+                  "ADMIN",
+
+                adminUid,
+
+                createdAt:
+                  admin.firestore
+                    .FieldValue
+                    .serverTimestamp(),
+              }
+            );
+
+            return {
+              uid,
+              before,
+              after,
+              amount,
+              ledgerId:
+                ledgerRef.id,
+            };
+          }
         );
 
-        switch (
-          error.message
-        ) {
-          case "USER_NOT_FOUND":
-            throw new HttpsError(
-              "not-found",
-              "User tidak ditemukan."
-            );
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error) {
+      logger.error(
+        "ADMIN SALDO GAGAL",
+        error
+      );
 
-          case "INVALID_BALANCE":
-            throw new HttpsError(
-              "failed-precondition",
-              "Saldo user tidak valid."
-            );
+      switch (error.message) {
+        case "USER_NOT_FOUND":
+          throw new HttpsError(
+            "not-found",
+            "User tidak ditemukan."
+          );
 
-          case "NEGATIVE_BALANCE":
-            throw new HttpsError(
-              "failed-precondition",
-              "Saldo tidak boleh negatif."
-            );
+        case "INVALID_BALANCE":
+          throw new HttpsError(
+            "failed-precondition",
+            "Saldo user tidak valid."
+          );
 
-          case "BALANCE_OVERFLOW":
-            throw new HttpsError(
-              "out-of-range",
-              "Saldo melebihi batas aman."
-            );
+        case "NEGATIVE_BALANCE":
+          throw new HttpsError(
+            "failed-precondition",
+            "Saldo tidak boleh negatif."
+          );
 
-          default:
-            throw new HttpsError(
-              "internal",
-              "Gagal mengubah saldo."
-            );
-        }
+        case "BALANCE_OVERFLOW":
+          throw new HttpsError(
+            "out-of-range",
+            "Saldo melebihi batas aman."
+          );
+
+        default:
+          throw new HttpsError(
+            "internal",
+            "Gagal mengubah saldo."
+          );
       }
     }
-  );
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -523,73 +476,68 @@ exports.adminAdjustBalance =
 |--------------------------------------------------------------------------
 */
 
-exports.digiflazzPriceList =
-  onCall(
-    {
-      region: REGION,
-      timeoutSeconds: 60,
-      memory: "256MiB",
-      secrets: [
-        DIGIFLAZZ_USERNAME,
-        DIGIFLAZZ_API_KEY,
-      ],
-    },
+exports.digiflazzPriceList = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    secrets: [
+      DIGIFLAZZ_USERNAME,
+      DIGIFLAZZ_API_KEY,
+    ],
+  },
 
-    async (request) => {
-      if (!request.auth) {
-        throw new HttpsError(
-          "unauthenticated",
-          "Harus login."
-        );
-      }
-
-      if (
-        !(await checkAdmin(
-          request.auth.uid
-        ))
-      ) {
-        throw new HttpsError(
-          "permission-denied",
-          "Hanya admin."
-        );
-      }
-
-      try {
-        const {
-          username,
-          apiKey,
-        } =
-          digiflazzCredentials();
-
-        const result =
-          await digiflazzRequest(
-            "price-list",
-            {
-              cmd: "prepaid",
-              username,
-
-              sign: md5(
-                username +
-                  apiKey +
-                  "pricelist"
-              ),
-            }
-          );
-
-        return result;
-      } catch (error) {
-        logger.error(
-          "DIGIFLAZZ PRICE LIST GAGAL",
-          error
-        );
-
-        throw new HttpsError(
-          "internal",
-          "Gagal mengambil daftar produk."
-        );
-      }
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Harus login."
+      );
     }
-  );
+
+    if (
+      !(await checkAdmin(
+        request.auth.uid
+      ))
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Hanya admin."
+      );
+    }
+
+    try {
+      const {
+        username,
+        apiKey,
+      } = digiflazzCredentials();
+
+      return await digiflazzRequest(
+        "price-list",
+        {
+          cmd: "prepaid",
+          username,
+
+          sign: md5(
+            username +
+              apiKey +
+              "pricelist"
+          ),
+        }
+      );
+    } catch (error) {
+      logger.error(
+        "DIGIFLAZZ PRICE LIST GAGAL",
+        error
+      );
+
+      throw new HttpsError(
+        "internal",
+        "Gagal mengambil daftar produk."
+      );
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -597,70 +545,68 @@ exports.digiflazzPriceList =
 |--------------------------------------------------------------------------
 */
 
-exports.digiflazzCekSaldo =
-  onCall(
-    {
-      region: REGION,
-      timeoutSeconds: 30,
-      memory: "256MiB",
-      secrets: [
-        DIGIFLAZZ_USERNAME,
-        DIGIFLAZZ_API_KEY,
-      ],
-    },
+exports.digiflazzCekSaldo = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 30,
+    memory: "256MiB",
+    secrets: [
+      DIGIFLAZZ_USERNAME,
+      DIGIFLAZZ_API_KEY,
+    ],
+  },
 
-    async (request) => {
-      if (!request.auth) {
-        throw new HttpsError(
-          "unauthenticated",
-          "Harus login."
-        );
-      }
-
-      if (
-        !(await checkAdmin(
-          request.auth.uid
-        ))
-      ) {
-        throw new HttpsError(
-          "permission-denied",
-          "Hanya admin."
-        );
-      }
-
-      try {
-        const {
-          username,
-          apiKey,
-        } =
-          digiflazzCredentials();
-
-        return await digiflazzRequest(
-          "cek-saldo",
-          {
-            cmd: "deposit",
-            username,
-
-            sign: md5(
-              username +
-                apiKey +
-                "depo"
-            ),
-          }
-        );
-      } catch (error) {
-        logger.error(
-          "DIGIFLAZZ CEK SALDO GAGAL",
-          error
-        );
-
-        throw new HttpsError(
-          "internal",
-          "Gagal mengambil saldo Digiflazz."
-        );
-      }
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Harus login."
+      );
     }
-  );
+
+    if (
+      !(await checkAdmin(
+        request.auth.uid
+      ))
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Hanya admin."
+      );
+    }
+
+    try {
+      const {
+        username,
+        apiKey,
+      } = digiflazzCredentials();
+
+      return await digiflazzRequest(
+        "cek-saldo",
+        {
+          cmd: "deposit",
+          username,
+
+          sign: md5(
+            username +
+              apiKey +
+              "depo"
+          ),
+        }
+      );
+    } catch (error) {
+      logger.error(
+        "DIGIFLAZZ CEK SALDO GAGAL",
+        error
+      );
+
+      throw new HttpsError(
+        "internal",
+        "Gagal mengambil saldo Digiflazz."
+      );
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -717,10 +663,8 @@ exports.digiflazzKirimTransaksi =
       }
 
       if (
-        buyerSkuCode.length >
-        100 ||
-        customerNo.length >
-        100
+        buyerSkuCode.length > 100 ||
+        customerNo.length > 100
       ) {
         throw new HttpsError(
           "invalid-argument",
@@ -732,8 +676,7 @@ exports.digiflazzKirimTransaksi =
         const {
           username,
           apiKey,
-        } =
-          digiflazzCredentials();
+        } = digiflazzCredentials();
 
         const refId =
           generateRefId(uid);
@@ -873,9 +816,7 @@ exports.digiflazzCekTransaksi =
         const transaksiSnap =
           await transaksiRef.get();
 
-        if (
-          !transaksiSnap.exists
-        ) {
+        if (!transaksiSnap.exists) {
           throw new HttpsError(
             "not-found",
             "Transaksi tidak ditemukan."
@@ -883,8 +824,7 @@ exports.digiflazzCekTransaksi =
         }
 
         const transaksi =
-          transaksiSnap.data() ||
-          {};
+          transaksiSnap.data() || {};
 
         const isAdmin =
           await checkAdmin(
@@ -905,8 +845,7 @@ exports.digiflazzCekTransaksi =
         const {
           username,
           apiKey,
-        } =
-          digiflazzCredentials();
+        } = digiflazzCredentials();
 
         const result =
           await digiflazzRequest(
@@ -1050,8 +989,7 @@ exports.digiflazzMintaDeposit =
         const {
           username,
           apiKey,
-        } =
-          digiflazzCredentials();
+        } = digiflazzCredentials();
 
         const result =
           await digiflazzRequest(
@@ -1132,9 +1070,7 @@ exports.tripayCallback =
     },
 
     async (req, res) => {
-      if (
-        req.method !== "POST"
-      ) {
+      if (req.method !== "POST") {
         return sendJson(
           res,
           405,
@@ -1189,9 +1125,7 @@ exports.tripayCallback =
         req.get(
           "x-callback-signature"
         ) ||
-        req.get(
-          "Signature"
-        );
+        req.get("Signature");
 
       if (!receivedSignature) {
         return sendJson(
@@ -1242,9 +1176,7 @@ exports.tripayCallback =
 
       try {
         payload =
-          JSON.parse(
-            rawBody
-          );
+          JSON.parse(rawBody);
       } catch (_) {
         return sendJson(
           res,
@@ -1301,9 +1233,7 @@ exports.tripayCallback =
       }
 
       if (
-        !ALLOWED_STATUS.has(
-          status
-        )
+        !ALLOWED_STATUS.has(status)
       ) {
         return sendJson(
           res,
@@ -1336,9 +1266,7 @@ exports.tripayCallback =
           .collection(
             "topup_transactions"
           )
-          .doc(
-            merchantRef
-          );
+          .doc(merchantRef);
 
       try {
         const result =
@@ -1417,17 +1345,14 @@ exports.tripayCallback =
                 ).toUpperCase();
 
               if (
-                currentStatus ===
-                "PAID"
+                currentStatus === "PAID"
               ) {
                 return {
                   alreadyPaid: true,
                 };
               }
 
-              if (
-                status !== "PAID"
-              ) {
+              if (status !== "PAID") {
                 transaction.update(
                   transaksiRef,
                   {
@@ -1457,9 +1382,7 @@ exports.tripayCallback =
 
               const userRef =
                 db
-                  .collection(
-                    "users"
-                  )
+                  .collection("users")
                   .doc(uid);
 
               const userSnap =
@@ -1467,17 +1390,14 @@ exports.tripayCallback =
                   userRef
                 );
 
-              if (
-                !userSnap.exists
-              ) {
+              if (!userSnap.exists) {
                 throw new Error(
                   "USER_NOT_FOUND"
                 );
               }
 
               const userData =
-                userSnap.data() ||
-                {};
+                userSnap.data() || {};
 
               const saldoSebelumnya =
                 toSafeInteger(
@@ -1487,8 +1407,7 @@ exports.tripayCallback =
                 );
 
               if (
-                saldoSebelumnya ===
-                  null ||
+                saldoSebelumnya === null ||
                 saldoSebelumnya < 0
               ) {
                 throw new Error(
@@ -1535,8 +1454,7 @@ exports.tripayCallback =
                 {
                   uid,
 
-                  type:
-                    "CREDIT",
+                  type: "CREDIT",
 
                   amount:
                     expectedAmount,
@@ -1576,8 +1494,7 @@ exports.tripayCallback =
                 {
                   uid,
 
-                  tipe:
-                    "MASUK",
+                  tipe: "MASUK",
 
                   nominal:
                     expectedAmount,
@@ -1608,8 +1525,7 @@ exports.tripayCallback =
               transaction.update(
                 transaksiRef,
                 {
-                  status:
-                    "PAID",
+                  status: "PAID",
 
                   reference,
 
@@ -1629,8 +1545,7 @@ exports.tripayCallback =
                   saldoAkhir:
                     saldoBaru,
 
-                  credited:
-                    true,
+                  credited: true,
 
                   creditedAt:
                     admin.firestore
@@ -1645,11 +1560,9 @@ exports.tripayCallback =
               );
 
               return {
-                alreadyPaid:
-                  false,
+                alreadyPaid: false,
 
-                credited:
-                  true,
+                credited: true,
 
                 uid,
 
@@ -1681,6 +1594,290 @@ exports.tripayCallback =
             message:
               "Callback processing failed.",
           }
+        );
+      }
+    }
+  );
+
+/*
+|--------------------------------------------------------------------------
+| EDPOIN - TRANSACTION REQUEST
+|--------------------------------------------------------------------------
+|
+| Alur:
+| User login -> pilih produk EDPOIN -> request transaksi
+| -> Function validasi -> simpan transaksi -> kirim ke EDPOIN
+|
+| CATATAN:
+| Ganti EDPOIN_BASE_URL dan format request/signature sesuai
+| dokumentasi API EDPOIN yang kamu gunakan.
+|--------------------------------------------------------------------------
+*/
+
+const EDPOIN_API_KEY =
+  defineSecret("EDPOIN_API_KEY");
+
+const EDPOIN_USERNAME =
+  defineSecret("EDPOIN_USERNAME");
+
+const EDPOIN_BASE_URL =
+  "https://api.edpoin.com";
+
+/*
+|--------------------------------------------------------------------------
+| EDPOIN HELPER
+|--------------------------------------------------------------------------
+*/
+
+function edpoinCredentials() {
+  const username =
+    EDPOIN_USERNAME.value();
+
+  const apiKey =
+    EDPOIN_API_KEY.value();
+
+  if (!username || !apiKey) {
+    throw new Error(
+      "Credential EDPOIN belum dikonfigurasi."
+    );
+  }
+
+  return {
+    username,
+    apiKey,
+  };
+}
+
+async function edpoinRequest(
+  endpoint,
+  body
+) {
+  const response =
+    await fetch(
+      `${EDPOIN_BASE_URL}/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+  const text =
+    await response.text();
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (_) {
+    throw new Error(
+      "Response EDPOIN bukan JSON."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `HTTP EDPOIN ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+/*
+|--------------------------------------------------------------------------
+| EDPOIN - TRANSACTION REQUEST
+|--------------------------------------------------------------------------
+*/
+
+exports.edpoinTransactionRequest =
+  onCall(
+    {
+      region: REGION,
+      timeoutSeconds: 60,
+      memory: "256MiB",
+      secrets: [
+        EDPOIN_USERNAME,
+        EDPOIN_API_KEY,
+      ],
+    },
+
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Harus login."
+        );
+      }
+
+      const uid =
+        request.auth.uid;
+
+      const data =
+        request.data || {};
+
+      const productCode =
+        typeof data.product_code ===
+        "string"
+          ? data.product_code.trim()
+          : "";
+
+      const customerNo =
+        typeof data.customer_no ===
+        "string"
+          ? data.customer_no.trim()
+          : "";
+
+      const amount =
+        toSafeInteger(
+          data.amount
+        );
+
+      if (
+        !productCode ||
+        !customerNo
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Kode produk dan nomor pelanggan wajib diisi."
+        );
+      }
+
+      if (
+        productCode.length > 100 ||
+        customerNo.length > 100
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Input transaksi tidak valid."
+        );
+      }
+
+      if (
+        amount === null ||
+        amount <= 0
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Nominal transaksi tidak valid."
+        );
+      }
+
+      try {
+        const {
+          username,
+          apiKey,
+        } = edpoinCredentials();
+
+        const refId =
+          generateRefId(uid);
+
+        const transaksiRef =
+          db
+            .collection(
+              "edpoin_transactions"
+            )
+            .doc(refId);
+
+        await transaksiRef.set({
+          uid,
+
+          refId,
+
+          productCode,
+
+          customerNo,
+
+          amount,
+
+          status:
+            "PROCESSING",
+
+          createdAt:
+            admin.firestore
+              .FieldValue
+              .serverTimestamp(),
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | REQUEST EDPOIN
+        |--------------------------------------------------------------------------
+        |
+        | Struktur ini sengaja dipisahkan agar mudah disesuaikan
+        | dengan dokumentasi API EDPOIN yang kamu pakai.
+        |--------------------------------------------------------------------------
+        */
+
+        const result =
+          await edpoinRequest(
+            "transaction",
+            {
+              username,
+
+              api_key:
+                apiKey,
+
+              product_code:
+                productCode,
+
+              customer_no:
+                customerNo,
+
+              ref_id:
+                refId,
+
+              amount,
+
+              sign: md5(
+                username +
+                  apiKey +
+                  refId
+              ),
+            }
+          );
+
+        const resultData =
+          result.data || {};
+
+        await transaksiRef.set(
+          {
+            response:
+              resultData,
+
+            status:
+              resultData.status ||
+              "UNKNOWN",
+
+            updatedAt:
+              admin.firestore
+                .FieldValue
+                .serverTimestamp(),
+          },
+          {
+            merge: true,
+          }
+        );
+
+        return {
+          success: true,
+
+          ref_id: refId,
+
+          ...result,
+        };
+      } catch (error) {
+        logger.error(
+          "EDPOIN TRANSAKSI GAGAL",
+          error
+        );
+
+        throw new HttpsError(
+          "internal",
+          "Transaksi EDPOIN gagal diproses."
         );
       }
     }
