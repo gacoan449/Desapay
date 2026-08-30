@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
 import '../../services/firestore_service.dart';
 import '../../services/digiflazz_service.dart';
 
@@ -27,16 +29,31 @@ class _AdminDashboardScreenState
   List<Map<String, dynamic>> mutations = [];
   List<Map<String, dynamic>> announcements = [];
 
+  // =========================================================
+  // CLOUD FUNCTIONS
+  // =========================================================
+
+  late final FirebaseFunctions functions =
+      FirebaseFunctions.instanceFor(
+    region: 'asia-southeast2',
+  );
+
   @override
   void initState() {
     super.initState();
     loadAll();
   }
 
+  // =========================================================
+  // LOAD DATA
+  // =========================================================
+
   Future<void> loadAll() async {
-    setState(() {
-      loading = true;
-    });
+    if (mounted) {
+      setState(() {
+        loading = true;
+      });
+    }
 
     await Future.wait([
       loadSettings(),
@@ -59,15 +76,19 @@ class _AdminDashboardScreenState
 
   Future<void> loadSettings() async {
     try {
-      maintenance = await FirestoreService.ambilMaintenance();
+      maintenance =
+          await FirestoreService.ambilMaintenance();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadProducts() async {
     try {
-      products = await FirestoreService.ambilSemuaProduk();
+      products =
+          await FirestoreService.ambilSemuaProduk();
 
       // Produk TEST tidak ditampilkan di dashboard produksi.
       products = products
@@ -75,12 +96,15 @@ class _AdminDashboardScreenState
           .toList();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadTransactions() async {
     try {
-      transactions = await FirestoreService.ambilSemuaTransaksi();
+      transactions =
+          await FirestoreService.ambilSemuaTransaksi();
 
       // Transaksi TEST tidak ditampilkan di dashboard produksi.
       transactions = transactions
@@ -88,7 +112,9 @@ class _AdminDashboardScreenState
           .toList();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadUsers() async {
@@ -96,50 +122,72 @@ class _AdminDashboardScreenState
       users = await FirestoreService.ambilUsers();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadKyc() async {
     try {
-      kyc = await FirestoreService.ambilKycPending();
+      kyc =
+          await FirestoreService.ambilKycPending();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadDevices() async {
     try {
-      devices = await FirestoreService.ambilDevices();
+      devices =
+          await FirestoreService.ambilDevices();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadMutations() async {
     try {
-      mutations = await FirestoreService.ambilMutasiBank();
+      mutations =
+          await FirestoreService.ambilMutasiBank();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadAnnouncements() async {
     try {
-      announcements = await FirestoreService.ambilPengumuman();
+      announcements =
+          await FirestoreService.ambilPengumuman();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> loadSaldo() async {
     try {
-      final saldo = await DigiflazzService().cekSaldoModal();
+      final saldo =
+          await DigiflazzService().cekSaldoModal();
 
-      saldoDigiflazz = (saldo as num).toDouble();
+      saldoDigiflazz =
+          (saldo as num).toDouble();
     } catch (_) {}
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
+
+  // =========================================================
+  // FORMAT RUPIAH
+  // =========================================================
 
   String rp(num value) {
     return 'Rp ${value.toStringAsFixed(0).replaceAllMapped(
@@ -221,7 +269,8 @@ class _AdminDashboardScreenState
             value: maintenance,
             onChanged: (value) async {
               try {
-                await FirestoreService.setMaintenance(value);
+                await FirestoreService
+                    .setMaintenance(value);
 
                 if (!mounted) return;
 
@@ -229,7 +278,9 @@ class _AdminDashboardScreenState
                   maintenance = value;
                 });
               } catch (e) {
-                _msg('Gagal mengubah maintenance: $e');
+                _msg(
+                  'Gagal mengubah maintenance: $e',
+                );
               }
             },
           ),
@@ -432,7 +483,8 @@ class _AdminDashboardScreenState
                   ),
                 )
               : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+                  scrollDirection:
+                      Axis.horizontal,
                   child: SingleChildScrollView(
                     child: DataTable(
                       columns: const [
@@ -463,11 +515,13 @@ class _AdminDashboardScreenState
                             ? p['cost'] as num
                             : 0;
 
-                        final margin = p['margin'] is num
-                            ? p['margin'] as num
-                            : 0;
+                        final margin =
+                            p['margin'] is num
+                                ? p['margin'] as num
+                                : 0;
 
-                        final jual = cost + margin;
+                        final jual =
+                            cost + margin;
 
                         return DataRow(
                           cells: [
@@ -529,7 +583,9 @@ class _AdminDashboardScreenState
 
                                       await loadProducts();
 
-                                      if (!mounted) return;
+                                      if (!mounted) {
+                                        return;
+                                      }
 
                                       _msg(
                                         'Margin produk berhasil diperbarui.',
@@ -551,7 +607,8 @@ class _AdminDashboardScreenState
                             DataCell(
                               Text(
                                 rp(jual),
-                                style: const TextStyle(
+                                style:
+                                    const TextStyle(
                                   fontWeight:
                                       FontWeight.bold,
                                 ),
@@ -643,6 +700,7 @@ class _AdminDashboardScreenState
                     icon: const Icon(
                       Icons.add,
                     ),
+                    tooltip: 'Tambah Saldo',
                     onPressed: () =>
                         _ubahSaldo(user, true),
                   ),
@@ -650,6 +708,7 @@ class _AdminDashboardScreenState
                     icon: const Icon(
                       Icons.remove,
                     ),
+                    tooltip: 'Kurangi Saldo',
                     onPressed: () =>
                         _ubahSaldo(user, false),
                   ),
@@ -657,6 +716,7 @@ class _AdminDashboardScreenState
                     icon: const Icon(
                       Icons.tune,
                     ),
+                    tooltip: 'Atur Limit',
                     onPressed: () =>
                         _setLimitUser(user),
                   ),
@@ -669,78 +729,474 @@ class _AdminDashboardScreenState
     );
   }
 
-  void _ubahSaldo(
+  // =========================================================
+  // ADMIN ADJUST BALANCE
+  // =========================================================
+  //
+  // PENTING:
+  // Fungsi ini TIDAK mengubah Firestore users secara langsung.
+  //
+  // Flutter -> Cloud Function:
+  //
+  // adminAdjustBalance
+  //
+  // Backend index.js yang melakukan:
+  // - cek login
+  // - cek role admin
+  // - validasi UID
+  // - validasi alasan
+  // - validasi nominal
+  // - transaksi atomik
+  // - update saldo
+  // - membuat balance_ledger
+  //
+  // Jadi index.js yang sudah kamu kirim TIDAK perlu diubah.
+  //
+  // =========================================================
+
+  Future<void> _ubahSaldo(
     Map<String, dynamic> user,
     bool tambah,
-  ) {
-    final c = TextEditingController();
+  ) async {
+    final uid =
+        user['id']?.toString().trim() ?? '';
 
-    showDialog(
+    if (uid.isEmpty) {
+      _msg(
+        'UID user tidak ditemukan.',
+      );
+      return;
+    }
+
+    final nominalController =
+        TextEditingController();
+
+    final alasanController =
+        TextEditingController();
+
+    bool submitting = false;
+
+    await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(
-          tambah ? 'Tambah Saldo' : 'Kurangi Saldo',
-        ),
-        content: TextField(
-          controller: c,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Nominal',
-            prefixText: 'Rp ',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nominal =
-                  num.tryParse(c.text) ?? 0;
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (
+            context,
+            setDialogState,
+          ) {
+            return AlertDialog(
+              title: Text(
+                tambah
+                    ? 'Tambah Saldo'
+                    : 'Kurangi Saldo',
+              ),
 
-              if (nominal <= 0) {
-                _msg('Nominal harus lebih dari 0.');
-                return;
-              }
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'User: ${user['name'] ?? user['email'] ?? uid}',
+                      style: const TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
 
-              try {
-                await FirestoreService.ubahSaldoUser(
-                  user['id'],
-                  tambah ? nominal : -nominal,
-                  'Perubahan saldo manual Admin',
-                );
+                    const SizedBox(height: 5),
 
-                if (!mounted) return;
+                    Text(
+                      'UID: $uid',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
 
-                Navigator.pop(context);
-                await loadUsers();
+                    const SizedBox(height: 5),
 
-                _msg(
-                  tambah
-                      ? 'Saldo berhasil ditambahkan.'
-                      : 'Saldo berhasil dikurangi.',
-                );
-              } catch (e) {
-                if (!mounted) return;
+                    Text(
+                      'Saldo sekarang: ${rp(user['balance'] ?? 0)}',
+                    ),
 
-                Navigator.pop(context);
-                _msg(
-                  'Gagal mengubah saldo: $e',
-                );
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
+                    const SizedBox(height: 20),
+
+                    TextField(
+                      controller:
+                          nominalController,
+                      enabled: !submitting,
+                      keyboardType:
+                          TextInputType.number,
+                      autofocus: true,
+                      decoration:
+                          const InputDecoration(
+                        labelText:
+                            'Nominal',
+                        hintText:
+                            'Contoh: 10000',
+                        prefixText:
+                            'Rp ',
+                        border:
+                            OutlineInputBorder(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    TextField(
+                      controller:
+                          alasanController,
+                      enabled: !submitting,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(
+                        labelText:
+                            'Alasan perubahan',
+                        hintText:
+                            'Contoh: Koreksi saldo manual',
+                        border:
+                            OutlineInputBorder(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Container(
+                      width: double.infinity,
+                      padding:
+                          const EdgeInsets.all(
+                        10,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        borderRadius:
+                            BorderRadius.circular(
+                          8,
+                        ),
+                        color: tambah
+                            ? Colors.green
+                                .withValues(
+                                alpha: 0.08,
+                              )
+                            : Colors.red
+                                .withValues(
+                                alpha: 0.08,
+                              ),
+                      ),
+                      child: Text(
+                        tambah
+                            ? 'Saldo user akan BERTAMBAH.'
+                            : 'Saldo user akan BERKURANG.',
+                        style: TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                          color: tambah
+                              ? Colors.green
+                              : Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              actions: [
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () {
+                          Navigator.pop(
+                            dialogContext,
+                          );
+                        },
+                  child:
+                      const Text('Batal'),
+                ),
+
+                ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final nominalText =
+                              nominalController
+                                  .text
+                                  .trim();
+
+                          final alasan =
+                              alasanController
+                                  .text
+                                  .trim();
+
+                          if (nominalText
+                              .isEmpty) {
+                            _msg(
+                              'Nominal wajib diisi.',
+                            );
+                            return;
+                          }
+
+                          final nominal =
+                              int.tryParse(
+                            nominalText,
+                          );
+
+                          if (nominal == null ||
+                              nominal <= 0) {
+                            _msg(
+                              'Nominal harus berupa angka lebih dari 0.',
+                            );
+                            return;
+                          }
+
+                          if (nominal >
+                              100000000) {
+                            _msg(
+                              'Maksimal perubahan saldo adalah Rp 100.000.000.',
+                            );
+                            return;
+                          }
+
+                          if (alasan.isEmpty) {
+                            _msg(
+                              'Alasan perubahan saldo wajib diisi.',
+                            );
+                            return;
+                          }
+
+                          if (alasan.length >
+                              500) {
+                            _msg(
+                              'Alasan terlalu panjang.',
+                            );
+                            return;
+                          }
+
+                          final amount =
+                              tambah
+                                  ? nominal
+                                  : -nominal;
+
+                          setDialogState(() {
+                            submitting =
+                                true;
+                          });
+
+                          try {
+                            // =================================================
+                            // PANGGIL CLOUD FUNCTION adminAdjustBalance
+                            // =================================================
+
+                            final callable =
+                                functions
+                                    .httpsCallable(
+                              'adminAdjustBalance',
+                            );
+
+                            final result =
+                                await callable.call(
+                              {
+                                'uid': uid,
+                                'amount':
+                                    amount,
+                                'alasan':
+                                    alasan,
+                              },
+                            );
+
+                            final resultData =
+                                result.data;
+
+                            if (!mounted) {
+                              return;
+                            }
+
+                            Navigator.pop(
+                              dialogContext,
+                            );
+
+                            await loadUsers();
+
+                            if (!mounted) {
+                              return;
+                            }
+
+                            int? before;
+                            int? after;
+                            String? ledgerId;
+
+                            if (resultData
+                                is Map) {
+                              final rawBefore =
+                                  resultData[
+                                      'before'];
+
+                              final rawAfter =
+                                  resultData[
+                                      'after'];
+
+                              final rawLedger =
+                                  resultData[
+                                      'ledgerId'];
+
+                              if (rawBefore
+                                  is num) {
+                                before =
+                                    rawBefore
+                                        .toInt();
+                              }
+
+                              if (rawAfter
+                                  is num) {
+                                after =
+                                    rawAfter
+                                        .toInt();
+                              }
+
+                              if (rawLedger !=
+                                  null) {
+                                ledgerId =
+                                    rawLedger
+                                        .toString();
+                              }
+                            }
+
+                            final action =
+                                tambah
+                                    ? 'ditambahkan'
+                                    : 'dikurangi';
+
+                            String message =
+                                'Saldo berhasil $action.';
+
+                            if (before !=
+                                    null &&
+                                after !=
+                                    null) {
+                              message +=
+                                  '\nSaldo: ${rp(before!)} → ${rp(after!)}';
+                            }
+
+                            if (ledgerId !=
+                                null) {
+                              message +=
+                                  '\nLedger: $ledgerId';
+                            }
+
+                            _msg(message);
+                          } on FirebaseFunctionsException catch (e) {
+                            if (!mounted) {
+                              return;
+                            }
+
+                            String message;
+
+                            switch (e.code) {
+                              case 'unauthenticated':
+                                message =
+                                    'Admin harus login.';
+                                break;
+
+                              case 'permission-denied':
+                                message =
+                                    'Akses ditolak. Akun bukan admin.';
+                                break;
+
+                              case 'invalid-argument':
+                                message =
+                                    e.message ??
+                                        'Data perubahan saldo tidak valid.';
+                                break;
+
+                              case 'not-found':
+                                message =
+                                    e.message ??
+                                        'User tidak ditemukan.';
+                                break;
+
+                              case 'failed-precondition':
+                                message =
+                                    e.message ??
+                                        'Saldo user tidak memenuhi syarat.';
+                                break;
+
+                              case 'out-of-range':
+                                message =
+                                    e.message ??
+                                        'Nominal saldo terlalu besar.';
+                                break;
+
+                              case 'internal':
+                                message =
+                                    e.message ??
+                                        'Server gagal memproses perubahan saldo.';
+                                break;
+
+                              default:
+                                message =
+                                    e.message ??
+                                        'Gagal mengubah saldo.';
+                            }
+
+                            setDialogState(() {
+                              submitting =
+                                  false;
+                            });
+
+                            _msg(
+                              message,
+                            );
+                          } catch (e) {
+                            if (!mounted) {
+                              return;
+                            }
+
+                            setDialogState(() {
+                              submitting =
+                                  false;
+                            });
+
+                            _msg(
+                              'Gagal mengubah saldo: $e',
+                            );
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child:
+                              CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Simpan',
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+
+    nominalController.dispose();
+    alasanController.dispose();
   }
+
+  // =========================================================
+  // LIMIT USER
+  // =========================================================
 
   void _setLimitUser(
     Map<String, dynamic> user,
   ) {
-    final c = TextEditingController();
+    final c =
+        TextEditingController();
 
     showDialog(
       context: context,
@@ -750,85 +1206,28 @@ class _AdminDashboardScreenState
         ),
         content: TextField(
           controller: c,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
+          keyboardType:
+              TextInputType.number,
+          decoration:
+              const InputDecoration(
             labelText: 'Limit',
             prefixText: 'Rp ',
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            onPressed: () =>
+                Navigator.pop(context),
+            child:
+                const Text('Batal'),
           ),
           ElevatedButton(
             onPressed: () async {
               final limit =
-                  num.tryParse(c.text) ?? 0;
-
-              if (limit < 0) {
-                _msg(
-                  'Limit tidak boleh negatif.',
-                );
-                return;
-              }
-
-              try {
-                await FirestoreService.setLimitSaldo(
-                  uid: user['id'],
-                  limitSaldo: limit,
-                );
-
-                if (!mounted) return;
-
-                Navigator.pop(context);
-                await loadUsers();
-
-                _msg(
-                  'Limit saldo berhasil disimpan.',
-                );
-              } catch (e) {
-                if (!mounted) return;
-
-                Navigator.pop(context);
-                _msg(
-                  'Gagal mengatur limit: $e',
-                );
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _setLimitUnverified() {
-    final c = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text(
-          'Limit User Belum KYC',
-        ),
-        content: TextField(
-          controller: c,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Limit Saldo',
-            prefixText: 'Rp ',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final limit =
-                  num.tryParse(c.text) ?? 0;
+                  num.tryParse(
+                        c.text,
+                      ) ??
+                      0;
 
               if (limit < 0) {
                 _msg(
@@ -839,7 +1238,86 @@ class _AdminDashboardScreenState
 
               try {
                 await FirestoreService
-                    .setLimitSaldoBelumKyc(limit);
+                    .setLimitSaldo(
+                  uid: user['id'],
+                  limitSaldo: limit,
+                );
+
+                if (!mounted) return;
+
+                Navigator.pop(context);
+
+                await loadUsers();
+
+                _msg(
+                  'Limit saldo berhasil disimpan.',
+                );
+              } catch (e) {
+                if (!mounted) return;
+
+                Navigator.pop(context);
+
+                _msg(
+                  'Gagal mengatur limit: $e',
+                );
+              }
+            },
+            child:
+                const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _setLimitUnverified() {
+    final c =
+        TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(
+          'Limit User Belum KYC',
+        ),
+        content: TextField(
+          controller: c,
+          keyboardType:
+              TextInputType.number,
+          decoration:
+              const InputDecoration(
+            labelText:
+                'Limit Saldo',
+            prefixText: 'Rp ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context),
+            child:
+                const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final limit =
+                  num.tryParse(
+                        c.text,
+                      ) ??
+                      0;
+
+              if (limit < 0) {
+                _msg(
+                  'Limit tidak boleh negatif.',
+                );
+                return;
+              }
+
+              try {
+                await FirestoreService
+                    .setLimitSaldoBelumKyc(
+                  limit,
+                );
 
                 if (!mounted) return;
 
@@ -858,7 +1336,8 @@ class _AdminDashboardScreenState
                 );
               }
             },
-            child: const Text('Simpan'),
+            child:
+                const Text('Simpan'),
           ),
         ],
       ),
@@ -871,13 +1350,15 @@ class _AdminDashboardScreenState
 
   Widget kycPage() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding:
+          const EdgeInsets.all(16),
       children: [
         const Text(
           'Verifikasi KYC',
           style: TextStyle(
             fontSize: 27,
-            fontWeight: FontWeight.bold,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
 
@@ -886,7 +1367,8 @@ class _AdminDashboardScreenState
         if (kyc.isEmpty)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(25),
+              padding:
+                  EdgeInsets.all(25),
               child: Text(
                 'Tidak ada KYC menunggu persetujuan.',
               ),
@@ -896,40 +1378,60 @@ class _AdminDashboardScreenState
         ...kyc.map(
           (user) => Card(
             child: Padding(
-              padding: const EdgeInsets.all(15),
+              padding:
+                  const EdgeInsets.all(15),
               child: Column(
                 crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    CrossAxisAlignment
+                        .start,
                 children: [
                   Text(
                     '${user['name'] ?? '-'}',
-                    style: const TextStyle(
+                    style:
+                        const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontWeight:
+                          FontWeight.bold,
                     ),
                   ),
+
                   Text(
                     'UID: ${user['id']}',
                   ),
-                  const SizedBox(height: 10),
-                  if (user['ktpUrl'] != null &&
+
+                  const SizedBox(
+                    height: 10,
+                  ),
+
+                  if (user['ktpUrl'] !=
+                          null &&
                       user['ktpUrl']
                           .toString()
                           .isNotEmpty)
                     Image.network(
-                      user['ktpUrl'].toString(),
+                      user['ktpUrl']
+                          .toString(),
                       height: 180,
                       errorBuilder:
-                          (_, __, ___) =>
+                          (
+                        _,
+                        __,
+                        ___,
+                      ) =>
                               const Text(
                         'Foto KTP gagal dimuat',
                       ),
                     ),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(
+                    height: 10,
+                  ),
+
                   Row(
                     children: [
                       ElevatedButton(
-                        onPressed: () async {
+                        onPressed:
+                            () async {
                           try {
                             await FirestoreService
                                 .prosesKyc(
@@ -940,7 +1442,9 @@ class _AdminDashboardScreenState
 
                             await loadKyc();
 
-                            if (!mounted) return;
+                            if (!mounted) {
+                              return;
+                            }
 
                             _msg(
                               'KYC berhasil disetujui.',
@@ -951,13 +1455,19 @@ class _AdminDashboardScreenState
                             );
                           }
                         },
-                        child: const Text(
+                        child:
+                            const Text(
                           'SETUJUI',
                         ),
                       ),
-                      const SizedBox(width: 10),
+
+                      const SizedBox(
+                        width: 10,
+                      ),
+
                       OutlinedButton(
-                        onPressed: () async {
+                        onPressed:
+                            () async {
                           try {
                             await FirestoreService
                                 .prosesKyc(
@@ -968,7 +1478,9 @@ class _AdminDashboardScreenState
 
                             await loadKyc();
 
-                            if (!mounted) return;
+                            if (!mounted) {
+                              return;
+                            }
 
                             _msg(
                               'KYC berhasil ditolak.',
@@ -979,7 +1491,8 @@ class _AdminDashboardScreenState
                             );
                           }
                         },
-                        child: const Text(
+                        child:
+                            const Text(
                           'TOLAK',
                         ),
                       ),
@@ -1000,7 +1513,8 @@ class _AdminDashboardScreenState
 
   Widget devicesPage() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding:
+          const EdgeInsets.all(16),
       children: [
         Row(
           children: [
@@ -1009,13 +1523,17 @@ class _AdminDashboardScreenState
                 'Device Management',
                 style: TextStyle(
                   fontSize: 27,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ),
+
             IconButton(
-              onPressed: loadDevices,
-              icon: const Icon(Icons.refresh),
+              onPressed:
+                  loadDevices,
+              icon:
+                  const Icon(Icons.refresh),
             ),
           ],
         ),
@@ -1025,7 +1543,8 @@ class _AdminDashboardScreenState
         ...devices.map(
           (device) => Card(
             child: ListTile(
-              leading: const Icon(
+              leading:
+                  const Icon(
                 Icons.phone_android,
               ),
               title: Text(
@@ -1035,11 +1554,16 @@ class _AdminDashboardScreenState
                 'UID: ${device['uid'] ?? '-'}\n'
                 'ID: ${device['id']}',
               ),
-              trailing: Switch(
-                value: device['blocked'] != true,
-                onChanged: (value) async {
+              trailing:
+                  Switch(
+                value:
+                    device['blocked'] !=
+                        true,
+                onChanged:
+                    (value) async {
                   try {
-                    await FirestoreService.blokirDevice(
+                    await FirestoreService
+                        .blokirDevice(
                       device['id'],
                       !value,
                     );
@@ -1065,7 +1589,8 @@ class _AdminDashboardScreenState
 
   Widget bankPage() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding:
+          const EdgeInsets.all(16),
       children: [
         Row(
           children: [
@@ -1074,13 +1599,17 @@ class _AdminDashboardScreenState
                 'Mutasi Bank',
                 style: TextStyle(
                   fontSize: 27,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ),
+
             IconButton(
-              onPressed: loadMutations,
-              icon: const Icon(Icons.refresh),
+              onPressed:
+                  loadMutations,
+              icon:
+                  const Icon(Icons.refresh),
             ),
           ],
         ),
@@ -1094,7 +1623,8 @@ class _AdminDashboardScreenState
         if (mutations.isEmpty)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(20),
+              padding:
+                  EdgeInsets.all(20),
               child: Text(
                 'Belum ada mutasi bank.',
               ),
@@ -1104,7 +1634,8 @@ class _AdminDashboardScreenState
         ...mutations.map(
           (m) => Card(
             child: ListTile(
-              leading: const Icon(
+              leading:
+                  const Icon(
                 Icons.account_balance,
               ),
               title: Text(
@@ -1115,9 +1646,11 @@ class _AdminDashboardScreenState
                 'Status: ${m['status'] ?? 'PENDING'}',
               ),
               trailing:
-                  m['status'] == 'PENDING'
+                  m['status'] ==
+                          'PENDING'
                       ? ElevatedButton(
-                          onPressed: () async {
+                          onPressed:
+                              () async {
                             try {
                               await FirestoreService
                                   .tandaiMutasi(
@@ -1127,7 +1660,9 @@ class _AdminDashboardScreenState
 
                               await loadMutations();
 
-                              if (!mounted) return;
+                              if (!mounted) {
+                                return;
+                              }
 
                               _msg(
                                 'Mutasi berhasil diproses.',
@@ -1138,7 +1673,8 @@ class _AdminDashboardScreenState
                               );
                             }
                           },
-                          child: const Text(
+                          child:
+                              const Text(
                             'Proses',
                           ),
                         )
@@ -1158,7 +1694,8 @@ class _AdminDashboardScreenState
 
   Widget announcementPage() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding:
+          const EdgeInsets.all(16),
       children: [
         Row(
           children: [
@@ -1167,16 +1704,19 @@ class _AdminDashboardScreenState
                 'Pengumuman & Promosi',
                 style: TextStyle(
                   fontSize: 27,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ),
+
             ElevatedButton.icon(
-              onPressed: addAnnouncement,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Tambah',
-              ),
+              onPressed:
+                  addAnnouncement,
+              icon:
+                  const Icon(Icons.add),
+              label:
+                  const Text('Tambah'),
             ),
           ],
         ),
@@ -1186,7 +1726,8 @@ class _AdminDashboardScreenState
         if (announcements.isEmpty)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(20),
+              padding:
+                  EdgeInsets.all(20),
               child: Text(
                 'Belum ada pengumuman.',
               ),
@@ -1195,15 +1736,18 @@ class _AdminDashboardScreenState
 
         ...announcements.map(
           (a) => Card(
-            child: SwitchListTile(
+            child:
+                SwitchListTile(
               title: Text(
                 '${a['title'] ?? '-'}',
               ),
               subtitle: Text(
                 '${a['message'] ?? '-'}',
               ),
-              value: a['active'] == true,
-              onChanged: (v) async {
+              value:
+                  a['active'] == true,
+              onChanged:
+                  (v) async {
                 try {
                   await FirestoreService
                       .togglePengumuman(
@@ -1226,30 +1770,44 @@ class _AdminDashboardScreenState
   }
 
   void addAnnouncement() {
-    final title = TextEditingController();
-    final message = TextEditingController();
+    final title =
+        TextEditingController();
+
+    final message =
+        TextEditingController();
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text(
+        title:
+            const Text(
           'Pengumuman Baru',
         ),
-        content: SingleChildScrollView(
+        content:
+            SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize:
+                MainAxisSize.min,
             children: [
               TextField(
                 controller: title,
-                decoration: const InputDecoration(
-                  labelText: 'Judul',
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Judul',
                 ),
               ),
-              const SizedBox(height: 10),
+
+              const SizedBox(
+                height: 10,
+              ),
+
               TextField(
                 controller: message,
-                decoration: const InputDecoration(
-                  labelText: 'Isi',
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Isi',
                 ),
                 maxLines: 3,
               ),
@@ -1258,13 +1816,20 @@ class _AdminDashboardScreenState
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            onPressed: () =>
+                Navigator.pop(context),
+            child:
+                const Text('Batal'),
           ),
+
           ElevatedButton(
             onPressed: () async {
-              if (title.text.trim().isEmpty ||
-                  message.text.trim().isEmpty) {
+              if (title.text
+                      .trim()
+                      .isEmpty ||
+                  message.text
+                      .trim()
+                      .isEmpty) {
                 _msg(
                   'Judul dan isi wajib diisi.',
                 );
@@ -1274,8 +1839,10 @@ class _AdminDashboardScreenState
               try {
                 await FirestoreService
                     .tambahPengumuman(
-                  title: title.text.trim(),
-                  message: message.text.trim(),
+                  title:
+                      title.text.trim(),
+                  message:
+                      message.text.trim(),
                   active: true,
                 );
 
@@ -1298,7 +1865,8 @@ class _AdminDashboardScreenState
                 );
               }
             },
-            child: const Text(
+            child:
+                const Text(
               'Publikasikan',
             ),
           ),
@@ -1313,7 +1881,8 @@ class _AdminDashboardScreenState
 
   Widget transactionPage() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding:
+          const EdgeInsets.all(16),
       children: [
         Row(
           children: [
@@ -1322,14 +1891,19 @@ class _AdminDashboardScreenState
                 'Monitor Transaksi PPOB',
                 style: TextStyle(
                   fontSize: 27,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ),
+
             IconButton(
-              onPressed: loadTransactions,
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh Transaksi',
+              onPressed:
+                  loadTransactions,
+              icon:
+                  const Icon(Icons.refresh),
+              tooltip:
+                  'Refresh Transaksi',
             ),
           ],
         ),
@@ -1339,7 +1913,8 @@ class _AdminDashboardScreenState
         if (transactions.isEmpty)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(20),
+              padding:
+                  EdgeInsets.all(20),
               child: Text(
                 'Belum ada transaksi PPOB.',
               ),
@@ -1371,18 +1946,24 @@ class _AdminDashboardScreenState
                           ? Colors.orange
                           : Colors.red,
                 ),
+
                 title: Text(
                   '${trx['productName'] ?? trx['product'] ?? '-'}',
                 ),
+
                 subtitle: Text(
                   'Ref: ${trx['ref_id'] ?? '-'}\n'
                   'Nominal: ${rp(trx['amount'] ?? 0)}\n'
                   'User: ${trx['uid'] ?? trx['userId'] ?? '-'}',
                 ),
-                trailing: Text(
+
+                trailing:
+                    Text(
                   status,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                  style:
+                      TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
                     color: isSuccess
                         ? Colors.green
                         : isPending
@@ -1406,20 +1987,28 @@ class _AdminDashboardScreenState
     switch (menu) {
       case 0:
         return dashboard();
+
       case 1:
         return productsPage();
+
       case 2:
         return transactionPage();
+
       case 3:
         return usersPage();
+
       case 4:
         return kycPage();
+
       case 5:
         return devicesPage();
+
       case 6:
         return bankPage();
+
       case 7:
         return announcementPage();
+
       default:
         return dashboard();
     }
@@ -1431,15 +2020,21 @@ class _AdminDashboardScreenState
     int index,
   ) {
     return ListTile(
-      selected: menu == index,
-      leading: Icon(icon),
-      title: Text(title),
+      selected:
+          menu == index,
+      leading:
+          Icon(icon),
+      title:
+          Text(title),
       onTap: () {
         setState(() {
           menu = index;
         });
 
-        if (MediaQuery.of(context).size.width < 700) {
+        if (MediaQuery.of(context)
+                .size
+                .width <
+            700) {
           Navigator.pop(context);
         }
       },
@@ -1455,9 +2050,11 @@ class _AdminDashboardScreenState
               child: Center(
                 child: Text(
                   'DESAPAY ADMIN',
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
               ),
@@ -1518,30 +2115,49 @@ class _AdminDashboardScreenState
 
   Widget drawer() {
     return Drawer(
-      child: adminMenu(),
+      child:
+          adminMenu(),
     );
   }
+
+  // =========================================================
+  // MESSAGE
+  // =========================================================
 
   void _msg(String text) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(
       SnackBar(
-        content: Text(text),
+        content:
+            Text(text),
       ),
     );
   }
 
+  // =========================================================
+  // BUILD
+  // =========================================================
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return LayoutBuilder(
-      builder: (_, constraints) {
+      builder: (
+        _,
+        constraints,
+      ) {
         final mobile =
-            constraints.maxWidth < 700;
+            constraints.maxWidth <
+                700;
 
         if (mobile) {
           return Scaffold(
-            appBar: AppBar(
+            appBar:
+                AppBar(
               title: Text(
                 [
                   'Dashboard',
@@ -1556,15 +2172,19 @@ class _AdminDashboardScreenState
               ),
               actions: [
                 IconButton(
-                  onPressed: loadAll,
-                  icon: const Icon(
+                  onPressed:
+                      loadAll,
+                  icon:
+                      const Icon(
                     Icons.refresh,
                   ),
                 ),
               ],
             ),
-            drawer: drawer(),
-            body: content(),
+            drawer:
+                drawer(),
+            body:
+                content(),
           );
         }
 
@@ -1573,11 +2193,14 @@ class _AdminDashboardScreenState
             children: [
               SizedBox(
                 width: 245,
-                child: adminMenu(),
+                child:
+                    adminMenu(),
               ),
               Expanded(
-                child: SafeArea(
-                  child: content(),
+                child:
+                    SafeArea(
+                  child:
+                      content(),
                 ),
               ),
             ],
