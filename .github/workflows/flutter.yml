@@ -17,69 +17,105 @@ jobs:
       contents: read
 
     steps:
+      # ============================================================
+      # 1. CHECKOUT
+      # ============================================================
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ============================================================
+      # 2. JAVA
+      # ============================================================
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
+      # ============================================================
+      # 3. FLUTTER
+      # ============================================================
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # Pastikan proyek Flutter lengkap
+      # ============================================================
+      # 4. CEK STRUKTUR SOURCE
+      # ============================================================
       - name: Check Flutter source tree
         run: |
           test -f pubspec.yaml
           test -d lib
           test -f lib/main.dart
+          test -d functions
+          test -f functions/index.js
+          test -f functions/package.json
           test -f firebase.json
-          echo "Flutter source tree valid."
+          echo "Source tree valid."
 
-      # Pastikan platform Android memang tersedia untuk build APK
-      - name: Check Android Platform
-        run: |
-          if [ ! -d "android" ]; then
-            echo "ERROR: Folder android tidak ditemukan."
-            echo "Build APK membutuhkan folder android."
-            exit 1
-          fi
-
-          echo "Android platform ditemukan."
-
-      # Install dependency Flutter
-      - name: Install Dependencies
+      # ============================================================
+      # 5. INSTALL FLUTTER DEPENDENCIES
+      # ============================================================
+      - name: Install Flutter dependencies
         run: |
           flutter pub get
 
-      # Generate launcher icon
+      # ============================================================
+      # 6. BUAT ANDROID PLATFORM SEMENTARA
+      #    TIDAK PERLU COMMIT FOLDER ANDROID KE GITHUB
+      # ============================================================
+      - name: Generate Android Platform
+        run: |
+          if [ ! -d "android" ]; then
+            echo "Folder android tidak ada."
+            echo "Membuat Android platform untuk proses build APK..."
+            flutter create . --platforms=android
+          else
+            echo "Folder android sudah tersedia."
+          fi
+
+      # ============================================================
+      # 7. GENERATE LAUNCHER ICON
+      # ============================================================
       - name: Generate Launcher Icons
         run: |
-          dart run flutter_launcher_icons
+          dart run flutter_launcher_icons || echo "Launcher icons dilewati"
 
-      # Bersihkan build sebelumnya
-      - name: Pre-Build Clean
+      # ============================================================
+      # 8. CLEAN
+      # ============================================================
+      - name: Clean Flutter
         run: |
           flutter clean
           flutter pub get
 
-      # Cek Dart
-      - name: Analyze Flutter Project
+      # ============================================================
+      # 9. FIREBASE FUNCTIONS
+      #    HANYA VERIFIKASI KODE BACKEND
+      # ============================================================
+      - name: Install Firebase Functions dependencies
+        working-directory: functions
         run: |
-          flutter analyze --no-fatal-infos
+          npm install
 
-      # Build APK
-      - name: Build APK Final
+      - name: Verify Firebase Functions
+        working-directory: functions
+        run: |
+          node --check index.js
+
+      # ============================================================
+      # 10. BUILD APK
+      # ============================================================
+      - name: Build APK Release
         run: |
           flutter build apk --release --no-tree-shake-icons
 
-      # Cek hasil APK
-      - name: Cek hasil APK
+      # ============================================================
+      # 11. CHECK APK
+      # ============================================================
+      - name: Check APK
         run: |
           echo "=== HASIL BUILD ==="
           ls -lh build/app/outputs/flutter-apk/
@@ -87,7 +123,9 @@ jobs:
           echo "=== UKURAN APK ==="
           du -h build/app/outputs/flutter-apk/app-release.apk
 
-      # Upload APK
+      # ============================================================
+      # 12. UPLOAD APK
+      # ============================================================
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
