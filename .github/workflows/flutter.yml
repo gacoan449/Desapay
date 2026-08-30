@@ -64,7 +64,6 @@ jobs:
 
       # ============================================================
       # 6. BUAT ANDROID PLATFORM SEMENTARA
-      #    TIDAK PERLU COMMIT FOLDER ANDROID KE GITHUB
       # ============================================================
       - name: Generate Android Platform
         run: |
