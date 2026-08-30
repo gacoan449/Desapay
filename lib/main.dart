@@ -45,10 +45,9 @@ Future<void> main() async {
     // CLOUD FUNCTIONS
     // =======================================================
     //
-    // Instance tidak perlu memanggil function apa pun di sini.
-    // FirebaseFunctions digunakan oleh service ketika diperlukan.
+    // Instance tersedia setelah Firebase berhasil diinisialisasi.
+    // Function akan dipanggil oleh service saat diperlukan.
     //
-    // Tetap diinisialisasi agar struktur project tetap konsisten.
     // =======================================================
 
     FirebaseFunctions.instance;
@@ -106,6 +105,7 @@ class DesaPayApp extends StatelessWidget {
 
       theme: ThemeData(
         useMaterial3: true,
+
         colorScheme: ColorScheme.fromSeed(
           seedColor: WarnaDesaPay.primary,
           primary: WarnaDesaPay.primary,
@@ -113,9 +113,12 @@ class DesaPayApp extends StatelessWidget {
           secondary: WarnaDesaPay.secondary,
           surface: Colors.white,
         ),
+
         scaffoldBackgroundColor:
             WarnaDesaPay.lightBg,
+
         fontFamily: 'Inter',
+
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
@@ -137,7 +140,8 @@ class DesaPayApp extends StatelessWidget {
 // FIREBASE ERROR SCREEN
 // =====================================================================
 
-class FirebaseErrorScreen extends StatelessWidget {
+class FirebaseErrorScreen
+    extends StatelessWidget {
   final String error;
 
   const FirebaseErrorScreen({
@@ -146,18 +150,25 @@ class FirebaseErrorScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
       backgroundColor:
           WarnaDesaPay.lightBg,
+
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child:
+              SingleChildScrollView(
             padding:
                 const EdgeInsets.all(24),
-            child: Column(
+
+            child:
+                Column(
               mainAxisAlignment:
                   MainAxisAlignment.center,
+
               children: [
                 const Icon(
                   Icons.cloud_off,
@@ -173,7 +184,8 @@ class FirebaseErrorScreen extends StatelessWidget {
                   'DesaPay gagal memulai',
                   textAlign:
                       TextAlign.center,
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     fontSize: 24,
                     fontWeight:
                         FontWeight.bold,
@@ -197,10 +209,12 @@ class FirebaseErrorScreen extends StatelessWidget {
                 Container(
                   width:
                       double.infinity,
+
                   padding:
                       const EdgeInsets.all(
                     16,
                   ),
+
                   decoration:
                       BoxDecoration(
                     color:
@@ -210,6 +224,7 @@ class FirebaseErrorScreen extends StatelessWidget {
                       12,
                     ),
                   ),
+
                   child:
                       SelectableText(
                     error,
@@ -233,6 +248,7 @@ class FirebaseErrorScreen extends StatelessWidget {
 // =====================================================================
 //
 // ALUR:
+//
 // Firebase Auth
 //      ↓
 // User ditemukan?
@@ -247,12 +263,13 @@ class FirebaseErrorScreen extends StatelessWidget {
 // ↓                 ↓
 // AdminDashboard   BottomNav
 //
-// PENTING:
-// Jika dokumen user tidak ada atau gagal dibaca,
-// aplikasi TIDAK diam-diam memasukkan user ke BottomNav.
+// Role kosong / invalid / dokumen tidak ada:
+// → jangan diam-diam masuk ke BottomNav.
+//
 // =====================================================================
 
-class DesaPayHome extends StatefulWidget {
+class DesaPayHome
+    extends StatefulWidget {
   const DesaPayHome({
     super.key,
   });
@@ -320,7 +337,8 @@ class _DesaPayHomeState
               .toLowerCase();
 
       debugPrint(
-        '🔐 DesaPay role check: uid=$uid role=$role',
+        '🔐 DesaPay role check: '
+        'uid=$uid role=$role',
       );
 
       // -------------------------------------------------------
@@ -328,22 +346,15 @@ class _DesaPayHomeState
       // -------------------------------------------------------
 
       if (role == 'admin') {
-        return const _AccountDestination
-            .admin();
+        return const _AccountDestination.admin();
       }
 
       // -------------------------------------------------------
       // USER
       // -------------------------------------------------------
-      //
-      // Hanya role user yang dianggap akun biasa.
-      // Role kosong / tidak dikenal tidak boleh otomatis
-      // dianggap user.
-      // -------------------------------------------------------
 
       if (role == 'user') {
-        return const _AccountDestination
-            .user();
+        return const _AccountDestination.user();
       }
 
       // -------------------------------------------------------
@@ -375,7 +386,7 @@ class _DesaPayHomeState
         stackTrace.toString(),
       );
 
-      return _AccountDestination.error(
+      return const _AccountDestination.error(
         'Terjadi kesalahan saat memverifikasi akun.',
       );
     }
@@ -385,7 +396,24 @@ class _DesaPayHomeState
   // RESET DESTINATION CACHE
   // =========================================================
 
-  void _prepareDestination(User user) {
+  void _resetDestination() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _loadedUid = null;
+      _destinationFuture = null;
+    });
+  }
+
+  // =========================================================
+  // PREPARE DESTINATION
+  // =========================================================
+
+  void _prepareDestination(
+    User user,
+  ) {
     if (_loadedUid == user.uid &&
         _destinationFuture != null) {
       return;
@@ -409,6 +437,7 @@ class _DesaPayHomeState
   ) {
     return StreamBuilder<User?>(
       stream: _authStream,
+
       builder: (
         context,
         snapshot,
@@ -442,7 +471,8 @@ class _DesaPayHomeState
 
         _prepareDestination(user);
 
-        final future =
+        final Future<_AccountDestination>?
+            future =
             _destinationFuture;
 
         if (future == null) {
@@ -464,6 +494,7 @@ class _DesaPayHomeState
         return FutureBuilder<
             _AccountDestination>(
           future: future,
+
           builder: (
             context,
             accountSnapshot,
@@ -478,6 +509,7 @@ class _DesaPayHomeState
               return const Scaffold(
                 backgroundColor:
                     WarnaDesaPay.lightBg,
+
                 body: Center(
                   child:
                       CircularProgressIndicator(
@@ -492,22 +524,28 @@ class _DesaPayHomeState
             // FUTURE ERROR
             // -------------------------------------------------
 
-            if (accountSnapshot
-                .hasError) {
+            if (accountSnapshot.hasError) {
               return _AccountErrorScreen(
                 message:
                     'Gagal memverifikasi akun:\n\n'
                     '${accountSnapshot.error}',
+
+                onRetry:
+                    _resetDestination,
               );
             }
 
-            final destination =
+            final _AccountDestination?
+                destination =
                 accountSnapshot.data;
 
             if (destination == null) {
-              return const _AccountErrorScreen(
+              return _AccountErrorScreen(
                 message:
                     'Sistem tidak menerima hasil verifikasi akun.',
+
+                onRetry:
+                    _resetDestination,
               );
             }
 
@@ -543,6 +581,9 @@ class _DesaPayHomeState
               message:
                   destination.errorMessage ??
                       'Akun tidak dapat diverifikasi.',
+
+              onRetry:
+                  _resetDestination,
             );
           },
         );
@@ -591,8 +632,11 @@ class _AccountErrorScreen
     extends StatelessWidget {
   final String message;
 
+  final VoidCallback onRetry;
+
   const _AccountErrorScreen({
     required this.message,
+    required this.onRetry,
   });
 
   @override
@@ -602,29 +646,34 @@ class _AccountErrorScreen
     return Scaffold(
       backgroundColor:
           WarnaDesaPay.lightBg,
+
       body: SafeArea(
         child: Center(
           child:
               SingleChildScrollView(
             padding:
                 const EdgeInsets.all(24),
-            child: Column(
+
+            child:
+                Column(
               mainAxisAlignment:
                   MainAxisAlignment.center,
+
               children: [
                 Container(
                   width: 70,
                   height: 70,
+
                   decoration:
                       BoxDecoration(
-                    color:
-                        Colors.orange
-                            .withOpacity(
+                    color: Colors.orange
+                        .withOpacity(
                       0.12,
                     ),
                     shape:
                         BoxShape.circle,
                   ),
+
                   child:
                       const Icon(
                     Icons
@@ -643,7 +692,9 @@ class _AccountErrorScreen
                   'Akun Belum Dapat Diverifikasi',
                   textAlign:
                       TextAlign.center,
-                  style: TextStyle(
+
+                  style:
+                      TextStyle(
                     fontSize: 21,
                     fontWeight:
                         FontWeight.w800,
@@ -658,6 +709,7 @@ class _AccountErrorScreen
                   message,
                   textAlign:
                       TextAlign.center,
+
                   style:
                       const TextStyle(
                     fontSize: 13,
@@ -671,19 +723,19 @@ class _AccountErrorScreen
                   height: 24,
                 ),
 
+                // =================================================
+                // RETRY
+                // =================================================
+
                 ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _loadedUid =
-                          null;
-                      _destinationFuture =
-                          null;
-                    });
-                  },
+                  onPressed:
+                      onRetry,
+
                   icon:
                       const Icon(
                     Icons.refresh,
                   ),
+
                   label:
                       const Text(
                     'Coba Lagi',
@@ -693,6 +745,10 @@ class _AccountErrorScreen
                 const SizedBox(
                   height: 10,
                 ),
+
+                // =================================================
+                // LOGOUT
+                // =================================================
 
                 OutlinedButton.icon(
                   onPressed:
@@ -707,10 +763,12 @@ class _AccountErrorScreen
                       );
                     }
                   },
+
                   icon:
                       const Icon(
                     Icons.logout,
                   ),
+
                   label:
                       const Text(
                     'Keluar',
