@@ -34,6 +34,8 @@ service cloud.firestore {
 
     match /users/{uid} {
 
+      // User hanya boleh membaca data dirinya sendiri.
+      // Admin boleh membaca data user untuk kebutuhan dashboard.
       allow read: if isOwner(uid) || isAdmin();
 
 
@@ -52,12 +54,11 @@ service cloud.firestore {
       // -------------------------------------------------------
       // UPDATE
       // -------------------------------------------------------
+
+      // Admin boleh update user.
       //
-      // Admin boleh update.
-      //
-      // User hanya boleh mengubah field profil non-finansial.
-      //
-      // -------------------------------------------------------
+      // User biasa hanya boleh mengubah field profil.
+      // Field finansial / privilege tidak boleh disentuh user.
 
       allow update: if isAdmin()
 
@@ -81,6 +82,7 @@ service cloud.firestore {
       // DELETE
       // -------------------------------------------------------
 
+      // Hanya admin.
       allow delete: if isAdmin();
     }
 
@@ -91,13 +93,16 @@ service cloud.firestore {
 
     match /balance_ledger/{ledgerId} {
 
+      // User hanya boleh melihat ledger miliknya.
+      // Admin boleh melihat seluruh ledger.
       allow read: if isAdmin()
         || (
           signedIn()
           && resource.data.uid == request.auth.uid
         );
 
-      // Hanya backend/Admin SDK.
+      // Tidak boleh dimanipulasi client.
+      // Penulisan dilakukan oleh backend/Admin SDK.
       allow create, update, delete: if false;
     }
 
@@ -114,6 +119,7 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
         );
 
+      // Tidak boleh dimanipulasi client.
       allow create, update, delete: if false;
     }
 
@@ -130,6 +136,7 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
         );
 
+      // Client tidak boleh membuat / mengubah transaksi.
       allow create, update, delete: if false;
     }
 
@@ -146,7 +153,7 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
         );
 
-      // Tidak boleh dimanipulasi client.
+      // Client tidak boleh memanipulasi transaksi.
       allow create, update, delete: if false;
     }
 
@@ -157,10 +164,10 @@ service cloud.firestore {
 
     match /products/{productId} {
 
-      // User boleh membaca produk.
+      // Produk boleh dibaca user yang sudah login.
       allow read: if signedIn();
 
-      // Perubahan produk hanya admin.
+      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
@@ -168,19 +175,14 @@ service cloud.firestore {
     // =========================================================
     // KYC
     // =========================================================
-    //
-    // CATATAN:
-    // Sistem Anda sekarang menyimpan KYC di users/{uid}
-    // melalui field kycStatus.
-    //
-    // Collection kyc tetap ditutup kecuali nanti benar-benar
-    // digunakan.
-    // =========================================================
 
     match /kyc/{uid} {
 
+      // User hanya boleh membaca KYC miliknya.
+      // Admin boleh membaca untuk proses verifikasi.
       allow read: if isOwner(uid) || isAdmin();
 
+      // Client tidak boleh membuat / mengubah / menghapus KYC.
       allow create, update, delete: if false;
     }
 
@@ -193,6 +195,7 @@ service cloud.firestore {
 
       allow read: if signedIn();
 
+      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
@@ -203,8 +206,10 @@ service cloud.firestore {
 
     match /settings/{settingId} {
 
+      // User boleh membaca setting aplikasi.
       allow read: if signedIn();
 
+      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
@@ -215,8 +220,11 @@ service cloud.firestore {
 
     match /devices/{deviceId} {
 
+      // Data device adalah data internal.
+      // User biasa tidak boleh membacanya.
       allow read: if isAdmin();
 
+      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
@@ -227,8 +235,11 @@ service cloud.firestore {
 
     match /bank_mutations/{mutationId} {
 
+      // Data mutasi bank bersifat internal.
       allow read: if isAdmin();
 
+      // Untuk tahap rilis sekarang admin masih diperbolehkan
+      // mengelola data melalui dashboard.
       allow create, update, delete: if isAdmin();
     }
 
@@ -241,6 +252,7 @@ service cloud.firestore {
 
       allow read: if signedIn();
 
+      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
@@ -249,8 +261,9 @@ service cloud.firestore {
     // DEFAULT DENY
     // =========================================================
 
+    // Semua collection yang belum didefinisikan di atas
+    // otomatis ditolak.
     match /{document=**} {
-
       allow read, write: if false;
     }
   }
