@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,6 +19,23 @@ import 'screens/admin/admin_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // =========================================================
+  // LOAD ENVIRONMENT VARIABLES
+  // =========================================================
+
+  String? dotenvError;
+
+  try {
+    await dotenv.load(fileName: '.env');
+
+    debugPrint('✅ DesaPay .env berhasil dimuat.');
+  } catch (e, stackTrace) {
+    dotenvError = e.toString();
+
+    debugPrint('❌ .env gagal dimuat: $e');
+    debugPrint(stackTrace.toString());
+  }
 
   // =========================================================
   // PORTRAIT ONLY
@@ -41,18 +59,13 @@ Future<void> main() async {
     );
 
     debugPrint(
-      'DesaPay Firebase berhasil terhubung: ${firebaseApp.name}',
+      '✅ DesaPay Firebase berhasil terhubung: ${firebaseApp.name}',
     );
   } catch (e, stackTrace) {
     firebaseError = e.toString();
 
-    debugPrint(
-      'Firebase initialization gagal: $e',
-    );
-
-    debugPrint(
-      stackTrace.toString(),
-    );
+    debugPrint('❌ Firebase initialization gagal: $e');
+    debugPrint(stackTrace.toString());
   }
 
   // =========================================================
@@ -63,18 +76,29 @@ Future<void> main() async {
     DesaPayApp(
       firebaseReady: firebaseApp != null,
       firebaseError: firebaseError,
+      dotenvReady: dotenvError == null,
+      dotenvError: dotenvError,
     ),
   );
 }
+
+// =====================================================================
+// DESAPAY APP
+// =====================================================================
 
 class DesaPayApp extends StatelessWidget {
   final bool firebaseReady;
   final String? firebaseError;
 
+  final bool dotenvReady;
+  final String? dotenvError;
+
   const DesaPayApp({
     super.key,
     required this.firebaseReady,
     this.firebaseError,
+    required this.dotenvReady,
+    this.dotenvError,
   });
 
   @override
@@ -100,11 +124,87 @@ class DesaPayApp extends StatelessWidget {
         ),
       ),
 
-      home: !firebaseReady
-          ? FirebaseErrorScreen(
-              error: firebaseError ?? 'Unknown Firebase error',
+      home: !dotenvReady
+          ? DotEnvErrorScreen(
+              error: dotenvError ?? 'Unknown .env error',
             )
-          : const DesaPayHome(),
+          : !firebaseReady
+              ? FirebaseErrorScreen(
+                  error: firebaseError ?? 'Unknown Firebase error',
+                )
+              : const DesaPayHome(),
+    );
+  }
+}
+
+// =====================================================================
+// DOTENV ERROR SCREEN
+// =====================================================================
+
+class DotEnvErrorScreen extends StatelessWidget {
+  final String error;
+
+  const DotEnvErrorScreen({
+    super.key,
+    required this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: WarnaDesaPay.lightBg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.settings,
+                  size: 72,
+                  color: Colors.orange,
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'DesaPay gagal memulai',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                const Text(
+                  '.env belum berhasil dimuat.',
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 20),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SelectableText(
+                    error,
+                    style: const TextStyle(
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -196,18 +296,9 @@ class DesaPayHome extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
 
       builder: (context, snapshot) {
-        // ===================================================
-        // FIREBASE AUTH SEDANG CEK SESSION
-        // ===================================================
-
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
-
-        // ===================================================
-        // AUTH ERROR
-        // ===================================================
 
         if (snapshot.hasError) {
           return AuthErrorScreen(
@@ -215,19 +306,11 @@ class DesaPayHome extends StatelessWidget {
           );
         }
 
-        // ===================================================
-        // BELUM LOGIN
-        // ===================================================
-
         final user = snapshot.data;
 
         if (user == null) {
           return const LoginScreen();
         }
-
-        // ===================================================
-        // CEK ROLE FIRESTORE
-        // ===================================================
 
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance
@@ -236,12 +319,7 @@ class DesaPayHome extends StatelessWidget {
               .get(),
 
           builder: (context, userSnap) {
-            // =================================================
-            // FIRESTORE SEDANG MEMUAT
-            // =================================================
-
-            if (userSnap.connectionState ==
-                ConnectionState.waiting) {
+            if (userSnap.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
                   child: CircularProgressIndicator(
@@ -251,22 +329,13 @@ class DesaPayHome extends StatelessWidget {
               );
             }
 
-            // =================================================
-            // FIRESTORE ERROR
-            // =================================================
-
             if (userSnap.hasError) {
               return AuthErrorScreen(
                 error: userSnap.error.toString(),
               );
             }
 
-            // =================================================
-            // USER ADA
-            // =================================================
-
-            if (userSnap.hasData &&
-                userSnap.data!.exists) {
+            if (userSnap.hasData && userSnap.data!.exists) {
               final rawData = userSnap.data!.data();
 
               if (rawData is Map<String, dynamic>) {
@@ -275,10 +344,6 @@ class DesaPayHome extends StatelessWidget {
                 }
               }
             }
-
-            // =================================================
-            // USER BIASA
-            // =================================================
 
             return const BottomNav();
           },
