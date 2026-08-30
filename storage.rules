@@ -26,46 +26,148 @@ service firebase.storage {
     // =========================================================
     // KYC
     // =========================================================
+    //
+    // Struktur:
+    // kyc/{uid}/{fileName}
+    //
+    // User:
+    // - hanya boleh upload KYC miliknya sendiri
+    // - hanya image atau PDF
+    // - maksimum 10 MB
+    // - tidak boleh membaca KYC user lain
+    //
+    // Admin:
+    // - boleh membaca KYC
+    //
+    // Penghapusan / perubahan file KYC oleh user ditutup.
+    // Ini membantu mencegah dokumen KYC yang sudah tersimpan
+    // diganti atau dihapus sembarangan.
+    //
+    // =========================================================
 
     match /kyc/{uid}/{fileName} {
 
-      // User hanya boleh upload file KYC miliknya.
-      allow write: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches(
-          'image/.*|application/pdf'
-        );
+      // -------------------------------------------------------
+      // READ
+      // -------------------------------------------------------
 
-      // User hanya bisa membaca KYC miliknya.
-      // Admin bisa membaca semua.
       allow read: if signedIn()
         && (
           request.auth.uid == uid
           || isAdmin()
         );
+
+
+      // -------------------------------------------------------
+      // CREATE
+      // -------------------------------------------------------
+      //
+      // User hanya boleh membuat file KYC baru miliknya.
+      //
+      // request.resource = file baru.
+      // resource = file lama.
+      //
+      // Karena menggunakan create, user tidak dapat menimpa
+      // file KYC lama menggunakan operasi update.
+      //
+      // -------------------------------------------------------
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches(
+          'image/.*|application/pdf'
+        );
+
+
+      // -------------------------------------------------------
+      // UPDATE
+      // -------------------------------------------------------
+      //
+      // User tidak boleh mengganti file KYC yang sudah ada.
+      //
+      // Admin juga tidak melakukan upload KYC melalui Storage
+      // pada tahap rilis ini.
+      //
+      // -------------------------------------------------------
+
+      allow update: if false;
+
+
+      // -------------------------------------------------------
+      // DELETE
+      // -------------------------------------------------------
+      //
+      // KYC tidak boleh dihapus melalui client.
+      //
+      // Penghapusan dapat dilakukan melalui backend/Admin SDK
+      // bila suatu saat diperlukan.
+      //
+      // -------------------------------------------------------
+
+      allow delete: if false;
     }
 
 
     // =========================================================
     // PROFILE
     // =========================================================
+    //
+    // Struktur:
+    // profiles/{uid}/{fileName}
+    //
+    // User:
+    // - boleh membaca file profile
+    // - hanya boleh upload miliknya sendiri
+    // - hanya image
+    // - maksimum 5 MB
+    //
+    // =========================================================
 
     match /profiles/{uid}/{fileName} {
 
+      // Profile dapat dibaca user yang sudah login.
       allow read: if signedIn();
 
-      allow write: if signedIn()
+
+      // User hanya boleh upload ke folder miliknya.
+      allow create: if signedIn()
         && request.auth.uid == uid
-        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches(
           'image/.*'
         );
+
+
+      // Untuk profile, user boleh mengganti foto profilnya.
+      //
+      // Tetap dibatasi:
+      // - pemilik folder sendiri
+      // - maksimum 5 MB
+      // - hanya image
+      //
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches(
+          'image/.*'
+        );
+
+
+      // User boleh menghapus file profile miliknya.
+      // Ini diperlukan agar foto lama dapat dibersihkan.
+      allow delete: if signedIn()
+        && request.auth.uid == uid;
     }
 
 
     // =========================================================
     // DEFAULT DENY
+    // =========================================================
+    //
+    // Semua path yang tidak didefinisikan secara eksplisit
+    // otomatis ditolak.
+    //
     // =========================================================
 
     match /{allPaths=**} {
