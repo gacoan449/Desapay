@@ -106,10 +106,16 @@ jobs:
 
       # ============================================================
       # 10. BUILD APK
+      #    GITHUB SECRETS -> DART DEFINE -> FIREBASE
       # ============================================================
       - name: Build APK Release
         run: |
-          flutter build apk --release --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons \
+            --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
+            --dart-define=FIREBASE_APP_ID_ANDROID="${{ secrets.FIREBASE_APP_ID_ANDROID }}" \
+            --dart-define=FIREBASE_SENDER_ID="${{ secrets.FIREBASE_SENDER_ID }}" \
+            --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.STORAGE_BUCKET }}"
 
       # ============================================================
       # 11. CHECK APK
