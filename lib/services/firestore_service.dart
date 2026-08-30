@@ -298,16 +298,14 @@ class FirestoreService {
   }
 
   // =========================================================
-  // UBAH SALDO USER
+  // UBAH SALDO USER - CLOUD FUNCTION
   // =========================================================
   //
-  // PENTING:
+  // Flutter hanya meminta perubahan.
+  // Flutter TIDAK menulis users/{uid}.balance.
   //
-  // Flutter TIDAK BOLEH lagi melakukan:
-  //
-  // users/{uid}.balance = ...
-  //
-  // Semua perubahan saldo dilakukan Cloud Function.
+  // Cloud Function:
+  // adminAdjustBalance
   //
   // =========================================================
 
@@ -318,7 +316,6 @@ class FirestoreService {
   ) async {
     final cleanUid = uid.trim();
     final cleanReason = alasan.trim();
-    final nominal = amount.toInt();
 
     if (cleanUid.isEmpty) {
       throw Exception(
@@ -332,11 +329,20 @@ class FirestoreService {
       );
     }
 
-    if (nominal == 0) {
+    if (amount == 0) {
       throw Exception(
         'Nominal perubahan saldo tidak boleh 0.',
       );
     }
+
+    // Saldo harus berupa bilangan rupiah utuh.
+    if (amount % 1 != 0) {
+      throw Exception(
+        'Nominal saldo harus berupa angka bulat.',
+      );
+    }
+
+    final nominal = amount.toInt();
 
     try {
       final callable =
@@ -378,12 +384,42 @@ class FirestoreService {
                 'Saldo tidak dapat diproses.',
           );
 
+        case 'already-exists':
+          throw Exception(
+            e.message ??
+                'Perubahan saldo sudah diproses.',
+          );
+
+        case 'aborted':
+          throw Exception(
+            'Transaksi saldo gagal karena konflik. Silakan coba lagi.',
+          );
+
+        case 'resource-exhausted':
+          throw Exception(
+            'Terlalu banyak permintaan. Silakan coba lagi.',
+          );
+
+        case 'unavailable':
+          throw Exception(
+            'Server sedang tidak tersedia. Silakan coba lagi.',
+          );
+
+        case 'internal':
+          throw Exception(
+            'Terjadi kesalahan internal server.',
+          );
+
         default:
           throw Exception(
             e.message ??
                 'Gagal memperbarui saldo.',
           );
       }
+    } catch (e) {
+      throw Exception(
+        'Gagal mengubah saldo: $e',
+      );
     }
   }
 
