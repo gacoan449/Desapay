@@ -4,38 +4,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'config/warna.dart';
+import 'firebase_options.dart';
 
 import 'screens/splash/splash_screen.dart';
 import 'screens/login/login_screen.dart';
 import 'widgets/bottom_nav.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
-
-
-// =====================================================================
-// SUPABASE CONFIG
-// =====================================================================
-//
-// GANTI 2 DATA DI BAWAH DENGAN DATA DARI SUPABASE
-//
-// Supabase Dashboard
-// → Project Settings
-// → API
-//
-// URL:
-// https://xxxxxxxx.supabase.co
-//
-// Publishable / anon key:
-// eyJhbGciOi...
-//
-// JANGAN MASUKKAN service_role key KE APK!
-// =====================================================================
-
-const String supabaseUrl = 'https://sukqrxsolvukqunrurfw.supabase.co/rest/v1/';
-
-const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1a3FyeHNvbHZ1a3F1bnJ1cmZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMDQ2MzMsImV4cCI6MjEwMzY4MDYzM30.Uwl9JEJiwItJw86gZ3EILQYZYkT00cnM-57ElGz6ODY';
 
 
 // =====================================================================
@@ -55,28 +35,44 @@ Future<void> main() async {
   ]);
 
   // =========================================================
-  // SUPABASE
+  // FIREBASE
   // =========================================================
 
-  bool supabaseReady = false;
-  String? supabaseError;
+  FirebaseApp? firebaseApp;
+  String? firebaseError;
 
   try {
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseAnonKey,
+    firebaseApp = await Firebase.initializeApp(
+      options:
+          DefaultFirebaseOptions.currentPlatform,
     );
 
-    supabaseReady = true;
+    // =======================================================
+    // CLOUD FUNCTIONS
+    // =======================================================
+    //
+    // Instance tersedia setelah Firebase berhasil
+    // diinisialisasi.
+    //
+    // Function dipanggil oleh service ketika diperlukan.
+    //
+    // =======================================================
+
+    FirebaseFunctions.instance;
 
     debugPrint(
-      '✅ DesaPay Supabase berhasil terhubung.',
+      '✅ DesaPay Firebase berhasil terhubung: '
+      '${firebaseApp.name}',
+    );
+
+    debugPrint(
+      '✅ Firebase Cloud Functions siap digunakan.',
     );
   } catch (e, stackTrace) {
-    supabaseError = e.toString();
+    firebaseError = e.toString();
 
     debugPrint(
-      '❌ Supabase initialization gagal: $e',
+      '❌ Firebase initialization gagal: $e',
     );
 
     debugPrint(
@@ -90,8 +86,10 @@ Future<void> main() async {
 
   runApp(
     DesaPayApp(
-      supabaseReady: supabaseReady,
-      supabaseError: supabaseError,
+      firebaseReady:
+          firebaseApp != null,
+      firebaseError:
+          firebaseError,
     ),
   );
 }
@@ -102,17 +100,19 @@ Future<void> main() async {
 // =====================================================================
 
 class DesaPayApp extends StatelessWidget {
-  final bool supabaseReady;
-  final String? supabaseError;
+  final bool firebaseReady;
+  final String? firebaseError;
 
   const DesaPayApp({
     super.key,
-    required this.supabaseReady,
-    this.supabaseError,
+    required this.firebaseReady,
+    this.firebaseError,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return MaterialApp(
       title: 'DesaPay',
       debugShowCheckedModeBanner: false,
@@ -120,12 +120,22 @@ class DesaPayApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
 
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: WarnaDesaPay.primary,
-          primary: WarnaDesaPay.primary,
-          onPrimary: Colors.white,
-          secondary: WarnaDesaPay.secondary,
-          surface: Colors.white,
+        colorScheme:
+            ColorScheme.fromSeed(
+          seedColor:
+              WarnaDesaPay.primary,
+
+          primary:
+              WarnaDesaPay.primary,
+
+          onPrimary:
+              Colors.white,
+
+          secondary:
+              WarnaDesaPay.secondary,
+
+          surface:
+              Colors.white,
         ),
 
         scaffoldBackgroundColor:
@@ -133,17 +143,18 @@ class DesaPayApp extends StatelessWidget {
 
         fontFamily: 'Inter',
 
-        appBarTheme: const AppBarTheme(
+        appBarTheme:
+            const AppBarTheme(
           centerTitle: true,
           elevation: 0,
         ),
       ),
 
-      home: !supabaseReady
-          ? SupabaseErrorScreen(
+      home: !firebaseReady
+          ? FirebaseErrorScreen(
               error:
-                  supabaseError ??
-                      'Supabase belum berhasil diinisialisasi.',
+                  firebaseError ??
+                      'Unknown Firebase error',
             )
           : const DesaPayHome(),
     );
@@ -152,26 +163,30 @@ class DesaPayApp extends StatelessWidget {
 
 
 // =====================================================================
-// SUPABASE ERROR SCREEN
+// FIREBASE ERROR SCREEN
 // =====================================================================
 
-class SupabaseErrorScreen extends StatelessWidget {
+class FirebaseErrorScreen
+    extends StatelessWidget {
   final String error;
 
-  const SupabaseErrorScreen({
+  const FirebaseErrorScreen({
     super.key,
     required this.error,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
       backgroundColor:
           WarnaDesaPay.lightBg,
 
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child:
+              SingleChildScrollView(
             padding:
                 const EdgeInsets.all(24),
 
@@ -192,6 +207,7 @@ class SupabaseErrorScreen extends StatelessWidget {
 
                 const Text(
                   'DesaPay gagal memulai',
+
                   textAlign:
                       TextAlign.center,
 
@@ -207,7 +223,8 @@ class SupabaseErrorScreen extends StatelessWidget {
                 ),
 
                 const Text(
-                  'Supabase tidak berhasil diinisialisasi.',
+                  'Firebase tidak berhasil diinisialisasi.',
+
                   textAlign:
                       TextAlign.center,
                 ),
@@ -236,7 +253,8 @@ class SupabaseErrorScreen extends StatelessWidget {
                     ),
                   ),
 
-                  child: SelectableText(
+                  child:
+                      SelectableText(
                     error,
 
                     style:
@@ -259,22 +277,26 @@ class SupabaseErrorScreen extends StatelessWidget {
 // DESAPAY HOME / AUTH GATE
 // =====================================================================
 //
-// ALUR SEMENTARA:
+// ALUR:
 //
-// Supabase Auth
+// Firebase Auth
 //      ↓
 // User ditemukan?
 //      ↓
-// users/{id}
+// users/{UID}
 //      ↓
 // role
 //      ↓
 // admin → AdminDashboard
 // user  → BottomNav
 //
+// Role kosong / invalid / dokumen tidak ada:
+// → jangan diam-diam masuk ke BottomNav.
+//
 // =====================================================================
 
-class DesaPayHome extends StatefulWidget {
+class DesaPayHome
+    extends StatefulWidget {
   const DesaPayHome({
     super.key,
   });
@@ -298,9 +320,9 @@ class _DesaPayHomeState
   // AUTH STREAM
   // =========================================================
 
-  Stream<AuthState> get _authStream =>
-      Supabase.instance.client.auth
-          .onAuthStateChange;
+  Stream<User?> get _authStream =>
+      FirebaseAuth.instance
+          .authStateChanges();
 
 
   // =========================================================
@@ -311,94 +333,86 @@ class _DesaPayHomeState
       _loadAccountDestination(
     String uid,
   ) async {
-
     try {
-
-      final response =
-          await Supabase.instance.client
-              .from('users')
-              .select()
-              .eq('id', uid)
-              .maybeSingle();
-
+      final DocumentSnapshot<
+              Map<String, dynamic>>
+          snapshot =
+          await FirebaseFirestore
+              .instance
+              .collection('users')
+              .doc(uid)
+              .get();
 
       // -------------------------------------------------------
       // USER TIDAK ADA
       // -------------------------------------------------------
 
-      if (response == null) {
-
+      if (!snapshot.exists) {
         return _AccountDestination.error(
           'Data akun tidak ditemukan di database DesaPay.\n\n'
-          'User ID: $uid',
+          'UID: $uid',
         );
       }
 
+      final Map<String, dynamic>
+          data =
+          snapshot.data() ??
+              <String, dynamic>{};
 
       // -------------------------------------------------------
       // ROLE
       // -------------------------------------------------------
 
       final String role =
-          (response['role'] ?? '')
+          (data['role'] ?? '')
               .toString()
               .trim()
               .toLowerCase();
-
 
       debugPrint(
         '🔐 DesaPay role check: '
         'uid=$uid role=$role',
       );
 
-
       // -------------------------------------------------------
       // ADMIN
       // -------------------------------------------------------
 
       if (role == 'admin') {
-
         return const
             _AccountDestination.admin();
       }
-
 
       // -------------------------------------------------------
       // USER
       // -------------------------------------------------------
 
       if (role == 'user') {
-
         return const
             _AccountDestination.user();
       }
 
-
       // -------------------------------------------------------
-      // ROLE TIDAK VALID
+      // ROLE INVALID
       // -------------------------------------------------------
 
       return _AccountDestination.error(
         'Role akun tidak valid.\n\n'
-        'User ID: $uid\n'
+        'UID: $uid\n'
         'Role: ${role.isEmpty ? '(kosong)' : role}',
       );
-
-    } on PostgrestException catch (e) {
-
+    } on FirebaseException catch (e) {
       debugPrint(
-        '❌ Supabase account check gagal: '
+        '❌ Firestore account check gagal: '
         '${e.code} - ${e.message}',
       );
 
       return _AccountDestination.error(
         'Gagal memverifikasi akun DesaPay.\n\n'
         'Kode: ${e.code}\n'
-        '${e.message}',
+        '${e.message ?? 'Tidak ada pesan tambahan.'}',
       );
-
     } catch (e, stackTrace) {
-
       debugPrint(
         '❌ Account routing error: $e',
       );
@@ -416,19 +430,16 @@ class _DesaPayHomeState
 
 
   // =========================================================
-  // RESET DESTINATION CACHE
+  // RESET DESTINATION
   // =========================================================
 
   void _resetDestination() {
-
     if (!mounted) {
       return;
     }
 
     setState(() {
-
       _loadedUid = null;
-
       _destinationFuture = null;
     });
   }
@@ -441,18 +452,16 @@ class _DesaPayHomeState
   void _prepareDestination(
     User user,
   ) {
-
-    if (_loadedUid == user.id &&
+    if (_loadedUid == user.uid &&
         _destinationFuture != null) {
-
       return;
     }
 
-    _loadedUid = user.id;
+    _loadedUid = user.uid;
 
     _destinationFuture =
         _loadAccountDestination(
-      user.id,
+      user.uid,
     );
   }
 
@@ -465,49 +474,35 @@ class _DesaPayHomeState
   Widget build(
     BuildContext context,
   ) {
-
-    return StreamBuilder<AuthState>(
+    return StreamBuilder<User?>(
       stream: _authStream,
 
       builder: (
         context,
         snapshot,
       ) {
-
         // =====================================================
         // AUTH MASIH MEMUAT
         // =====================================================
 
         if (snapshot.connectionState ==
             ConnectionState.waiting) {
-
           return const SplashScreen();
         }
-
-
-        // =====================================================
-        // AMBIL USER SUPABASE
-        // =====================================================
-
-        final User? user =
-            Supabase.instance.client
-                .auth
-                .currentUser;
-
 
         // =====================================================
         // BELUM LOGIN
         // =====================================================
 
+        final User? user =
+            snapshot.data;
+
         if (user == null) {
-
           _loadedUid = null;
-
           _destinationFuture = null;
 
           return const LoginScreen();
         }
-
 
         // =====================================================
         // LOGIN ADA
@@ -515,13 +510,12 @@ class _DesaPayHomeState
 
         _prepareDestination(user);
 
-        final Future<_AccountDestination>?
+        final Future<
+                _AccountDestination>?
             future =
             _destinationFuture;
 
-
         if (future == null) {
-
           return const Scaffold(
             body: Center(
               child:
@@ -529,7 +523,6 @@ class _DesaPayHomeState
             ),
           );
         }
-
 
         // =====================================================
         // CEK ROLE
@@ -543,7 +536,6 @@ class _DesaPayHomeState
             context,
             accountSnapshot,
           ) {
-
             // -------------------------------------------------
             // LOADING
             // -------------------------------------------------
@@ -551,7 +543,6 @@ class _DesaPayHomeState
             if (accountSnapshot
                     .connectionState ==
                 ConnectionState.waiting) {
-
               return const Scaffold(
                 backgroundColor:
                     WarnaDesaPay.lightBg,
@@ -566,13 +557,11 @@ class _DesaPayHomeState
               );
             }
 
-
             // -------------------------------------------------
-            // ERROR
+            // FUTURE ERROR
             // -------------------------------------------------
 
             if (accountSnapshot.hasError) {
-
               return _AccountErrorScreen(
                 message:
                     'Gagal memverifikasi akun:\n\n'
@@ -583,14 +572,11 @@ class _DesaPayHomeState
               );
             }
 
-
             final _AccountDestination?
                 destination =
                 accountSnapshot.data;
 
-
             if (destination == null) {
-
               return _AccountErrorScreen(
                 message:
                     'Sistem tidak menerima hasil '
@@ -601,13 +587,11 @@ class _DesaPayHomeState
               );
             }
 
-
             // -------------------------------------------------
             // ADMIN
             // -------------------------------------------------
 
             if (destination.isAdmin) {
-
               debugPrint(
                 '✅ Routing → AdminDashboardScreen',
               );
@@ -616,20 +600,17 @@ class _DesaPayHomeState
                   AdminDashboardScreen();
             }
 
-
             // -------------------------------------------------
             // USER
             // -------------------------------------------------
 
             if (destination.isUser) {
-
               debugPrint(
                 '✅ Routing → BottomNav',
               );
 
               return const BottomNav();
             }
-
 
             // -------------------------------------------------
             // ERROR
@@ -656,13 +637,9 @@ class _DesaPayHomeState
 // =====================================================================
 
 class _AccountDestination {
-
   final bool isAdmin;
-
   final bool isUser;
-
   final String? errorMessage;
-
 
   const _AccountDestination({
     this.isAdmin = false,
@@ -670,23 +647,19 @@ class _AccountDestination {
     this.errorMessage,
   });
 
-
   const _AccountDestination.admin()
       : isAdmin = true,
         isUser = false,
         errorMessage = null;
-
 
   const _AccountDestination.user()
       : isAdmin = false,
         isUser = true,
         errorMessage = null;
 
-
   const _AccountDestination.error(
     String message,
-  )
-      : isAdmin = false,
+  )   : isAdmin = false,
         isUser = false,
         errorMessage = message;
 }
@@ -698,30 +671,26 @@ class _AccountDestination {
 
 class _AccountErrorScreen
     extends StatelessWidget {
-
   final String message;
-
   final VoidCallback onRetry;
-
 
   const _AccountErrorScreen({
     required this.message,
     required this.onRetry,
   });
 
-
   @override
   Widget build(
     BuildContext context,
   ) {
-
     return Scaffold(
       backgroundColor:
           WarnaDesaPay.lightBg,
 
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child:
+              SingleChildScrollView(
             padding:
                 const EdgeInsets.all(24),
 
@@ -730,7 +699,6 @@ class _AccountErrorScreen
                   MainAxisAlignment.center,
 
               children: [
-
                 Container(
                   width: 70,
                   height: 70,
@@ -759,11 +727,9 @@ class _AccountErrorScreen
                   ),
                 ),
 
-
                 const SizedBox(
                   height: 18,
                 ),
-
 
                 const Text(
                   'Akun Belum Dapat Diverifikasi',
@@ -779,11 +745,9 @@ class _AccountErrorScreen
                   ),
                 ),
 
-
                 const SizedBox(
                   height: 12,
                 ),
-
 
                 SelectableText(
                   message,
@@ -800,11 +764,9 @@ class _AccountErrorScreen
                   ),
                 ),
 
-
                 const SizedBox(
                   height: 24,
                 ),
-
 
                 // =================================================
                 // RETRY
@@ -825,11 +787,9 @@ class _AccountErrorScreen
                   ),
                 ),
 
-
                 const SizedBox(
                   height: 10,
                 ),
-
 
                 // =================================================
                 // LOGOUT
@@ -838,17 +798,11 @@ class _AccountErrorScreen
                 OutlinedButton.icon(
                   onPressed:
                       () async {
-
                     try {
-
-                      await Supabase
+                      await FirebaseAuth
                           .instance
-                          .client
-                          .auth
                           .signOut();
-
                     } catch (e) {
-
                       debugPrint(
                         'Logout error: $e',
                       );
