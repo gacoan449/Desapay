@@ -1,22 +1,18 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+// =====================================================================
+// FILE: lib/services/auth_service.dart
+// =====================================================================
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// ===============================================================
 /// KONTRAK LAYANAN AUTENTIKASI DESAPAY
-/// ===============================================================
-///
-/// Versi ini sudah menggunakan Supabase Auth.
-/// Tidak lagi menggunakan:
-/// - FirebaseAuth
-/// - FirebaseFirestore
-/// - Firebase User
-/// - Firebase UserCredential
-/// - FirebaseAuthException
 /// ===============================================================
 
 abstract class IAuthService {
   User? get currentUser;
 
-  Stream<AuthState> get authStateChanges;
+  Stream<User?> get authStateChanges;
 
   Future<String?> login({
     required String email,
@@ -41,23 +37,41 @@ abstract class IAuthService {
 
   Future<void> logout();
 
-  Future<String?> sendPhoneOtp({
+  Future<void> verifyPhoneNumber({
     required String phoneNumber,
+    required Function(
+      PhoneAuthCredential,
+    ) verificationCompleted,
+    required Function(
+      FirebaseAuthException,
+    ) verificationFailed,
+    required Function(
+      String,
+      int?,
+    ) codeSent,
+    required Function(
+      String,
+    ) codeAutoRetrievalTimeout,
   });
 
-  Future<String?> verifyPhoneOtp({
-    required String phoneNumber,
+  Future<UserCredential?> signInWithPhoneNumber({
+    required String verificationId,
     required String smsCode,
   });
 }
 
+
 /// ===============================================================
-/// IMPLEMENTASI SUPABASE AUTH DESAPAY
+/// IMPLEMENTASI FIREBASE AUTHENTICATION DESAPAY
 /// ===============================================================
 
 class AuthService implements IAuthService {
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
+  final FirebaseAuth _auth =
+      FirebaseAuth.instance;
+
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance;
+
 
   // ===============================================================
   // CURRENT USER
@@ -65,33 +79,17 @@ class AuthService implements IAuthService {
 
   @override
   User? get currentUser =>
-      _supabase.auth.currentUser;
+      _auth.currentUser;
+
 
   // ===============================================================
   // AUTH STATE
   // ===============================================================
 
   @override
-  Stream<AuthState> get authStateChanges =>
-      _supabase.auth.onAuthStateChange;
+  Stream<User?> get authStateChanges =>
+      _auth.authStateChanges();
 
-  // ===============================================================
-  // FORMAT NOMOR INDONESIA
-  // ===============================================================
-
-  String _formatPhone(String phone) {
-    String formatted =
-        phone.trim().replaceAll(' ', '');
-
-    if (formatted.startsWith('0')) {
-      formatted =
-          '+62${formatted.substring(1)}';
-    } else if (!formatted.startsWith('+')) {
-      formatted = '+$formatted';
-    }
-
-    return formatted;
-  }
 
   // ===============================================================
   // LOGIN
@@ -102,47 +100,62 @@ class AuthService implements IAuthService {
     required String email,
     required String password,
   }) async {
-    final emailTrim =
+    final String emailTrim =
         email.trim();
 
-    final passwordTrim =
+    final String passwordTrim =
         password.trim();
 
     if (emailTrim.isEmpty ||
         passwordTrim.isEmpty) {
-      return 'Email dan password wajib diisi.';
+      return "Email dan password wajib diisi.";
     }
 
     try {
-      await _supabase.auth.signInWithPassword(
+      final UserCredential credential =
+          await _auth.signInWithEmailAndPassword(
         email: emailTrim,
         password: passwordTrim,
       );
 
+      if (credential.user == null) {
+        return "Login gagal. Data sesi pengguna tidak ditemukan.";
+      }
+
       return null;
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       switch (e.code) {
-        case 'invalid_credentials':
-          return 'Email atau password salah. Silakan periksa kembali.';
+        case "user-not-found":
+        case "invalid-credential":
+          return "Email atau password salah. Silakan periksa kembali.";
 
-        case 'email_not_confirmed':
-          return 'Email Anda belum dikonfirmasi. Silakan cek email terlebih dahulu.';
+        case "wrong-password":
+          return "Password yang Anda masukkan salah.";
 
-        case 'user_not_found':
-          return 'Akun tidak ditemukan.';
+        case "invalid-email":
+          return "Format alamat email tidak valid.";
 
-        case 'user_banned':
-          return 'Akun Anda telah dinonaktifkan oleh administrator.';
+        case "user-disabled":
+          return "Akun Anda telah dinonaktifkan oleh administrator.";
+
+        case "too-many-requests":
+          return "Terlalu banyak percobaan login. Silakan coba lagi nanti.";
+
+        case "network-request-failed":
+          return "Koneksi internet terputus. Periksa jaringan Anda.";
+
+        case "operation-not-allowed":
+          return "Metode login email/password belum diaktifkan.";
 
         default:
-          return e.message.isNotEmpty
-              ? e.message
-              : 'Terjadi kegagalan saat masuk akun.';
+          return e.message ??
+              "Terjadi kegagalan saat masuk akun.";
       }
     } catch (_) {
-      return 'Terjadi kesalahan sistem saat memproses login.';
+      return "Terjadi kesalahan sistem saat memproses login.";
     }
   }
+
 
   // ===============================================================
   // REGISTER
@@ -155,150 +168,210 @@ class AuthService implements IAuthService {
     required String phone,
     required String password,
   }) async {
-    final namaTrim =
+    User? user;
+
+    final String namaTrim =
         nama.trim();
 
-    final emailTrim =
+    final String emailTrim =
         email.trim();
 
-    final phoneInput =
+    final String phoneInput =
         phone.trim();
 
-    final passwordTrim =
+    final String passwordTrim =
         password.trim();
 
+    // -------------------------------------------------------------
+    // VALIDASI
+    // -------------------------------------------------------------
+
     if (namaTrim.isEmpty) {
-      return 'Nama wajib diisi.';
+      return "Nama wajib diisi.";
     }
 
     if (emailTrim.isEmpty) {
-      return 'Email wajib diisi.';
+      return "Email wajib diisi.";
     }
 
     if (phoneInput.isEmpty) {
-      return 'Nomor handphone wajib diisi.';
+      return "Nomor handphone wajib diisi.";
     }
 
     if (passwordTrim.length < 6) {
-      return 'Password minimal 6 karakter.';
+      return "Password minimal 6 karakter.";
     }
 
     try {
-      final formattedPhone =
-          _formatPhone(phoneInput);
+      // ===========================================================
+      // FORMAT NOMOR INDONESIA
+      // ===========================================================
 
-      // =========================================================
-      // SUPABASE AUTH
-      // =========================================================
+      String formattedPhone =
+          phoneInput
+              .replaceAll(
+                ' ',
+                '',
+              );
 
-      final response =
-          await _supabase.auth.signUp(
+      if (formattedPhone.startsWith("0")) {
+        formattedPhone =
+            "+62${formattedPhone.substring(1)}";
+      } else if (!formattedPhone.startsWith("+")) {
+        if (formattedPhone.startsWith("62")) {
+          formattedPhone =
+              "+$formattedPhone";
+        } else {
+          formattedPhone =
+              "+$formattedPhone";
+        }
+      }
+
+      // ===========================================================
+      // FIREBASE AUTH
+      // ===========================================================
+
+      final UserCredential credential =
+          await _auth
+              .createUserWithEmailAndPassword(
         email: emailTrim,
         password: passwordTrim,
-        data: {
-          'nama': namaTrim,
-          'phone': formattedPhone,
-        },
       );
 
-      final user =
-          response.user;
+      user = credential.user;
 
       if (user == null) {
-        return 'Gagal membuat akun pengguna.';
+        return "Gagal membuat akun pengguna.";
       }
 
-      // =========================================================
-      // PROFILE / USERS
-      // =========================================================
-      //
-      // Data akun disimpan di tabel public.users.
-      //
-      // Pastikan tabel users memiliki kolom:
-      //
-      // id
-      // uid
-      // nama
-      // email
-      // phone
-      // balance
-      // poin
-      // member
-      // fotoProfil
-      // fotoKtp
-      // fotoSelfie
-      // kycStatus
-      // status
-      // role
-      // createdAt
-      // updatedAt
-      //
-      // =========================================================
+      // ===========================================================
+      // DISPLAY NAME
+      // ===========================================================
 
-      try {
-        await _supabase
-            .from('users')
-            .upsert({
-          'id': user.id,
-          'uid': user.id,
-          'nama': namaTrim,
-          'email': emailTrim,
-          'phone': formattedPhone,
-          'balance': 0,
-          'poin': 0,
-          'member': 'Silver',
-          'fotoProfil': '',
-          'fotoKtp': '',
-          'fotoSelfie': '',
-          'kycStatus': 'BELUM',
-          'status': 'Aktif',
-          'role': 'user',
-          'createdAt':
-              DateTime.now().toIso8601String(),
-          'updatedAt':
-              DateTime.now().toIso8601String(),
-        });
-      } catch (e) {
-        return 'Akun berhasil dibuat, tetapi data profil gagal disimpan: $e';
-      }
+      await user.updateDisplayName(
+        namaTrim,
+      );
 
-      // =========================================================
-      // EMAIL CONFIRMATION
-      // =========================================================
+      // ===========================================================
+      // FIRESTORE USER
+      // ===========================================================
       //
-      // Jika Supabase Email Confirmation aktif,
-      // user perlu konfirmasi email.
+      // Struktur pengguna:
       //
-      // =========================================================
+      // users/{uid}
+      //
+      // balance = saldo utama DesaPay.
+      //
+      // role = user
+      // ===========================================================
 
-      if (response.session == null) {
-        return 'EMAIL_CONFIRMATION_REQUIRED';
-      }
+      await _firestore
+          .collection("users")
+          .doc(user.uid)
+          .set({
+        "uid": user.uid,
+
+        "nama": namaTrim,
+
+        "name": namaTrim,
+
+        "displayName": namaTrim,
+
+        "email": emailTrim,
+
+        "phone": formattedPhone,
+
+        "balance": 0,
+
+        "poin": 0,
+
+        "member": "Silver",
+
+        "role": "user",
+
+        "fotoProfil": "",
+
+        "fotoKtp": "",
+
+        "fotoSelfie": "",
+
+        "photoUrl": "",
+
+        "ktpUrl": "",
+
+        "selfieUrl": "",
+
+        "kycStatus": "BELUM",
+
+        "status": "Aktif",
+
+        "createdAt":
+            FieldValue.serverTimestamp(),
+
+        "updatedAt":
+            FieldValue.serverTimestamp(),
+      });
 
       return null;
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
+      // ==========================================================
+      // ROLLBACK AUTH
+      // ==========================================================
+
+      if (user != null) {
+        try {
+          await user.delete();
+        } catch (_) {}
+      }
+
       switch (e.code) {
-        case 'user_already_exists':
-          return 'Alamat email tersebut sudah terdaftar.';
+        case "email-already-in-use":
+          return "Alamat email tersebut sudah terdaftar.";
 
-        case 'email_exists':
-          return 'Alamat email tersebut sudah terdaftar.';
+        case "weak-password":
+          return "Keamanan password terlalu lemah.";
 
-        case 'weak_password':
-          return 'Keamanan password terlalu lemah.';
+        case "invalid-email":
+          return "Format alamat email tidak valid.";
 
-        case 'invalid_credentials':
-          return 'Data pendaftaran tidak valid.';
+        case "operation-not-allowed":
+          return "Metode login email/password belum diaktifkan.";
+
+        case "network-request-failed":
+          return "Koneksi internet terputus. Periksa jaringan Anda.";
 
         default:
-          return e.message.isNotEmpty
-              ? e.message
-              : 'Terjadi kegagalan saat pendaftaran.';
+          return e.message ??
+              "Terjadi kegagalan saat pendaftaran.";
       }
+    } on FirebaseException catch (e) {
+      // ==========================================================
+      // ROLLBACK AUTH JIKA FIRESTORE GAGAL
+      // ==========================================================
+
+      if (user != null) {
+        try {
+          await user.delete();
+        } catch (_) {}
+      }
+
+      return "Gagal menyimpan data akun: "
+          "${e.message ?? e.code}";
     } catch (e) {
-      return 'Gagal membuat akun: $e';
+      // ==========================================================
+      // ROLLBACK AUTH JIKA TERJADI ERROR LAIN
+      // ==========================================================
+
+      if (user != null) {
+        try {
+          await user.delete();
+        } catch (_) {}
+      }
+
+      return "Gagal menyimpan data akun: $e";
     }
   }
+
 
   // ===============================================================
   // RESET PASSWORD
@@ -308,27 +381,39 @@ class AuthService implements IAuthService {
   Future<String?> forgotPassword(
     String email,
   ) async {
-    final emailTrim =
+    final String emailTrim =
         email.trim();
 
     if (emailTrim.isEmpty) {
-      return 'Email wajib diisi.';
+      return "Email wajib diisi.";
     }
 
     try {
-      await _supabase.auth.resetPasswordForEmail(
-        emailTrim,
+      await _auth.sendPasswordResetEmail(
+        email: emailTrim,
       );
 
       return null;
-    } on AuthException catch (e) {
-      return e.message.isNotEmpty
-          ? e.message
-          : 'Gagal mengirimkan email reset password.';
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "user-not-found":
+          return "Email tidak terdaftar dalam sistem DesaPay.";
+
+        case "invalid-email":
+          return "Format alamat email tidak valid.";
+
+        case "network-request-failed":
+          return "Koneksi internet terputus. Periksa jaringan Anda.";
+
+        default:
+          return e.message ??
+              "Gagal mengirimkan email reset password.";
+      }
     } catch (_) {
-      return 'Terjadi kesalahan sistem saat meminta reset password.';
+      return "Terjadi kesalahan sistem saat meminta reset password.";
     }
   }
+
 
   // ===============================================================
   // CHANGE PASSWORD
@@ -339,96 +424,99 @@ class AuthService implements IAuthService {
     required String currentPassword,
     required String newPassword,
   }) async {
-    final user =
-        _supabase.auth.currentUser;
+    final User? user =
+        _auth.currentUser;
 
     if (user == null) {
-      return 'Sesi akun tidak ditemukan. Silakan login kembali.';
+      return "Sesi akun tidak ditemukan. Silakan login kembali.";
     }
 
-    final newPasswordTrim =
+    final String newPasswordTrim =
         newPassword.trim();
 
     if (newPasswordTrim.length < 6) {
-      return 'Password baru minimal 6 karakter.';
+      return "Password baru minimal 6 karakter.";
+    }
+
+    final String? email =
+        user.email;
+
+    if (email == null ||
+        email.isEmpty) {
+      return "Email akun tidak tersedia.";
     }
 
     try {
-      // ===========================================================
-      // VERIFIKASI PASSWORD LAMA
-      // ===========================================================
-      //
-      // Supabase tidak menyediakan reauthenticateWithCredential()
-      // seperti Firebase.
-      //
-      // Kita verifikasi password lama dengan login ulang.
-      //
-      // ===========================================================
+      // ==========================================================
+      // RE-AUTHENTICATION
+      // ==========================================================
 
-      final email =
-          user.email;
-
-      if (email == null ||
-          email.isEmpty) {
-        return 'Email akun tidak tersedia.';
-      }
-
-      await _supabase.auth.signInWithPassword(
+      final AuthCredential credential =
+          EmailAuthProvider.credential(
         email: email,
         password: currentPassword.trim(),
       );
 
-      // ===========================================================
-      // UPDATE PASSWORD
-      // ===========================================================
+      await user.reauthenticateWithCredential(
+        credential,
+      );
 
-      await _supabase.auth.updateUser(
-        UserAttributes(
-          password: newPasswordTrim,
+      // ==========================================================
+      // UPDATE PASSWORD
+      // ==========================================================
+
+      await user.updatePassword(
+        newPasswordTrim,
+      );
+
+      // ==========================================================
+      // UPDATE SECURITY TIMESTAMP
+      // ==========================================================
+
+      await _firestore
+          .collection("users")
+          .doc(user.uid)
+          .set(
+        {
+          "securityUpdatedAt":
+              FieldValue.serverTimestamp(),
+
+          "updatedAt":
+              FieldValue.serverTimestamp(),
+        },
+        SetOptions(
+          merge: true,
         ),
       );
 
-      // ===========================================================
-      // UPDATE PROFILE
-      // ===========================================================
-
-      try {
-        await _supabase
-            .from('users')
-            .update({
-          'securityUpdatedAt':
-              DateTime.now().toIso8601String(),
-          'updatedAt':
-              DateTime.now().toIso8601String(),
-        })
-            .eq(
-          'id',
-          user.id,
-        );
-      } catch (_) {
-        // Password sudah berhasil diubah.
-        // Kegagalan update profile tidak membatalkan
-        // perubahan password.
-      }
-
       return null;
-    } on AuthException catch (e) {
-      final code =
-          e.code.toLowerCase();
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "wrong-password":
+        case "invalid-credential":
+          return "Kata sandi lama salah.";
 
-      if (code.contains('invalid') ||
-          code.contains('credential') ||
-          code.contains('password')) {
-        return 'Kata sandi lama salah.';
+        case "weak-password":
+          return "Kata sandi baru terlalu lemah.";
+
+        case "requires-recent-login":
+          return "Sesi keamanan telah kedaluwarsa. Silakan login kembali.";
+
+        case "user-disabled":
+          return "Akun Anda telah dinonaktifkan.";
+
+        case "network-request-failed":
+          return "Koneksi internet terputus.";
+
+        default:
+          return e.message ??
+              "Gagal mengubah kata sandi.";
       }
-
-      return e.message.isNotEmpty
-          ? e.message
-          : 'Gagal mengubah kata sandi.';
     } catch (_) {
-      return 'Terjadi kesalahan saat mengubah kata sandi.';
+      return "Terjadi kesalahan saat mengubah kata sandi.";
     }
   }
+
 
   // ===============================================================
   // LOGOUT
@@ -436,76 +524,121 @@ class AuthService implements IAuthService {
 
   @override
   Future<void> logout() async {
-    await _supabase.auth.signOut();
+    await _auth.signOut();
   }
 
+
   // ===============================================================
-  // KIRIM OTP TELEPON
-  // ===============================================================
-  //
-  // Pengganti Firebase verifyPhoneNumber().
-  //
+  // PHONE AUTH
   // ===============================================================
 
   @override
-  Future<String?> sendPhoneOtp({
+  Future<void> verifyPhoneNumber({
     required String phoneNumber,
+    required Function(
+      PhoneAuthCredential,
+    ) verificationCompleted,
+    required Function(
+      FirebaseAuthException,
+    ) verificationFailed,
+    required Function(
+      String,
+      int?,
+    ) codeSent,
+    required Function(
+      String,
+    ) codeAutoRetrievalTimeout,
   }) async {
-    final phone =
-        _formatPhone(phoneNumber);
+    String formattedPhone =
+        phoneNumber
+            .trim()
+            .replaceAll(
+              ' ',
+              '',
+            );
 
-    if (phone.length < 10) {
-      return 'Nomor handphone tidak valid.';
+    if (formattedPhone.startsWith("0")) {
+      formattedPhone =
+          "+62${formattedPhone.substring(1)}";
+    } else if (!formattedPhone.startsWith("+")) {
+      if (formattedPhone.startsWith("62")) {
+        formattedPhone =
+            "+$formattedPhone";
+      } else {
+        formattedPhone =
+            "+$formattedPhone";
+      }
     }
 
-    try {
-      await _supabase.auth.signInWithOtp(
-        phone: phone,
+    if (formattedPhone.length < 10) {
+      throw FirebaseAuthException(
+        code: "invalid-phone-number",
+        message:
+            "Nomor handphone tidak valid.",
       );
-
-      return null;
-    } on AuthException catch (e) {
-      return e.message.isNotEmpty
-          ? e.message
-          : 'Gagal mengirim kode OTP.';
-    } catch (_) {
-      return 'Terjadi kesalahan saat mengirim kode OTP.';
     }
+
+    await _auth.verifyPhoneNumber(
+      phoneNumber: formattedPhone,
+
+      verificationCompleted:
+          verificationCompleted,
+
+      verificationFailed:
+          verificationFailed,
+
+      codeSent:
+          codeSent,
+
+      codeAutoRetrievalTimeout:
+          codeAutoRetrievalTimeout,
+
+      timeout:
+          const Duration(
+        seconds: 60,
+      ),
+    );
   }
 
+
   // ===============================================================
-  // VERIFIKASI OTP TELEPON
+  // SIGN IN WITH PHONE OTP
   // ===============================================================
 
   @override
-  Future<String?> verifyPhoneOtp({
-    required String phoneNumber,
+  Future<UserCredential?>
+      signInWithPhoneNumber({
+    required String verificationId,
     required String smsCode,
   }) async {
-    final phone =
-        _formatPhone(phoneNumber);
-
-    final code =
+    final String code =
         smsCode.trim();
 
-    if (code.isEmpty) {
-      return 'Kode OTP wajib diisi.';
-    }
-
-    try {
-      await _supabase.auth.verifyOTP(
-        type: OtpType.sms,
-        phone: phone,
-        token: code,
+    if (verificationId.trim().isEmpty) {
+      throw FirebaseAuthException(
+        code: "invalid-verification-id",
+        message:
+            "Verification ID tidak valid.",
       );
-
-      return null;
-    } on AuthException catch (e) {
-      return e.message.isNotEmpty
-          ? e.message
-          : 'Kode OTP tidak valid.';
-    } catch (_) {
-      return 'Terjadi kesalahan saat memverifikasi OTP.';
     }
+
+    if (code.isEmpty) {
+      throw FirebaseAuthException(
+        code: "invalid-verification-code",
+        message:
+            "Kode OTP wajib diisi.",
+      );
+    }
+
+    final PhoneAuthCredential credential =
+        PhoneAuthProvider.credential(
+      verificationId:
+          verificationId.trim(),
+      smsCode: code,
+    );
+
+    return _auth.signInWithCredential(
+      credential,
+    );
   }
 }
