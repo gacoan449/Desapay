@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/payment_channel.dart';
 
 class TriPayInvoiceResult {
   final bool isSukses;
@@ -105,15 +106,27 @@ class TriPayService implements ITriPayService {
     }
   }
 
-  /// Compatibility alias for existing callers that use the older capitalization.
-  Future<List<PaymentChannel>> getPaymentChannels() async => <PaymentChannel>[];
+  Future<List<PaymentChannel>> getPaymentChannels() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendBaseUrl/api/payment/channels'),
+        headers: const {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) return <PaymentChannel>[];
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['data'] is List) {
+        return (decoded['data'] as List)
+            .whereType<Map>()
+            .map((item) => PaymentChannel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+      return <PaymentChannel>[];
+    } catch (_) {
+      return <PaymentChannel>[];
+    }
+  }
 }
 
+/// Backward-compatible class name used by existing screens.
 class TripayService extends TriPayService {}
-
-class PaymentChannel {
-  final String code;
-  final String name;
-
-  const PaymentChannel({required this.code, required this.name});
-}
