@@ -22,11 +22,10 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == "WAITING"
-        && request.resource.data.buyer_sku_code is string
-        && request.resource.data.buyer_sku_code.size() > 0
+        && ((request.resource.data.buyer_sku_code is string && request.resource.data.buyer_sku_code.size() > 0) || (request.resource.data.sku is string && request.resource.data.sku.size() > 0))
         && request.resource.data.customerNo is string
         && request.resource.data.customerNo.size() > 0
-        && request.resource.data.keys().hasOnly(["requestId", "uid", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "amount", "sellingPrice", "cost", "margin", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt", "updatedAt"]);
+        && request.resource.data.keys().hasOnly(["requestId", "transactionId", "uid", "type", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "operator", "amount", "sellingPrice", "cost", "margin", "paymentMethod", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt", "updatedAt"]);
       allow update, delete: if false;
     }
 
