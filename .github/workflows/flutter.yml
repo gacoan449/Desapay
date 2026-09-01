@@ -47,6 +47,9 @@ jobs:
       - name: Generate Android Platform
         run: |
           if [ ! -d "android" ]; then flutter create . --platforms=android; fi
+          # flutter create generates a default widget_test.dart when creating the platform.
+          # DesaPay does not use that template test, and its MyApp reference does not match the app root.
+          rm -f test/widget_test.dart
       - name: Generate Launcher Icons
         run: dart run flutter_launcher_icons || echo "Launcher icons dilewati"
       - name: Clean Flutter
