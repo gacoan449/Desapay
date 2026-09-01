@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 
-// PENGATURAN TEMA & WIDGET MODULAR (CTO STANDARD)
 import '../../config/warna.dart';
-import '../../widgets/menu_item.dart'; // Memuat MenuItem dan CustomBounce yang sudah distandarisasi
-
-// JALUR IMPORT GLOBAL KE SCREENS LAYANAN PPOB
+import '../../widgets/menu_item.dart';
+import '../ewallet/ewallet_screen.dart';
 import '../paket/paket_screen.dart';
 import '../pln/pln_screen.dart';
-import '../ewallet/ewallet_screen.dart';
+import '../pascabayar/pascabayar_screen.dart';
 import '../pulsa/pulsa_screen.dart';
-import '../pascabayar_screen.dart';
 
-// =========================================================================
-// DATA CLASS: STRONG-TYPED MODEL UNTUK ITEM LAYANAN (ANTI RUNTIME ERROR)
-// =========================================================================
 class DataLayanan {
   final IconData icon;
   final String title;
@@ -30,9 +24,6 @@ class DataLayanan {
   });
 }
 
-// =========================================================================
-// MAIN SCREEN WINDOWS: HALAMAN SEMUA LAYANAN DESAPAY
-// =========================================================================
 class LayananScreen extends StatefulWidget {
   const LayananScreen({super.key});
 
@@ -43,8 +34,6 @@ class LayananScreen extends StatefulWidget {
 class _LayananScreenState extends State<LayananScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
-
-  // Global Keys untuk auto-scroll ketika tab ditekan (Sticky Tabs)
   final GlobalKey _keyKategori1 = GlobalKey();
   final GlobalKey _keyKategori2 = GlobalKey();
   final GlobalKey _keyKategori3 = GlobalKey();
@@ -62,7 +51,6 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  /// Menangani pergerakan scroll reaktif berdasarkan tab yang dipilih
   void _scrollToSection(GlobalKey key) {
     final context = key.currentContext;
     if (context != null) {
@@ -70,7 +58,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
         context,
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
-        alignment: 0.05, // Memberikan sedikit jarak (offset) dari ujung atas layar
+        alignment: 0.05,
       );
     }
   }
@@ -83,15 +71,11 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
         elevation: 0,
         backgroundColor: WarnaDesaPay.primary,
         foregroundColor: Colors.white,
-        title: const Text(
-          "Semua Kategori",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3),
-        ),
+        title: const Text("Semua Kategori", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.3)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        // STICKY TABS PLATFORM (STYLE FINTECH PREMIUM)
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
@@ -100,7 +84,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
             child: TabBar(
               controller: _tabController,
               indicatorColor: WarnaDesaPay.primary,
-              indicatorWeight: 3, // Indikator lebih tebal & tegas
+              indicatorWeight: 3,
               labelColor: WarnaDesaPay.primary,
               unselectedLabelColor: WarnaDesaPay.textSub,
               labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
@@ -126,9 +110,6 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ==========================================
-            // KATEGORI 1: PULSA & DATA
-            // ==========================================
             _buildSectionKategori(
               key: _keyKategori1,
               icon: Icons.phone_iphone_rounded,
@@ -148,10 +129,6 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
                 const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota AXIS", color: Color(0xFF7E22CE), target: PaketScreen()),
               ],
             ),
-
-            // ==========================================
-            // KATEGORI 2: E-WALLET
-            // ==========================================
             _buildSectionKategori(
               key: _keyKategori2,
               icon: Icons.account_balance_wallet_rounded,
@@ -168,10 +145,6 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
                 const DataLayanan(icon: Icons.wallet_rounded, title: "GOPAY", color: Color(0xFF0EA5E9), target: EwalletScreen(jenisEwallet: "GoPay")),
               ],
             ),
-
-            // ==========================================
-            // KATEGORI 3: BILLER PPOB
-            // ==========================================
             _buildSectionKategori(
               key: _keyKategori3,
               icon: Icons.receipt_long_rounded,
@@ -190,13 +163,7 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
     );
   }
 
-  /// Helper untuk membangun blok kontainer masing-masing kategori
-  Widget _buildSectionKategori({
-    required GlobalKey key,
-    required IconData icon,
-    required String judul,
-    required List<DataLayanan> items,
-  }) {
+  Widget _buildSectionKategori({required GlobalKey key, required IconData icon, required String judul, required List<DataLayanan> items}) {
     return Container(
       key: key,
       margin: const EdgeInsets.only(bottom: 24),
@@ -205,31 +172,24 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: WarnaDesaPay.shadow.withOpacity(0.06), 
-            blurRadius: 14, 
-            spreadRadius: 0, 
+            color: WarnaDesaPay.shadow.withOpacity(0.06),
+            blurRadius: 14,
             offset: const Offset(0, 6),
-          )
+          ),
         ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // JUDUL KATEGORI
           Row(
             children: [
               Icon(icon, size: 22, color: WarnaDesaPay.primary),
               const SizedBox(width: 10),
-              Text(
-                judul,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain, letterSpacing: 0.2),
-              ),
+              Text(judul, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: WarnaDesaPay.textMain, letterSpacing: 0.2)),
             ],
           ),
           const SizedBox(height: 20),
-          
-          // GRID MENU LAYANAN MODULAR
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -237,13 +197,11 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
               crossAxisCount: 4,
               crossAxisSpacing: 12,
               mainAxisSpacing: 16,
-              childAspectRatio: 0.75, // Disesuaikan agar teks 2 baris tidak terpotong
+              childAspectRatio: 0.75,
             ),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final data = items[index];
-
-              // MENGGUNAKAN KOMPONEN `MenuItem` YANG SUDAH KITA STANDARISASI
               return MenuItem(
                 icon: data.icon,
                 title: data.title,
