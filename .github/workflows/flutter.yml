@@ -12,38 +12,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
-
     steps:
-      # ============================================================
-      # 1. CHECKOUT
-      # ============================================================
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # ============================================================
-      # 2. JAVA
-      # ============================================================
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
-
-      # ============================================================
-      # 3. FLUTTER
-      # ============================================================
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
-      # ============================================================
-      # 4. CEK STRUKTUR SOURCE
-      # ============================================================
       - name: Check Flutter source tree
         run: |
           test -f pubspec.yaml
@@ -51,63 +34,37 @@ jobs:
           test -f lib/main.dart
           test -d functions
           test -f functions/index.js
+          test -f functions/bootstrap.js
+          test -f functions/transactionFlow.js
+          test -f functions/notificationBridge.js
           test -f functions/package.json
           test -f firebase.json
-          echo "Source tree valid."
-
-      # ============================================================
-      # 5. INSTALL FLUTTER DEPENDENCIES
-      # ============================================================
+          test -f firestore.rules
+          test -f firestore.indexes.json
+          test -f storage.rules
       - name: Install Flutter dependencies
-        run: |
-          flutter pub get
-
-      # ============================================================
-      # 6. BUAT ANDROID PLATFORM SEMENTARA
-      # ============================================================
+        run: flutter pub get
       - name: Generate Android Platform
         run: |
-          if [ ! -d "android" ]; then
-            echo "Folder android tidak ada."
-            echo "Membuat Android platform untuk proses build APK..."
-            flutter create . --platforms=android
-          else
-            echo "Folder android sudah tersedia."
-          fi
-
-      # ============================================================
-      # 7. GENERATE LAUNCHER ICON
-      # ============================================================
+          if [ ! -d "android" ]; then flutter create . --platforms=android; fi
       - name: Generate Launcher Icons
-        run: |
-          dart run flutter_launcher_icons || echo "Launcher icons dilewati"
-
-      # ============================================================
-      # 8. CLEAN
-      # ============================================================
+        run: dart run flutter_launcher_icons || echo "Launcher icons dilewati"
       - name: Clean Flutter
         run: |
           flutter clean
           flutter pub get
-
-      # ============================================================
-      # 9. FIREBASE FUNCTIONS
-      #    HANYA VERIFIKASI KODE BACKEND
-      # ============================================================
       - name: Install Firebase Functions dependencies
         working-directory: functions
-        run: |
-          npm install
-
-      - name: Verify Firebase Functions
+        run: npm install
+      - name: Verify Firebase Functions JavaScript
         working-directory: functions
         run: |
           node --check index.js
-
-      # ============================================================
-      # 10. BUILD APK
-      #    GITHUB SECRETS -> DART DEFINE -> FIREBASE
-      # ============================================================
+          node --check bootstrap.js
+          node --check transactionFlow.js
+          node --check notificationBridge.js
+      - name: Analyze Flutter
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Build APK Release
         run: |
           flutter build apk --release --no-tree-shake-icons \
@@ -116,21 +73,10 @@ jobs:
             --dart-define=FIREBASE_SENDER_ID="${{ secrets.FIREBASE_SENDER_ID }}" \
             --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
             --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.STORAGE_BUCKET }}"
-
-      # ============================================================
-      # 11. CHECK APK
-      # ============================================================
       - name: Check APK
         run: |
-          echo "=== HASIL BUILD ==="
           ls -lh build/app/outputs/flutter-apk/
-
-          echo "=== UKURAN APK ==="
           du -h build/app/outputs/flutter-apk/app-release.apk
-
-      # ============================================================
-      # 12. UPLOAD APK
-      # ============================================================
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
