@@ -5,9 +5,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
     function isAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
     match /users/{uid} {
@@ -19,64 +17,23 @@ service cloud.firestore {
 
     match /transaction_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "WAITING"
-        && ((request.resource.data.buyer_sku_code is string && request.resource.data.buyer_sku_code.size() > 0) || (request.resource.data.sku is string && request.resource.data.sku.size() > 0))
-        && request.resource.data.customerNo is string
-        && request.resource.data.customerNo.size() > 0
-        && request.resource.data.keys().hasOnly(["requestId", "transactionId", "uid", "type", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "operator", "amount", "sellingPrice", "cost", "margin", "paymentMethod", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt", "updatedAt"]);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.status == "WAITING" && ((request.resource.data.buyer_sku_code is string && request.resource.data.buyer_sku_code.size() > 0) || (request.resource.data.sku is string && request.resource.data.sku.size() > 0)) && request.resource.data.customerNo is string && request.resource.data.customerNo.size() > 0 && request.resource.data.keys().hasOnly(["requestId", "transactionId", "uid", "type", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "operator", "amount", "sellingPrice", "cost", "margin", "paymentMethod", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt", "updatedAt"]);
       allow update, delete: if false;
     }
 
-    match /balance_ledger/{ledgerId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if false;
-    }
-    match /mutasi_saldo/{mutasiId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if false;
-    }
-    match /topup_transactions/{transactionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if false;
-    }
-    match /transactions/{transactionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if false;
-    }
-    match /notifications/{notificationId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if false;
-    }
-    match /products/{productId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-    match /kyc/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
-      allow create, update, delete: if false;
-    }
-    match /promos/{promoId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-    match /settings/{settingId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-    match /devices/{deviceId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
-    }
-    match /bank_mutations/{mutationId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
-    }
-    match /announcements/{announcementId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
+    match /balance_ledger/{ledgerId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
+    match /mutasi_saldo/{mutasiId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
+    match /topup_transactions/{transactionId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
+    match /transactions/{transactionId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
+    match /notifications/{notificationId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
+    match /notifikasi/{notificationId} { allow read: if isAdmin() || (signedIn() && (resource.data.uid == request.auth.uid || resource.data.uid == "global")); allow create, update, delete: if false; }
+    match /products/{productId} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    match /kyc/{uid} { allow read: if isOwner(uid) || isAdmin(); allow create, update, delete: if false; }
+    match /promos/{promoId} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    match /settings/{settingId} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    match /devices/{deviceId} { allow read: if isAdmin(); allow create, update, delete: if isAdmin(); }
+    match /bank_mutations/{mutationId} { allow read: if isAdmin(); allow create, update, delete: if isAdmin(); }
+    match /announcements/{announcementId} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
     match /{document=**} { allow read, write: if false; }
   }
 }
