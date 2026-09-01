@@ -63,9 +63,6 @@ class MetodePembayaranScreen extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ==========================================
-          // 1. RINGKASAN NOMINAL TOP UP PREMIUM
-          // ==========================================
           Container(
             width: double.infinity,
             color: Colors.white,
@@ -73,9 +70,9 @@ class MetodePembayaranScreen extends StatelessWidget {
             decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
-                  color: WarnaDesaPay.shadow.withOpacity(0.04), 
-                  blurRadius: 10, 
-                  offset: const Offset(0, 4)
+                  color: WarnaDesaPay.shadow.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 )
               ],
             ),
@@ -93,9 +90,7 @@ class MetodePembayaranScreen extends StatelessWidget {
               ],
             ),
           ),
-          
           const SizedBox(height: 24),
-          
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text(
@@ -103,24 +98,17 @@ class MetodePembayaranScreen extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: WarnaDesaPay.textMain),
             ),
           ),
-          
           const SizedBox(height: 12),
-
-          // ==========================================
-          // 2. DAFTAR PAYMENT CHANNEL (REAL-TIME API)
-          // ==========================================
           Expanded(
             child: FutureBuilder<List<PaymentChannel>>(
               future: tripay.getPaymentChannels(),
               builder: (context, snapshot) {
-                // STATE: LOADING
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(color: WarnaDesaPay.primary),
                   );
                 }
 
-                // STATE: ERROR / NO DATA
                 if (snapshot.hasError || !snapshot.hasData) {
                   return Center(
                     child: Column(
@@ -139,25 +127,23 @@ class MetodePembayaranScreen extends StatelessWidget {
                 }
 
                 final channels = snapshot.data ?? [];
-                
-                // STATE: EMPTY LIST
+
                 if (channels.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.payment_off_rounded, size: 54, color: WarnaDesaPay.textSub.withOpacity(0.3)),
+                        Icon(Icons.payment_rounded, size: 54, color: WarnaDesaPay.textSub.withOpacity(0.3)),
                         const SizedBox(height: 16),
                         const Text(
-                          "Belum ada metode pembayaran yang aktif.", 
-                          style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 13)
+                          "Belum ada metode pembayaran yang aktif.",
+                          style: TextStyle(color: WarnaDesaPay.textSub, fontSize: 13),
                         ),
                       ],
                     ),
                   );
                 }
 
-                // STATE: SUCCESS
                 return ListView.builder(
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -182,13 +168,10 @@ class MetodePembayaranScreen extends StatelessWidget {
                       ),
                       child: CustomBounce(
                         onTap: () {
-                          // Mengembalikan nilai channel.code ke layar sebelumnya (Top-Up) 
-                          // untuk digunakan sebagai parameter pembuatan transaksi.
                           Navigator.pop(context, channel.code);
                         },
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          // ICON AVATAR BRAND DENGAN WARNA REPRESENTATIF DYNAMIC
                           leading: Container(
                             width: 46,
                             height: 46,
@@ -198,8 +181,8 @@ class MetodePembayaranScreen extends StatelessWidget {
                             ),
                             alignment: Alignment.center,
                             child: Text(
-                              channel.code.length >= 3 
-                                  ? channel.code.substring(0, 3).toUpperCase() 
+                              channel.code.length >= 3
+                                  ? channel.code.substring(0, 3).toUpperCase()
                                   : channel.code.toUpperCase(),
                               style: TextStyle(color: channelColor, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5),
                             ),
