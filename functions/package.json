@@ -2,6 +2,7 @@
   "name": "functions",
   "description": "Cloud Functions backend DesaPay",
   "private": true,
+  "main": "bootstrap.js",
   "engines": {
     "node": "20"
   },
