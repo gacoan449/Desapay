@@ -1,268 +1,114 @@
 rules_version = '2';
 
 service cloud.firestore {
-
   match /databases/{database}/documents {
-
-    // =========================================================
-    // HELPER
-    // =========================================================
-
     function signedIn() {
       return request.auth != null;
     }
 
     function isOwner(uid) {
-      return signedIn()
-        && request.auth.uid == uid;
+      return signedIn() && request.auth.uid == uid;
     }
 
     function isAdmin() {
       return signedIn()
-        && exists(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.role == "admin";
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
-
-    // =========================================================
-    // USERS
-    // =========================================================
-
     match /users/{uid} {
-
-      // User hanya boleh membaca data dirinya sendiri.
-      // Admin boleh membaca data user untuk kebutuhan dashboard.
       allow read: if isOwner(uid) || isAdmin();
-
-
-      // -------------------------------------------------------
-      // CREATE
-      // -------------------------------------------------------
-
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.balance == 0
         && request.resource.data.poin == 0
         && request.resource.data.member == "Silver"
         && request.resource.data.role == "user";
-
-
-      // -------------------------------------------------------
-      // UPDATE
-      // -------------------------------------------------------
-
-      // Admin boleh update user.
-      //
-      // User biasa hanya boleh mengubah field profil.
-      // Field finansial / privilege tidak boleh disentuh user.
-
       allow update: if isAdmin()
-
-        || (
-          isOwner(uid)
-
-          && request.resource.data.diff(resource.data)
-              .affectedKeys()
-              .hasOnly([
-                "name",
-                "displayName",
-                "photoUrl",
-                "phone",
-                "email",
-                "updatedAt"
-              ])
-        );
-
-
-      // -------------------------------------------------------
-      // DELETE
-      // -------------------------------------------------------
-
-      // Hanya admin.
+        || (isOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "name", "displayName", "photoUrl", "phone", "email", "updatedAt"
+          ]));
       allow delete: if isAdmin();
     }
 
-
-    // =========================================================
-    // BALANCE LEDGER
-    // =========================================================
+    match /transaction_requests/{requestId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "WAITING"
+        && request.resource.data.buyer_sku_code is string
+        && request.resource.data.buyer_sku_code.size() > 0
+        && request.resource.data.customerNo is string
+        && request.resource.data.customerNo.size() > 0
+        && request.resource.data.keys().hasOnly([
+          "requestId", "uid", "sku", "buyer_sku_code", "productName", "category",
+          "brand", "customerNo", "customer_no", "amount", "sellingPrice", "cost", "margin",
+          "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt"
+        ]);
+      allow update, delete: if false;
+    }
 
     match /balance_ledger/{ledgerId} {
-
-      // User hanya boleh melihat ledger miliknya.
-      // Admin boleh melihat seluruh ledger.
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      // Tidak boleh dimanipulasi client.
-      // Penulisan dilakukan oleh backend/Admin SDK.
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if false;
     }
-
-
-    // =========================================================
-    // MUTASI SALDO
-    // =========================================================
 
     match /mutasi_saldo/{mutasiId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      // Tidak boleh dimanipulasi client.
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if false;
     }
-
-
-    // =========================================================
-    // TOP UP TRANSACTIONS
-    // =========================================================
 
     match /topup_transactions/{transactionId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      // Client tidak boleh membuat / mengubah transaksi.
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if false;
     }
-
-
-    // =========================================================
-    // PPOB TRANSACTIONS
-    // =========================================================
 
     match /transactions/{transactionId} {
-
-      allow read: if isAdmin()
-        || (
-          signedIn()
-          && resource.data.uid == request.auth.uid
-        );
-
-      // Client tidak boleh memanipulasi transaksi.
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if false;
     }
 
-
-    // =========================================================
-    // PRODUCTS
-    // =========================================================
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
 
     match /products/{productId} {
-
-      // Produk boleh dibaca user yang sudah login.
       allow read: if signedIn();
-
-      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
-
-    // =========================================================
-    // KYC
-    // =========================================================
-
     match /kyc/{uid} {
-
-      // User hanya boleh membaca KYC miliknya.
-      // Admin boleh membaca untuk proses verifikasi.
       allow read: if isOwner(uid) || isAdmin();
-
-      // Client tidak boleh membuat / mengubah / menghapus KYC.
       allow create, update, delete: if false;
     }
 
-
-    // =========================================================
-    // PROMO
-    // =========================================================
-
     match /promos/{promoId} {
-
       allow read: if signedIn();
-
-      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
-
-
-    // =========================================================
-    // SETTINGS
-    // =========================================================
 
     match /settings/{settingId} {
-
-      // User boleh membaca setting aplikasi.
       allow read: if signedIn();
-
-      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
-
-
-    // =========================================================
-    // DEVICES
-    // =========================================================
 
     match /devices/{deviceId} {
-
-      // Data device adalah data internal.
-      // User biasa tidak boleh membacanya.
       allow read: if isAdmin();
-
-      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
-
-
-    // =========================================================
-    // BANK MUTATIONS
-    // =========================================================
 
     match /bank_mutations/{mutationId} {
-
-      // Data mutasi bank bersifat internal.
       allow read: if isAdmin();
-
-      // Untuk tahap rilis sekarang admin masih diperbolehkan
-      // mengelola data melalui dashboard.
       allow create, update, delete: if isAdmin();
     }
-
-
-    // =========================================================
-    // ANNOUNCEMENTS
-    // =========================================================
 
     match /announcements/{announcementId} {
-
       allow read: if signedIn();
-
-      // Hanya admin.
       allow create, update, delete: if isAdmin();
     }
 
-
-    // =========================================================
-    // DEFAULT DENY
-    // =========================================================
-
-    // Semua collection yang belum didefinisikan di atas
-    // otomatis ditolak.
     match /{document=**} {
       allow read, write: if false;
     }
