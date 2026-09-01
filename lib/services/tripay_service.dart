@@ -3,12 +3,8 @@
 // PENTING:
 // File Flutter TIDAK lagi menyimpan PRIVATE KEY.
 // Pembuatan transaksi harus dilakukan oleh backend/server.
-//
-// Endpoint backend:
-// POST https://DOMAIN-BACKEND-ANDA/api/topup/create
 
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 class TriPayInvoiceResult {
@@ -58,7 +54,6 @@ class TriPayInvoiceResult {
     if (value == null) return null;
     if (value is int) return value;
     if (value is num) return value.toInt();
-
     return int.tryParse(value.toString());
   }
 }
@@ -72,12 +67,7 @@ abstract class ITriPayService {
 }
 
 class TriPayService implements ITriPayService {
-  // GANTI dengan URL backend Anda.
-  //
-  // JANGAN isi dengan URL API TriPay langsung.
-  // API Key + Private Key harus berada di backend.
-  static const String _backendBaseUrl =
-      'https://DOMAIN-BACKEND-ANDA';
+  static const String _backendBaseUrl = 'https://DOMAIN-BACKEND-ANDA';
 
   @override
   Future<TriPayInvoiceResult> buatTagihanClosedPayment({
@@ -86,77 +76,44 @@ class TriPayService implements ITriPayService {
     required int amount,
   }) async {
     if (uid.trim().isEmpty) {
-      return const TriPayInvoiceResult(
-        isSukses: false,
-        pesan: 'Sesi pengguna tidak valid.',
-      );
+      return const TriPayInvoiceResult(isSukses: false, pesan: 'Sesi pengguna tidak valid.');
     }
-
     if (amount < 10000) {
-      return const TriPayInvoiceResult(
-        isSukses: false,
-        pesan: 'Minimal top up adalah Rp 10.000.',
-      );
+      return const TriPayInvoiceResult(isSukses: false, pesan: 'Minimal top up adalah Rp 10.000.');
     }
-
     if (method.trim().isEmpty) {
-      return const TriPayInvoiceResult(
-        isSukses: false,
-        pesan: 'Metode pembayaran belum dipilih.',
-      );
+      return const TriPayInvoiceResult(isSukses: false, pesan: 'Metode pembayaran belum dipilih.');
     }
 
     try {
-      final response = await http
-          .post(
-            Uri.parse('$_backendBaseUrl/api/topup/create'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'uid': uid,
-              'method': method.trim().toUpperCase(),
-              'amount': amount,
-            }),
-          )
-          .timeout(const Duration(seconds: 30));
+      final response = await http.post(
+        Uri.parse('$_backendBaseUrl/api/topup/create'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'uid': uid, 'method': method.trim().toUpperCase(), 'amount': amount}),
+      ).timeout(const Duration(seconds: 30));
 
-      Map<String, dynamic> json;
-
-      try {
-        final decoded = jsonDecode(response.body);
-
-        if (decoded is Map<String, dynamic>) {
-          json = decoded;
-        } else {
-          return const TriPayInvoiceResult(
-            isSukses: false,
-            pesan: 'Respons server tidak valid.',
-          );
-        }
-      } catch (_) {
-        return TriPayInvoiceResult(
-          isSukses: false,
-          pesan:
-              'Server mengembalikan respons tidak valid (${response.statusCode}).',
-        );
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        return const TriPayInvoiceResult(isSukses: false, pesan: 'Respons server tidak valid.');
       }
-
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return TriPayInvoiceResult(
-          isSukses: false,
-          pesan: json['message']?.toString() ??
-              'Gagal membuat tagihan pembayaran.',
-        );
+        return TriPayInvoiceResult(isSukses: false, pesan: decoded['message']?.toString() ?? 'Gagal membuat tagihan pembayaran.');
       }
-
-      return TriPayInvoiceResult.fromJson(json);
+      return TriPayInvoiceResult.fromJson(decoded);
     } catch (_) {
-      return const TriPayInvoiceResult(
-        isSukses: false,
-        pesan: 'Tidak dapat menghubungi server pembayaran.',
-      );
+      return const TriPayInvoiceResult(isSukses: false, pesan: 'Tidak dapat menghubungi server pembayaran.');
     }
   }
+
+  /// Compatibility alias for existing callers that use the older capitalization.
+  Future<List<PaymentChannel>> getPaymentChannels() async => <PaymentChannel>[];
+}
+
+class TripayService extends TriPayService {}
+
+class PaymentChannel {
+  final String code;
+  final String name;
+
+  const PaymentChannel({required this.code, required this.name});
 }
