@@ -4412,3 +4412,281 @@ exports.edpoinTransactionRequest =
       }
     }
   );
+
+
+/*
+|--------------------------------------------------------------------------
+| DESAPAY - PENARIKAN SALDO (ATOMIC + IDEMPOTENT)
+|--------------------------------------------------------------------------
+*/
+
+const WITHDRAWAL_MAX_AMOUNT = 100000000;
+
+function validateWithdrawalDestination(data) {
+  const destinationType = normalizeString(data.destination_type).toUpperCase();
+  const destinationName = normalizeString(data.destination_name);
+  const destinationAccount = normalizeString(data.destination_account);
+  const destinationAccountName = normalizeString(data.destination_account_name);
+
+  if (!["BANK", "E-WALLET"].includes(destinationType)) {
+    throw new HttpsError("invalid-argument", "Jenis tujuan harus BANK atau E-WALLET.");
+  }
+  if (!destinationName || destinationName.length > 100 ||
+      !destinationAccount || destinationAccount.length > 100 ||
+      !destinationAccountName || destinationAccountName.length > 100) {
+    throw new HttpsError("invalid-argument", "Nama layanan, nomor rekening/akun, dan nama pemilik wajib diisi dengan benar.");
+  }
+
+  return { destinationType, destinationName, destinationAccount, destinationAccountName };
+}
+
+exports.requestWithdrawal = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    }
+
+    const uid = request.auth.uid;
+    const data = request.data || {};
+    const requestId = normalizeString(data.request_id);
+    const amount = toSafeInteger(data.amount);
+
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(requestId)) {
+      throw new HttpsError("invalid-argument", "ID permintaan wajib berupa 8-80 karakter huruf, angka, _ atau -.");
+    }
+    if (amount === null || amount <= 0 || amount > WITHDRAWAL_MAX_AMOUNT) {
+      throw new HttpsError("invalid-argument", "Nominal penarikan tidak valid.");
+    }
+
+    const destination = validateWithdrawalDestination(data);
+    const withdrawalId = `wd-${crypto.createHash("sha256").update(`${uid}:${requestId}`, "utf8").digest("hex")}`;
+    const withdrawalRef = db.collection("withdrawal_requests").doc(withdrawalId);
+    const userRef = db.collection("users").doc(uid);
+    const ledgerRef = db.collection("balance_ledger").doc();
+    const mutasiRef = db.collection("mutasi_saldo").doc();
+
+    try {
+      return await db.runTransaction(async (transaction) => {
+        const existingSnap = await transaction.get(withdrawalRef);
+        if (existingSnap.exists) {
+          const existing = existingSnap.data() || {};
+          const sameRequest = existing.uid === uid &&
+            existing.amount === amount &&
+            existing.destinationType === destination.destinationType &&
+            existing.destinationName === destination.destinationName &&
+            existing.destinationAccount === destination.destinationAccount &&
+            existing.destinationAccountName === destination.destinationAccountName;
+
+          if (!sameRequest) {
+            throw new HttpsError("already-exists", "ID permintaan sudah dipakai untuk data penarikan yang berbeda.");
+          }
+          return {
+            success: true,
+            request_id: withdrawalId,
+            status: existing.status,
+            saldoAkhir: existing.saldoAkhir,
+            reused: true,
+          };
+        }
+
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          throw new HttpsError("not-found", "Akun pengguna tidak ditemukan.");
+        }
+        const userData = userSnap.data() || {};
+        const balanceBefore = toSafeInteger(userData[BALANCE_FIELD]);
+        if (balanceBefore === null || balanceBefore < 0) {
+          throw new HttpsError("failed-precondition", "Saldo pengguna tidak valid.");
+        }
+        if (balanceBefore < amount) {
+          throw new HttpsError("failed-precondition", "Saldo tidak mencukupi untuk penarikan.");
+        }
+
+        const balanceAfter = balanceBefore - amount;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+
+        transaction.update(userRef, {
+          [BALANCE_FIELD]: balanceAfter,
+          updatedAt: now,
+        });
+        transaction.create(withdrawalRef, {
+          uid,
+          requestId,
+          amount,
+          destinationType: destination.destinationType,
+          destinationName: destination.destinationName,
+          destinationAccount: destination.destinationAccount,
+          destinationAccountName: destination.destinationAccountName,
+          status: "PENDING",
+          saldoAwal: balanceBefore,
+          saldoAkhir: balanceAfter,
+          refunded: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+        transaction.create(ledgerRef, {
+          uid,
+          type: "DEBIT",
+          amount,
+          before: balanceBefore,
+          after: balanceAfter,
+          reason: "Penahanan saldo untuk permintaan penarikan",
+          source: "WITHDRAWAL",
+          transactionId: withdrawalId,
+          createdAt: now,
+        });
+        transaction.create(mutasiRef, {
+          uid,
+          tipe: "KELUAR",
+          nominal: amount,
+          saldoAwal: balanceBefore,
+          saldoAkhir: balanceAfter,
+          keterangan: "Saldo ditahan untuk permintaan penarikan",
+          sumber: "WITHDRAWAL",
+          transactionId: withdrawalId,
+          waktu: now,
+        });
+
+        return {
+          success: true,
+          request_id: withdrawalId,
+          status: "PENDING",
+          saldoAkhir: balanceAfter,
+          reused: false,
+        };
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      logger.error("Permintaan penarikan gagal", error);
+      throw new HttpsError("internal", "Permintaan penarikan gagal diproses.");
+    }
+  }
+);
+
+exports.adminReviewWithdrawal = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Admin harus login.");
+    }
+    if (!(await checkAdmin(request.auth.uid))) {
+      throw new HttpsError("permission-denied", "Akses hanya untuk admin.");
+    }
+
+    const data = request.data || {};
+    const withdrawalId = normalizeString(data.request_id);
+    const action = normalizeString(data.action).toUpperCase();
+    const reason = normalizeString(data.reason).slice(0, 500);
+
+    if (!withdrawalId || withdrawalId.length > 180 ||
+        !["APPROVE", "REJECT"].includes(action)) {
+      throw new HttpsError("invalid-argument", "ID permintaan atau tindakan admin tidak valid.");
+    }
+
+    const withdrawalRef = db.collection("withdrawal_requests").doc(withdrawalId);
+    const ledgerRef = db.collection("balance_ledger").doc();
+    const mutasiRef = db.collection("mutasi_saldo").doc();
+
+    try {
+      return await db.runTransaction(async (transaction) => {
+        const withdrawalSnap = await transaction.get(withdrawalRef);
+        if (!withdrawalSnap.exists) {
+          throw new HttpsError("not-found", "Permintaan penarikan tidak ditemukan.");
+        }
+        const withdrawal = withdrawalSnap.data() || {};
+        const targetStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+
+        if (withdrawal.status !== "PENDING") {
+          if (withdrawal.status === targetStatus) {
+            return {
+              success: true,
+              request_id: withdrawalId,
+              status: withdrawal.status,
+              refunded: withdrawal.refunded === true,
+              reused: true,
+            };
+          }
+          throw new HttpsError("failed-precondition", "Permintaan sudah diproses dan tidak dapat diubah lagi.");
+        }
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        if (action === "APPROVE") {
+          transaction.update(withdrawalRef, {
+            status: "APPROVED",
+            reviewedBy: request.auth.uid,
+            reviewedAt: now,
+            reviewReason: reason,
+            updatedAt: now,
+          });
+          return { success: true, request_id: withdrawalId, status: "APPROVED", refunded: false, reused: false };
+        }
+
+        const uid = normalizeString(withdrawal.uid);
+        const amount = toSafeInteger(withdrawal.amount);
+        if (!uid || amount === null || amount <= 0) {
+          throw new HttpsError("failed-precondition", "Data permintaan penarikan tidak valid.");
+        }
+        if (withdrawal.refunded === true) {
+          throw new HttpsError("failed-precondition", "Saldo permintaan ini sudah dikembalikan.");
+        }
+
+        const userRef = db.collection("users").doc(uid);
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          throw new HttpsError("not-found", "Akun pengguna tidak ditemukan untuk pengembalian saldo.");
+        }
+        const userData = userSnap.data() || {};
+        const balanceBefore = toSafeInteger(userData[BALANCE_FIELD]);
+        if (balanceBefore === null || balanceBefore < 0) {
+          throw new HttpsError("failed-precondition", "Saldo pengguna tidak valid.");
+        }
+        const balanceAfter = balanceBefore + amount;
+        if (!Number.isSafeInteger(balanceAfter)) {
+          throw new HttpsError("failed-precondition", "Saldo hasil pengembalian melampaui batas.");
+        }
+
+        transaction.update(userRef, { [BALANCE_FIELD]: balanceAfter, updatedAt: now });
+        transaction.update(withdrawalRef, {
+          status: "REJECTED",
+          refunded: true,
+          refundSaldoAwal: balanceBefore,
+          refundSaldoAkhir: balanceAfter,
+          reviewedBy: request.auth.uid,
+          reviewedAt: now,
+          reviewReason: reason || "Permintaan penarikan ditolak",
+          updatedAt: now,
+        });
+        transaction.create(ledgerRef, {
+          uid,
+          type: "CREDIT",
+          amount,
+          before: balanceBefore,
+          after: balanceAfter,
+          reason: reason || "Pengembalian saldo penarikan yang ditolak",
+          source: "WITHDRAWAL_REFUND",
+          transactionId: withdrawalId,
+          createdAt: now,
+        });
+        transaction.create(mutasiRef, {
+          uid,
+          tipe: "MASUK",
+          nominal: amount,
+          saldoAwal: balanceBefore,
+          saldoAkhir: balanceAfter,
+          keterangan: reason || "Pengembalian saldo penarikan yang ditolak",
+          sumber: "WITHDRAWAL_REFUND",
+          transactionId: withdrawalId,
+          waktu: now,
+        });
+
+        return { success: true, request_id: withdrawalId, status: "REJECTED", refunded: true, saldoAkhir: balanceAfter, reused: false };
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      logger.error("Review penarikan gagal", error);
+      throw new HttpsError("internal", "Status penarikan gagal diperbarui.");
+    }
+  }
+);
+

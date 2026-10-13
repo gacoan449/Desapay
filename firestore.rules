@@ -72,6 +72,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /withdrawal_requests/{requestId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
     match /balance_ledger/{ledgerId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
     match /mutasi_saldo/{mutasiId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
     match /topup_transactions/{transactionId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
