@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/transaksi.dart';
 
 /// Kontrak Abstraksi Layanan Riwayat Transaksi DesaPay (Domain Layer)
@@ -11,7 +10,6 @@ abstract class IRiwayatService {
 /// Implementasi Layanan Manajemen Riwayat & Log Mutasi (Data Layer)
 class RiwayatService implements IRiwayatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ===================================================
   // 1. FUNGSI SIMPAN RIWAYAT TRANSAKSI REAL (NO DUMMY)
