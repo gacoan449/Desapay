@@ -95,14 +95,29 @@ class DigiflazzService implements IDigiflazzService {
       return {'status': 'Gagal', 'message': 'Format respon transaksi tidak valid.'};
     } on FirebaseFunctionsException catch (e) {
       debugPrint('Error fungsi digiflazzKirimTransaksi: ${e.code}');
+      const definitiveFailureCodes = <String>{
+        'invalid-argument',
+        'unauthenticated',
+        'permission-denied',
+        'failed-precondition',
+        'not-found',
+        'already-exists',
+        'resource-exhausted',
+      };
+      final definitiveFailure = definitiveFailureCodes.contains(e.code);
       return {
-        'status': 'Gagal',
+        'status': definitiveFailure ? 'Gagal' : 'PENDING',
         'code': e.code,
-        'message': e.message ?? 'Transaksi tidak dapat diproses.',
+        'message': definitiveFailure
+            ? (e.message ?? 'Transaksi tidak dapat diproses.')
+            : 'Status transaksi belum dapat dipastikan. Periksa riwayat sebelum mencoba lagi.',
       };
     } catch (e) {
       debugPrint('Error fungsi digiflazzKirimTransaksi: $e');
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan transaksi di server.'};
+      return {
+        'status': 'PENDING',
+        'message': 'Status transaksi belum dapat dipastikan. Periksa riwayat sebelum mencoba lagi.',
+      };
     }
   }
 
