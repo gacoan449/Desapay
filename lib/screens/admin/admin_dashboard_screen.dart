@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../services/firestore_service.dart';
@@ -1983,6 +1984,102 @@ class _AdminDashboardScreenState
   // MENU
   // =========================================================
 
+  Widget withdrawalsPage() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('withdrawal_requests').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Center(child: Text('Gagal memuat permintaan penarikan.'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs.toList()
+          ..sort((a, b) {
+            final av = a.data()['createdAt'];
+            final bv = b.data()['createdAt'];
+            final at = av is Timestamp ? av.millisecondsSinceEpoch : 0;
+            final bt = bv is Timestamp ? bv.millisecondsSinceEpoch : 0;
+            return bt.compareTo(at);
+          });
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('Permintaan Penarikan Saldo', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (docs.isEmpty) const Card(child: ListTile(title: Text('Belum ada permintaan penarikan.'))),
+            ...docs.map((doc) {
+              final data = doc.data();
+              final status = (data['status'] ?? 'PENDING').toString();
+              final amount = (data['amount'] as num?) ?? 0;
+              final pending = status == 'PENDING';
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(rp(amount), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('User: ${data['uid'] ?? '-'}'),
+                    Text('Tujuan: ${data['destinationType'] ?? '-'} • ${data['destinationName'] ?? '-'}'),
+                    Text('Akun: ${data['destinationAccount'] ?? '-'}'),
+                    Text('Pemilik: ${data['destinationAccountName'] ?? '-'}'),
+                    Text('Status: $status${data['refunded'] == true ? ' • saldo dikembalikan' : ''}'),
+                    if (pending) Wrap(spacing: 8, children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _reviewWithdrawal(doc.id, 'REJECT'),
+                        icon: const Icon(Icons.close),
+                        label: const Text('Tolak & kembalikan saldo'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () => _reviewWithdrawal(doc.id, 'APPROVE'),
+                        icon: const Icon(Icons.check),
+                        label: const Text('Setujui'),
+                      ),
+                    ]),
+                  ]),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _reviewWithdrawal(String requestId, String action) async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(action == 'REJECT' ? 'Tolak penarikan?' : 'Setujui penarikan?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(action == 'REJECT'
+              ? 'Saldo pengguna akan dikembalikan secara otomatis.'
+              : 'Status menjadi disetujui. Pastikan transfer eksternal dilakukan terpisah.'),
+          const SizedBox(height: 12),
+          TextField(controller: reasonController, decoration: const InputDecoration(labelText: 'Catatan (opsional)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, reasonController.text.trim()), child: const Text('Lanjutkan')),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null) return;
+    try {
+      final result = await functions.httpsCallable('adminReviewWithdrawal').call({
+        'request_id': requestId,
+        'action': action,
+        'reason': reason,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      _msg(action == 'REJECT'
+          ? 'Penarikan ditolak. Saldo dikembalikan.'
+          : 'Penarikan disetujui. Lakukan transfer secara terpisah.');
+    } on FirebaseFunctionsException catch (e) {
+      _msg(e.message ?? 'Gagal memproses penarikan.');
+    } catch (_) {
+      _msg('Gagal memproses penarikan.');
+    }
+  }
+
   Widget content() {
     switch (menu) {
       case 0:
@@ -2008,6 +2105,9 @@ class _AdminDashboardScreenState
 
       case 7:
         return announcementPage();
+
+      case 8:
+        return withdrawalsPage();
 
       default:
         return dashboard();
@@ -2107,6 +2207,12 @@ class _AdminDashboardScreenState
               'Pengumuman / Promo',
               7,
             ),
+
+            menuItem(
+              Icons.account_balance_wallet,
+              'Penarikan Saldo',
+              8,
+            ),
           ],
         ),
       ),
@@ -2168,6 +2274,7 @@ class _AdminDashboardScreenState
                   'Device Management',
                   'Mutasi Bank',
                   'Pengumuman / Promo',
+                  'Penarikan Saldo',
                 ][menu],
               ),
               actions: [
