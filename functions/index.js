@@ -7,6 +7,7 @@ const {
   onCall,
   HttpsError,
 } = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 
 const {
   defineSecret,
