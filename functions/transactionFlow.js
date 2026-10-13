@@ -467,6 +467,19 @@ async function finalize(requestRef, status, providerData, refundReason) {
                 providerConflict: "FAILED_CALLBACK_AFTER_SUCCESS",
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               });
+              return;
+            }
+            if (currentStatus === "FAILED" &&
+                normalizedStatus === "FAILED" &&
+                current.balanceDebited === true &&
+                current.balanceRefunded !== true &&
+                current.refunded !== true) {
+              tx.update(requestRef, {
+                status: "REFUND_PENDING",
+                refundError: text(error.message).slice(0, 300),
+                ...providerFields,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
             }
             return;
           }
