@@ -4217,7 +4217,8 @@ exports.reconcileLegacyProviderTransactions = onSchedule(
 
       for (const item of collections) {
         const snapshot = await db.collection(item.name)
-            .where("status", "in", pendingStatuses).limit(100).get();
+            .where("status", "in", pendingStatuses)
+            .orderBy("updatedAt", "asc").limit(100).get();
 
         for (const doc of snapshot.docs) {
           const original = doc.data() || {};
