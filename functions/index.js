@@ -4502,6 +4502,7 @@ exports.requestWithdrawal = onCall(
     }
 
     const uid = request.auth.uid;
+    await pinSecurity.assertActiveUser(uid);
     const data = request.data || {};
     const requestId = normalizeString(data.request_id);
     const amount = toSafeInteger(data.amount);
