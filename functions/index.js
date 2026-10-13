@@ -1986,37 +1986,16 @@ exports.digiflazzKirimTransaksi =
           };
         }
 
-        await transaksiRef.set(
-          {
-            status:
-              "PENDING",
-
-            response:
-              resultData,
-
-            updatedAt:
-              admin.firestore
-                .FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          }
-        );
-
+        const pendingResult = await applyLegacyPending(transaksiRef, resultData);
         return {
-          success:
-            true,
-
-          ref_id:
-            refId,
-
-          status:
-            "PENDING",
-
-          response:
-            resultData,
+          success: pendingResult.success === true,
+          ref_id: refId,
+          status: pendingResult.status,
+          reconciliationRequired: pendingResult.status === "RECONCILIATION_REQUIRED",
+          message: pendingResult.conflict
+            ? "Status transaksi perlu diperiksa admin. Jangan lakukan pembelian ulang."
+            : (resultData.message || result.message || ""),
+          response: resultData,
         };
       } catch (error) {
         if (
@@ -2284,37 +2263,16 @@ exports.digiflazzCekTransaksi =
           };
         }
 
-        await transaksiRef.set(
-          {
-            status:
-              "PENDING",
-
-            response:
-              resultData,
-
-            updatedAt:
-              admin.firestore
-                .FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          }
-        );
-
+        const pendingResult = await applyLegacyPending(transaksiRef, resultData);
         return {
-          success:
-            true,
-
-          ref_id:
-            refId,
-
-          status:
-            "PENDING",
-
-          response:
-            resultData,
+          success: pendingResult.success === true,
+          ref_id: refId,
+          status: pendingResult.status,
+          reconciliationRequired: pendingResult.status === "RECONCILIATION_REQUIRED",
+          message: pendingResult.conflict
+            ? "Status transaksi perlu diperiksa admin. Jangan lakukan pembelian ulang."
+            : (resultData.message || result.message || ""),
+          response: resultData,
         };
       } catch (error) {
         if (
@@ -4210,37 +4168,16 @@ exports.edpoinTransactionRequest =
           };
         }
 
-        await transaksiRef.set(
-          {
-            status:
-              "PENDING",
-
-            response:
-              resultData,
-
-            updatedAt:
-              admin.firestore
-                .FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
-          }
-        );
-
+        const pendingResult = await applyLegacyPending(transaksiRef, resultData);
         return {
-          success:
-            true,
-
-          ref_id:
-            refId,
-
-          status:
-            "PENDING",
-
-          response:
-            resultData,
+          success: pendingResult.success === true,
+          ref_id: refId,
+          status: pendingResult.status,
+          reconciliationRequired: pendingResult.status === "RECONCILIATION_REQUIRED",
+          message: pendingResult.conflict
+            ? "Status transaksi perlu diperiksa admin. Jangan lakukan pembelian ulang."
+            : (resultData.message || result.message || ""),
+          response: resultData,
         };
       } catch (error) {
         if (
@@ -4777,6 +4714,58 @@ async function applyLegacyFailure(ref, providerData, providerName, reason) {
       updatedAt: now,
     });
     return {status: "FAILED", success: false, refunded: refund.refunded, reused: false};
+  });
+}
+
+async function applyLegacyPending(ref, providerData) {
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {status: "NOT_FOUND", success: false};
+    const current = snap.data() || {};
+    const currentStatus = String(current.status || "").trim().toUpperCase();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (["SUCCESS", "FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
+      return {
+        status: currentStatus,
+        success: currentStatus === "SUCCESS",
+        conflict: currentStatus === "RECONCILIATION_REQUIRED",
+        terminal: true,
+      };
+    }
+
+    if (current.balanceRefunded === true || current.refunded === true) {
+      const reason = "PENDING_PROVIDER_STATUS_AFTER_REFUND";
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus || null,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason,
+        createdAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      tx.update(ref, {
+        status: "RECONCILIATION_REQUIRED",
+        reconciliationRequired: true,
+        providerConflict: reason,
+        response: providerData,
+        providerStatus: providerData.status || null,
+        updatedAt: now,
+      });
+      return {status: "RECONCILIATION_REQUIRED", success: false, conflict: true};
+    }
+
+    tx.update(ref, {
+      status: "PENDING",
+      response: providerData,
+      providerStatus: providerData.status || null,
+      providerMessage: providerData.message || "Menunggu konfirmasi provider.",
+      updatedAt: now,
+    });
+    return {status: "PENDING", success: true};
   });
 }
 
