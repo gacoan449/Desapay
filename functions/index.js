@@ -4804,82 +4804,197 @@ async function recordLegacyReconciliation(ref, providerData, reason) {
 }
 
 async function applyLegacySuccess(ref, providerData) {
-  await db.runTransaction(async (tx) => {
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists) return;
+    if (!snap.exists) return {status: "NOT_FOUND", success: false};
     const current = snap.data() || {};
     const currentStatus = String(current.status || "").trim().toUpperCase();
-    if (currentStatus === "SUCCESS") return;
-    if (currentStatus === "FAILED" || current.balanceRefunded === true || current.refunded === true) {
-      const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+    const providerReference = providerData.ref_id || providerData.reference || providerData.sn || null;
+
+    if (currentStatus === "SUCCESS") {
+      tx.update(ref, {
+        response: providerData,
+        providerStatus: providerData.status || null,
+        providerReference: current.providerReference || providerReference,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {status: "SUCCESS", success: true, reused: true};
+    }
+
+    if (["FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus) ||
+        current.balanceRefunded === true || current.refunded === true) {
+      const reason = "PROVIDER_SUCCESS_AFTER_LOCAL_FAILURE_OR_REFUND";
       tx.set(reconciliationRef, {
         transactionId: ref.id,
         uid: current.uid || null,
-        localStatus: currentStatus,
+        localStatus: currentStatus || null,
         providerStatus: providerData.status || null,
         providerMessage: providerData.message || null,
-        reason: "PROVIDER_SUCCESS_AFTER_REFUND_OR_FAILURE",
+        reason,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, {merge: true});
       tx.update(ref, {
         reconciliationRequired: true,
-        providerConflict: "SUCCESS_AFTER_REFUND_OR_FAILURE",
-        status: currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED",
+        providerConflict: reason,
         response: providerData,
+        providerStatus: providerData.status || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return;
+      return {status: "RECONCILIATION_REQUIRED", success: false, conflict: true};
     }
+
     tx.update(ref, {
       status: "SUCCESS",
       response: providerData,
-      providerReference: providerData.ref_id || providerData.reference || providerData.sn || null,
+      providerStatus: providerData.status || null,
+      providerReference,
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    return {status: "SUCCESS", success: true, reused: false};
   });
 }
 
-async function applyLegacyFailure(ref, providerData, refundFunction, reason) {
-  const refund = await refundFunction({
-    transactionRef: ref,
-    reason: reason || providerData.message || "Provider menyatakan transaksi gagal.",
-  });
-  if (refund && refund.reason === "TRANSACTION_ALREADY_SUCCESS") return;
+async function applyLegacyFailure(ref, providerData, providerName, reason) {
+  const ledgerRef = db.collection("balance_ledger").doc();
+  const mutasiRef = db.collection("mutasi_saldo").doc();
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  const providerReason = reason || providerData.message || "Provider menyatakan transaksi gagal.";
 
-  await db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists) return;
+    if (!snap.exists) return {status: "NOT_FOUND", success: false};
     const current = snap.data() || {};
     const currentStatus = String(current.status || "").trim().toUpperCase();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
     if (currentStatus === "SUCCESS") {
-      const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+      const conflictReason = "PROVIDER_FAILURE_AFTER_LOCAL_SUCCESS";
       tx.set(reconciliationRef, {
         transactionId: ref.id,
         uid: current.uid || null,
         localStatus: currentStatus,
         providerStatus: providerData.status || null,
         providerMessage: providerData.message || null,
-        reason: "PROVIDER_FAILURE_AFTER_LOCAL_SUCCESS",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        reason: conflictReason,
+        createdAt: now,
+        updatedAt: now,
       }, {merge: true});
       tx.update(ref, {
         reconciliationRequired: true,
-        providerConflict: "FAILURE_AFTER_SUCCESS",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        providerConflict: conflictReason,
+        updatedAt: now,
       });
-      return;
+      return {status: "SUCCESS", success: false, conflict: true, refunded: false};
     }
+
+    if (currentStatus === "RECONCILIATION_REQUIRED") {
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason: "PROVIDER_FAILURE_DURING_RECONCILIATION",
+        createdAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      return {status: currentStatus, success: false, conflict: true, refunded: false};
+    }
+
+    // Terminal failure is idempotent only after its refund state is complete.
+    if (currentStatus === "FAILED" &&
+        (current.balanceRefunded === true || current.refunded === true || current.balanceDebited !== true)) {
+      tx.update(ref, {
+        response: providerData,
+        providerStatus: providerData.status || null,
+        failureReason: current.failureReason || providerData.message || providerReason,
+        updatedAt: now,
+      });
+      return {
+        status: "FAILED",
+        success: false,
+        refunded: current.balanceRefunded === true || current.refunded === true,
+        reused: true,
+      };
+    }
+
+    let refund = {refunded: false, amount: 0};
+    if (current.balanceRefunded === true || current.refunded === true) {
+      refund = {
+        refunded: true,
+        amount: toSafeInteger(current.refundAmount) ?? toSafeInteger(current.amount) ?? 0,
+      };
+    } else if (current.balanceDebited === true) {
+      const uid = normalizeString(current.uid);
+      const amount = toSafeInteger(current.trustedPrice) ?? toSafeInteger(current.amount);
+      if (!uid || amount === null || amount <= 0) throw new Error("INVALID_REFUND_DATA");
+      const userRef = db.collection("users").doc(uid);
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new Error("USER_NOT_FOUND");
+      const userData = userSnap.data() || {};
+      const before = toSafeInteger(userData[BALANCE_FIELD]);
+      if (before === null || before < 0) throw new Error("INVALID_BALANCE");
+      const after = before + amount;
+      if (!Number.isSafeInteger(after)) throw new Error("BALANCE_OVERFLOW");
+
+      tx.update(userRef, {
+        [BALANCE_FIELD]: after,
+        updatedAt: now,
+      });
+      tx.create(ledgerRef, {
+        uid,
+        type: "CREDIT",
+        amount,
+        before,
+        after,
+        reason: providerReason,
+        source: providerName + "_REFUND",
+        transactionId: ref.id,
+        createdAt: now,
+      });
+      tx.create(mutasiRef, {
+        uid,
+        tipe: "MASUK",
+        nominal: amount,
+        saldoAwal: before,
+        saldoAkhir: after,
+        keterangan: providerReason,
+        sumber: providerName + "_REFUND",
+        transactionId: ref.id,
+        waktu: now,
+      });
+      refund = {
+        refunded: true,
+        amount,
+        refundSaldoAwal: before,
+        refundSaldoAkhir: after,
+        refundLedgerId: ledgerRef.id,
+        refundMutasiId: mutasiRef.id,
+      };
+    }
+
     tx.update(ref, {
       status: "FAILED",
       response: providerData,
-      failureReason: providerData.message || reason || "Transaksi provider gagal.",
-      refunded: current.balanceRefunded === true || (refund && refund.refunded === true) || current.refunded === true,
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      providerStatus: providerData.status || null,
+      failureReason: providerData.message || providerReason,
+      refunded: refund.refunded,
+      balanceRefunded: refund.refunded,
+      ...(refund.refunded ? {
+        refundAmount: refund.amount,
+        refundSaldoAwal: refund.refundSaldoAwal ?? current.refundSaldoAwal ?? null,
+        refundSaldoAkhir: refund.refundSaldoAkhir ?? current.refundSaldoAkhir ?? null,
+        refundLedgerId: refund.refundLedgerId ?? current.refundLedgerId ?? null,
+        refundMutasiId: refund.refundMutasiId ?? current.refundMutasiId ?? null,
+        refundedAt: now,
+      } : {}),
+      completedAt: now,
+      updatedAt: now,
     });
+    return {status: "FAILED", success: false, refunded: refund.refunded, reused: false};
   });
 }
 
@@ -4986,7 +5101,7 @@ exports.reconcileLegacyProviderTransactions = onSchedule(
               await applyLegacyFailure(
                 ref,
                 providerData,
-                item.provider === "DIGIFLAZZ" ? refundDigiflazzBalance : refundEdpoinBalance,
+                item.provider,
                 providerData.message || "Provider menyatakan transaksi gagal."
               );
             } else {
