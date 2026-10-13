@@ -8,6 +8,7 @@ import 'keamanan_screen.dart';
 import 'bantuan_cs_screen.dart';
 import 'tentang_screen.dart';
 import '../login/login_screen.dart';
+import '../saldo/penarikan_saldo_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
   const ProfilScreen({super.key});
@@ -459,6 +460,26 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     ),
                     child: Column(
                       children: [
+                        _menu(
+                          Icons.account_balance_wallet_rounded,
+                          "Penarikan Saldo",
+                          "Ajukan dan pantau status penarikan",
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PenarikanSaldoScreen(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const Divider(
+                          height: 1,
+                          indent: 56,
+                          color: WarnaDesaPay.lightField,
+                        ),
+
                         _menu(
                           Icons.security_rounded,
                           "Keamanan Akun",
