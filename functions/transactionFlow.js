@@ -627,30 +627,50 @@ async function processRequest(requestRef) {
   try {
     await debit(requestRef, uid, trusted.price, sku, customerNo);
   } catch (error) {
-    const message = error.message === "INSUFFICIENT_BALANCE"
+    // Debit is atomic with balanceDebited. Re-read through finalize's transaction:
+    // if the debit actually committed despite an ambiguous client error, finalize
+    // performs the refund; otherwise it simply closes the no-debit failure.
+    const insufficient = error.message === "INSUFFICIENT_BALANCE";
+    const message = insufficient
       ? "Saldo tidak mencukupi"
-      : "Transaksi tidak dapat diproses";
-    await requestRef.update({
-      status: "FAILED",
-      providerStatus: "NOT_SENT",
-      providerMessage: message,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "BALANCE", message});
-    await notify(uid, "Transaksi gagal", message, requestRef.id, "FAILED");
+      : "Transaksi belum dikirim ke provider karena saldo tidak dapat diamankan.";
+    await finalize(
+      requestRef,
+      "FAILED",
+      {
+        status: "Gagal",
+        rc: insufficient ? "BALANCE" : "PRE_DISPATCH_DEBIT_ERROR",
+        message,
+      },
+      message
+    );
     return;
   }
 
-  // From this point, a timeout/error is ambiguous: the provider may already
-  // have accepted the request. Keep the debit and reconcile using the same
-  // stable provider ref_id instead of issuing an unsafe automatic refund.
-  await requestRef.update({
-    providerDispatchState: "IN_FLIGHT",
-    providerDispatchStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  // A failure while recording this marker happens before the network request
+  // is invoked, so refund safely rather than leaving a reserved balance.
+  try {
+    await requestRef.update({
+      providerDispatchState: "IN_FLIGHT",
+      providerDispatchStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    await finalize(
+      requestRef,
+      "FAILED",
+      {
+        status: "Gagal",
+        rc: "PRE_DISPATCH_MARKER_ERROR",
+        message: "Permintaan belum dikirim ke provider. Saldo akan dikembalikan.",
+      },
+      "Gagal mencatat status pengiriman sebelum provider dipanggil."
+    );
+    return;
+  }
 
+  // Once the provider request begins, a timeout is ambiguous. Keep the debit
+  // and reconcile with the same stable provider reference; never mint a new one.
   try {
     const provider = await sendToDigiflazz({...data, buyer_sku_code: sku, customerNo}, providerRefId);
     const status = normalizeStatus(provider.status);
