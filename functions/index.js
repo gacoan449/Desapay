@@ -14,6 +14,7 @@ const {
 
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const pinSecurity = require("./pinSecurity");
 
 admin.initializeApp();
 
@@ -398,6 +399,57 @@ async function checkAdmin(uid) {
 
   return data.role === "admin";
 }
+
+/*
+|--------------------------------------------------------------------------
+| SERVER-SIDE TRANSACTION PIN
+|--------------------------------------------------------------------------
+*/
+
+exports.getTransactionPinStatus = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    return pinSecurity.getTransactionPinStatus(request.auth.uid);
+  }
+);
+
+exports.setTransactionPin = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    const data = request.data || {};
+    const pin = normalizeString(data.pin);
+    const confirmation = normalizeString(data.confirmation);
+    if (pin !== confirmation) throw new HttpsError("invalid-argument", "Konfirmasi PIN tidak cocok.");
+    return pinSecurity.setTransactionPin(request.auth.uid, pin);
+  }
+);
+
+exports.changeTransactionPin = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    const data = request.data || {};
+    const pinLama = normalizeString(data.old_pin);
+    const pinBaru = normalizeString(data.new_pin);
+    const confirmation = normalizeString(data.confirmation);
+    if (pinBaru !== confirmation) throw new HttpsError("invalid-argument", "Konfirmasi PIN tidak cocok.");
+    return pinSecurity.changeTransactionPin(request.auth.uid, pinLama, pinBaru);
+  }
+);
+
+exports.verifyTransactionPin = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    const data = request.data || {};
+    return pinSecurity.verifyTransactionPin(
+      request.auth.uid,
+      normalizeString(data.pin)
+    );
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -1565,6 +1617,9 @@ exports.digiflazzKirimTransaksi =
           data.customer_no
         );
 
+      const transactionPin = normalizeString(data.transaction_pin || data.pin);
+      await pinSecurity.verifyTransactionPin(uid, transactionPin);
+
       const requestId =
         normalizeString(
           data.request_id
@@ -2162,6 +2217,18 @@ exports.digiflazzCekTransaksi =
         | jangan melakukan perubahan finansial ulang.
         |
         */
+
+        const localStatus = String(transaksi.status || "").trim().toUpperCase();
+        if (localStatus === "FAILED") {
+          return {
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            balanceRefunded: transaksi.balanceRefunded === true || transaksi.refunded === true,
+            response: transaksi.response || null,
+            reused: true,
+          };
+        }
 
         if (
           String(
@@ -3894,6 +3961,9 @@ exports.edpoinTransactionRequest =
         normalizeString(
           data.customer_no
         );
+
+      const transactionPin = normalizeString(data.transaction_pin || data.pin);
+      await pinSecurity.verifyTransactionPin(uid, transactionPin);
 
       const requestId =
         normalizeString(
