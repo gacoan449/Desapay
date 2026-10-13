@@ -7,6 +7,7 @@ const {
   onCall,
   HttpsError,
 } = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 
 const {
   defineSecret,
@@ -18,6 +19,7 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 const db = admin.firestore();
+const pinSecurity = require("./pinSecurity");
 
 /*
 |--------------------------------------------------------------------------
@@ -120,29 +122,11 @@ function generateRefId(uid) {
 }
 
 function isValidRequestId(value) {
-  if (
-    typeof value !== "string"
-  ) {
-    return false;
-  }
-
-  const requestId =
-    value.trim();
-
-  if (!requestId) {
-    return true;
-  }
-
-  if (
-    requestId.length >
-    MAX_REQUEST_ID_LENGTH
-  ) {
-    return false;
-  }
-
-  return /^[A-Za-z0-9_-]+$/.test(
-    requestId
-  );
+  if (typeof value !== "string") return false;
+  const requestId = value.trim();
+  return requestId.length >= 8 &&
+    requestId.length <= MAX_REQUEST_ID_LENGTH &&
+    /^[A-Za-z0-9_-]+$/.test(requestId);
 }
 
 function normalizeString(value) {
@@ -398,6 +382,57 @@ async function checkAdmin(uid) {
 
   return data.role === "admin";
 }
+
+/*
+|--------------------------------------------------------------------------
+| SERVER-SIDE TRANSACTION PIN
+|--------------------------------------------------------------------------
+*/
+
+exports.getTransactionPinStatus = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    return pinSecurity.getTransactionPinStatus(request.auth.uid);
+  }
+);
+
+exports.setTransactionPin = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    const data = request.data || {};
+    const pin = normalizeString(data.pin);
+    const confirmation = normalizeString(data.confirmation);
+    if (pin !== confirmation) throw new HttpsError("invalid-argument", "Konfirmasi PIN tidak cocok.");
+    return pinSecurity.setTransactionPin(request.auth.uid, pin);
+  }
+);
+
+exports.changeTransactionPin = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    const data = request.data || {};
+    const pinLama = normalizeString(data.old_pin);
+    const pinBaru = normalizeString(data.new_pin);
+    const confirmation = normalizeString(data.confirmation);
+    if (pinBaru !== confirmation) throw new HttpsError("invalid-argument", "Konfirmasi PIN tidak cocok.");
+    return pinSecurity.changeTransactionPin(request.auth.uid, pinLama, pinBaru);
+  }
+);
+
+exports.verifyTransactionPin = onCall(
+  {region: REGION, timeoutSeconds: 30, memory: "256MiB"},
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+    const data = request.data || {};
+    return pinSecurity.verifyTransactionPin(
+      request.auth.uid,
+      normalizeString(data.pin)
+    );
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -753,297 +788,6 @@ async function debitUserBalanceForDigiflazz({
 | SALDO - REFUND DIGIFLAZZ
 |--------------------------------------------------------------------------
 */
-
-async function refundDigiflazzBalance({
-  transactionRef,
-  reason,
-}) {
-  const ledgerRef =
-    db
-      .collection("balance_ledger")
-      .doc();
-
-  const mutasiRef =
-    db
-      .collection("mutasi_saldo")
-      .doc();
-
-  return db.runTransaction(
-    async (transaction) => {
-      const transactionSnap =
-        await transaction.get(
-          transactionRef
-        );
-
-      if (
-        !transactionSnap.exists
-      ) {
-        throw new Error(
-          "TRANSACTION_NOT_FOUND"
-        );
-      }
-
-      const trx =
-        transactionSnap.data() ||
-        {};
-
-      /*
-      |------------------------------------------------------------
-      | SUCCESS ADALAH TERMINAL STATE
-      |------------------------------------------------------------
-      |
-      | Jangan pernah refund transaksi yang sudah dinyatakan
-      | SUCCESS oleh sistem lokal.
-      |
-      */
-
-      if (
-        String(
-          trx.status || ""
-        )
-          .trim()
-          .toUpperCase() ===
-        "SUCCESS"
-      ) {
-        return {
-          refunded:
-            false,
-
-          reason:
-            "TRANSACTION_ALREADY_SUCCESS",
-
-          saldoAkhir:
-            toSafeInteger(
-              trx.saldoAkhir
-            ) ?? 0,
-        };
-      }
-
-      if (
-        trx.balanceDebited !== true
-      ) {
-        return {
-          refunded:
-            false,
-
-          reason:
-            "BALANCE_NOT_DEBITED",
-        };
-      }
-
-      if (
-        trx.balanceRefunded === true
-      ) {
-        return {
-          refunded:
-            false,
-
-          reason:
-            "ALREADY_REFUNDED",
-
-          saldoAkhir:
-            toSafeInteger(
-              trx.refundSaldoAkhir ??
-                trx.saldoAkhir
-            ) ?? 0,
-        };
-      }
-
-      const uid =
-        normalizeString(
-          trx.uid
-        );
-
-      const amount =
-        toSafeInteger(
-          trx.amount
-        );
-
-      if (!uid) {
-        throw new Error(
-          "TRANSACTION_UID_MISSING"
-        );
-      }
-
-      if (
-        amount === null ||
-        amount <= 0
-      ) {
-        throw new Error(
-          "INVALID_REFUND_AMOUNT"
-        );
-      }
-
-      const userRef =
-        db
-          .collection("users")
-          .doc(uid);
-
-      const userSnap =
-        await transaction.get(
-          userRef
-        );
-
-      if (!userSnap.exists) {
-        throw new Error(
-          "USER_NOT_FOUND"
-        );
-      }
-
-      const userData =
-        userSnap.data() || {};
-
-      const saldoSebelumnya =
-        toSafeInteger(
-          userData[BALANCE_FIELD]
-        );
-
-      if (
-        saldoSebelumnya === null ||
-        saldoSebelumnya < 0
-      ) {
-        throw new Error(
-          "INVALID_BALANCE"
-        );
-      }
-
-      const saldoBaru =
-        saldoSebelumnya +
-        amount;
-
-      if (
-        !Number.isSafeInteger(
-          saldoBaru
-        )
-      ) {
-        throw new Error(
-          "BALANCE_OVERFLOW"
-        );
-      }
-
-      transaction.update(
-        userRef,
-        {
-          [BALANCE_FIELD]:
-            saldoBaru,
-
-          updatedAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      transaction.set(
-        ledgerRef,
-        {
-          uid,
-
-          type:
-            "CREDIT",
-
-          amount,
-
-          before:
-            saldoSebelumnya,
-
-          after:
-            saldoBaru,
-
-          reason:
-            reason ||
-            "Refund transaksi Digiflazz",
-
-          source:
-            "DIGIFLAZZ_REFUND",
-
-          transactionId:
-            transactionRef.id,
-
-          createdAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      transaction.set(
-        mutasiRef,
-        {
-          uid,
-
-          tipe:
-            "MASUK",
-
-          nominal:
-            amount,
-
-          saldoAwal:
-            saldoSebelumnya,
-
-          saldoAkhir:
-            saldoBaru,
-
-          keterangan:
-            reason ||
-            "Refund transaksi Digiflazz",
-
-          sumber:
-            "DIGIFLAZZ_REFUND",
-
-          transactionId:
-            transactionRef.id,
-
-          waktu:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      transaction.update(
-        transactionRef,
-        {
-          balanceRefunded:
-            true,
-
-          refundAmount:
-            amount,
-
-          refundSaldoAwal:
-            saldoSebelumnya,
-
-          refundSaldoAkhir:
-            saldoBaru,
-
-          refundLedgerId:
-            ledgerRef.id,
-
-          refundMutasiId:
-            mutasiRef.id,
-
-          refundedAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-
-          updatedAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      return {
-        refunded:
-          true,
-
-        saldoAkhir:
-          saldoBaru,
-      };
-    }
-  );
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -1565,6 +1309,8 @@ exports.digiflazzKirimTransaksi =
           data.customer_no
         );
 
+      const transactionPin = normalizeString(data.transaction_pin || data.pin);
+
       const requestId =
         normalizeString(
           data.request_id
@@ -1611,6 +1357,12 @@ exports.digiflazzKirimTransaksi =
           await getTrustedProductPrice(
             buyerSkuCode
           );
+
+        await pinSecurity.verifyTransactionPin(uid, transactionPin);
+        const activeUser = await pinSecurity.assertActiveUser(uid);
+        if (activeUser.role !== "user") {
+          throw new HttpsError("permission-denied", "Hanya akun pengguna yang dapat melakukan pembelian.");
+        }
 
         const refId =
           requestId
@@ -1724,6 +1476,9 @@ exports.digiflazzKirimTransaksi =
               true,
           };
         }
+
+        // Validate credentials before any debit; leave reused requests readable without a provider call.
+        digiflazzCredentials();
 
         await transaksiRef.create(
           {
@@ -1892,158 +1647,64 @@ exports.digiflazzKirimTransaksi =
             .trim()
             .toUpperCase();
 
-        if (
-          providerStatus ===
-          "SUKSES"
-        ) {
-          await transaksiRef.set(
-            {
-              status:
-                "SUCCESS",
-
-              response:
-                resultData,
-
-              providerReference:
-                resultData.ref_id ||
-                resultData.sn ||
-                resultData.reference ||
-                null,
-
-              completedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
-          return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              resultData,
-          };
-        }
-
-        if (
-          providerStatus ===
-          "GAGAL"
-        ) {
-          const refund =
-            await refundDigiflazzBalance(
-              {
-                transactionRef:
-                  transaksiRef,
-
-                reason:
-                  `Refund transaksi Digiflazz: ${
-                    resultData.message ||
-                    "Provider menyatakan gagal."
-                  }`,
-              }
-            );
-
-          await transaksiRef.set(
-            {
-              status:
-                "FAILED",
-
-              response:
-                resultData,
-
-              failureReason:
-                resultData.message ||
-                "Transaksi Digiflazz gagal.",
-
-              refunded:
-                refund.refunded ===
-                  true ||
-                refund.reason ===
-                  "ALREADY_REFUNDED",
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
-          return {
-            success:
-              false,
-
-            ref_id:
-              refId,
-
-            status:
-              "FAILED",
-
-            refunded:
-              refund.refunded ===
-                true ||
-              refund.reason ===
-                "ALREADY_REFUNDED",
-
-            message:
-              resultData.message ||
-              "Transaksi gagal dan saldo telah dikembalikan.",
-
-            response:
-              resultData,
-          };
-        }
-
-        await transaksiRef.set(
-          {
-            status:
-              "PENDING",
-
-            response:
-              resultData,
-
-            updatedAt:
-              admin.firestore
-                .FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
+        if (providerStatus === "SUKSES") {
+          const finalization = await applyLegacySuccess(transaksiRef, resultData);
+          if (finalization.conflict) {
+            return {
+              success: false,
+              ref_id: refId,
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              message: "Status provider berbeda dengan status lokal. Admin perlu memeriksa transaksi.",
+              response: resultData,
+            };
           }
-        );
+          return {
+            success: true,
+            ref_id: refId,
+            status: "SUCCESS",
+            response: resultData,
+            reused: finalization.reused === true,
+          };
+        }
 
-        return {
-          success:
-            true,
-
-          ref_id:
-            refId,
-
-          status:
-            "PENDING",
-
-          response:
+        if (providerStatus === "GAGAL") {
+          const finalization = await applyLegacyFailure(
+            transaksiRef,
             resultData,
+            "DIGIFLAZZ",
+            `Refund transaksi Digiflazz: ${resultData.message || "Provider menyatakan gagal."}`
+          );
+          if (finalization.conflict) {
+            return {
+              success: false,
+              ref_id: refId,
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              message: "Status provider berbeda dengan status lokal. Admin perlu memeriksa transaksi.",
+              response: resultData,
+            };
+          }
+          return {
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            refunded: finalization.refunded === true,
+            message: resultData.message || (finalization.refunded ? "Transaksi gagal dan saldo telah dikembalikan." : "Transaksi gagal diproses."),
+            response: resultData,
+          };
+        }
+
+        const pendingResult = await applyLegacyPending(transaksiRef, resultData);
+        return {
+          success: pendingResult.success === true,
+          ref_id: refId,
+          status: pendingResult.status,
+          reconciliationRequired: pendingResult.status === "RECONCILIATION_REQUIRED",
+          message: pendingResult.conflict
+            ? "Status transaksi perlu diperiksa admin. Jangan lakukan pembelian ulang."
+            : (resultData.message || result.message || ""),
+          response: resultData,
         };
       } catch (error) {
         if (
@@ -2163,31 +1824,55 @@ exports.digiflazzCekTransaksi =
         |
         */
 
-        if (
-          String(
-            transaksi.status ||
-              ""
-          )
-            .trim()
-            .toUpperCase() ===
-          "SUCCESS"
-        ) {
+        const localStatus = String(transaksi.status || "").trim().toUpperCase();
+        if (localStatus === "RECONCILIATION_REQUIRED") {
           return {
-            success:
-              true,
+            success: false,
+            ref_id: refId,
+            status: "RECONCILIATION_REQUIRED",
+            reconciliationRequired: true,
+            message: "Transaksi ini sedang menunggu pemeriksaan admin.",
+            response: transaksi.response || null,
+            reused: true,
+          };
+        }
 
-            ref_id:
-              refId,
+        if (localStatus === "FAILED" &&
+            (transaksi.balanceRefunded === true ||
+             transaksi.refunded === true ||
+             transaksi.balanceDebited !== true)) {
+          return {
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            balanceRefunded: transaksi.balanceRefunded === true || transaksi.refunded === true,
+            response: transaksi.response || null,
+            reused: true,
+          };
+        }
 
-            status:
-              "SUCCESS",
+        if (localStatus === "SUCCESS") {
+          return {
+            success: true,
+            ref_id: refId,
+            status: "SUCCESS",
+            response: transaksi.response || null,
+            reused: true,
+          };
+        }
 
-            response:
-              transaksi.response ||
-              null,
-
-            reused:
-              true,
+        if (transaksi.balanceRefunded === true || transaksi.refunded === true) {
+          await recordLegacyReconciliation(
+            transaksiRef,
+            {status: transaksi.providerStatus || null, message: transaksi.failureReason || null},
+            "REFUNDED_TRANSACTION_LEFT_IN_NONTERMINAL_STATE"
+          );
+          return {
+            success: false,
+            ref_id: refId,
+            status: "RECONCILIATION_REQUIRED",
+            message: "Transaksi sudah direfund dan perlu pemeriksaan admin. Jangan lakukan pembelian ulang.",
+            reused: true,
           };
         }
 
@@ -2252,148 +1937,64 @@ exports.digiflazzCekTransaksi =
             .trim()
             .toUpperCase();
 
-        if (
-          providerStatus ===
-          "SUKSES"
-        ) {
-          await transaksiRef.set(
-            {
-              status:
-                "SUCCESS",
-
-              response:
-                resultData,
-
-              completedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
-          return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              resultData,
-          };
-        }
-
-        if (
-          providerStatus ===
-          "GAGAL"
-        ) {
-          const refund =
-            await refundDigiflazzBalance(
-              {
-                transactionRef:
-                  transaksiRef,
-
-                reason:
-                  `Refund transaksi Digiflazz: ${
-                    resultData.message ||
-                    "Provider menyatakan gagal."
-                  }`,
-              }
-            );
-
-          await transaksiRef.set(
-            {
-              status:
-                "FAILED",
-
-              response:
-                resultData,
-
-              failureReason:
-                resultData.message ||
-                "Transaksi Digiflazz gagal.",
-
-              refunded:
-                refund.refunded ===
-                  true ||
-                refund.reason ===
-                  "ALREADY_REFUNDED",
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
-          return {
-            success:
-              false,
-
-            ref_id:
-              refId,
-
-            status:
-              "FAILED",
-
-            refunded:
-              refund.refunded ===
-                true ||
-              refund.reason ===
-                "ALREADY_REFUNDED",
-
-            response:
-              resultData,
-          };
-        }
-
-        await transaksiRef.set(
-          {
-            status:
-              "PENDING",
-
-            response:
-              resultData,
-
-            updatedAt:
-              admin.firestore
-                .FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
+        if (providerStatus === "SUKSES") {
+          const finalization = await applyLegacySuccess(transaksiRef, resultData);
+          if (finalization.conflict) {
+            return {
+              success: false,
+              ref_id: refId,
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              message: "Status provider berbeda dengan status lokal. Admin perlu memeriksa transaksi.",
+              response: resultData,
+            };
           }
-        );
+          return {
+            success: true,
+            ref_id: refId,
+            status: "SUCCESS",
+            response: resultData,
+            reused: finalization.reused === true,
+          };
+        }
 
-        return {
-          success:
-            true,
-
-          ref_id:
-            refId,
-
-          status:
-            "PENDING",
-
-          response:
+        if (providerStatus === "GAGAL") {
+          const finalization = await applyLegacyFailure(
+            transaksiRef,
             resultData,
+            "DIGIFLAZZ",
+            `Refund transaksi Digiflazz: ${resultData.message || "Provider menyatakan gagal."}`
+          );
+          if (finalization.conflict) {
+            return {
+              success: false,
+              ref_id: refId,
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              message: "Status provider berbeda dengan status lokal. Admin perlu memeriksa transaksi.",
+              response: resultData,
+            };
+          }
+          return {
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            refunded: finalization.refunded === true,
+            message: resultData.message || (finalization.refunded ? "Transaksi gagal dan saldo telah dikembalikan." : "Transaksi gagal diproses."),
+            response: resultData,
+          };
+        }
+
+        const pendingResult = await applyLegacyPending(transaksiRef, resultData);
+        return {
+          success: pendingResult.success === true,
+          ref_id: refId,
+          status: pendingResult.status,
+          reconciliationRequired: pendingResult.status === "RECONCILIATION_REQUIRED",
+          message: pendingResult.conflict
+            ? "Status transaksi perlu diperiksa admin. Jangan lakukan pembelian ulang."
+            : (resultData.message || result.message || ""),
+          response: resultData,
         };
       } catch (error) {
         if (
@@ -3560,299 +3161,6 @@ async function debitUserBalanceForEdpoin({
 |--------------------------------------------------------------------------
 */
 
-async function refundEdpoinBalance({
-  transactionRef,
-  reason,
-}) {
-  const ledgerRef =
-    db
-      .collection("balance_ledger")
-      .doc();
-
-  const mutasiRef =
-    db
-      .collection("mutasi_saldo")
-      .doc();
-
-  return db.runTransaction(
-    async (transaction) => {
-      const transactionSnap =
-        await transaction.get(
-          transactionRef
-        );
-
-      if (
-        !transactionSnap.exists
-      ) {
-        throw new Error(
-          "TRANSACTION_NOT_FOUND"
-        );
-      }
-
-      const trx =
-        transactionSnap.data() ||
-        {};
-
-      /*
-      |----------------------------------------------------------
-      | SUCCESS ADALAH TERMINAL STATE
-      |----------------------------------------------------------
-      */
-
-      if (
-        String(
-          trx.status || ""
-        )
-          .trim()
-          .toUpperCase() ===
-        "SUCCESS"
-      ) {
-        return {
-          refunded:
-            false,
-
-          reason:
-            "TRANSACTION_ALREADY_SUCCESS",
-
-          saldoAkhir:
-            toSafeInteger(
-              trx.saldoAkhir
-            ) ?? 0,
-        };
-      }
-
-      if (
-        trx.balanceDebited !==
-        true
-      ) {
-        return {
-          refunded:
-            false,
-
-          reason:
-            "BALANCE_NOT_DEBITED",
-        };
-      }
-
-      if (
-        trx.balanceRefunded ===
-        true
-      ) {
-        return {
-          refunded:
-            false,
-
-          reason:
-            "ALREADY_REFUNDED",
-
-          saldoAkhir:
-            toSafeInteger(
-              trx.refundSaldoAkhir ??
-                trx.saldoAkhir
-            ) ?? 0,
-        };
-      }
-
-      const uid =
-        normalizeString(
-          trx.uid
-        );
-
-      const amount =
-        toSafeInteger(
-          trx.amount
-        );
-
-      if (!uid) {
-        throw new Error(
-          "TRANSACTION_UID_MISSING"
-        );
-      }
-
-      if (
-        amount === null ||
-        amount <= 0
-      ) {
-        throw new Error(
-          "INVALID_REFUND_AMOUNT"
-        );
-      }
-
-      const userRef =
-        db
-          .collection("users")
-          .doc(uid);
-
-      const userSnap =
-        await transaction.get(
-          userRef
-        );
-
-      if (!userSnap.exists) {
-        throw new Error(
-          "USER_NOT_FOUND"
-        );
-      }
-
-      const userData =
-        userSnap.data() ||
-        {};
-
-      const saldoSebelumnya =
-        toSafeInteger(
-          userData[
-            BALANCE_FIELD
-          ]
-        );
-
-      if (
-        saldoSebelumnya ===
-            null ||
-        saldoSebelumnya < 0
-      ) {
-        throw new Error(
-          "INVALID_BALANCE"
-        );
-      }
-
-      const saldoBaru =
-        saldoSebelumnya +
-        amount;
-
-      if (
-        !Number.isSafeInteger(
-          saldoBaru
-        )
-      ) {
-        throw new Error(
-          "BALANCE_OVERFLOW"
-        );
-      }
-
-      transaction.update(
-        userRef,
-        {
-          [BALANCE_FIELD]:
-            saldoBaru,
-
-          updatedAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      transaction.set(
-        ledgerRef,
-        {
-          uid,
-
-          type:
-            "CREDIT",
-
-          amount,
-
-          before:
-            saldoSebelumnya,
-
-          after:
-            saldoBaru,
-
-          reason:
-            reason ||
-            "Refund transaksi EDPOIN",
-
-          source:
-            "EDPOIN_REFUND",
-
-          transactionId:
-            transactionRef.id,
-
-          createdAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      transaction.set(
-        mutasiRef,
-        {
-          uid,
-
-          tipe:
-            "MASUK",
-
-          nominal:
-            amount,
-
-          saldoAwal:
-            saldoSebelumnya,
-
-          saldoAkhir:
-            saldoBaru,
-
-          keterangan:
-            reason ||
-            "Refund transaksi EDPOIN",
-
-          sumber:
-            "EDPOIN_REFUND",
-
-          transactionId:
-            transactionRef.id,
-
-          waktu:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      transaction.update(
-        transactionRef,
-        {
-          balanceRefunded:
-            true,
-
-          refundAmount:
-            amount,
-
-          refundSaldoAwal:
-            saldoSebelumnya,
-
-          refundSaldoAkhir:
-            saldoBaru,
-
-          refundLedgerId:
-            ledgerRef.id,
-
-          refundMutasiId:
-            mutasiRef.id,
-
-          refundedAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-
-          updatedAt:
-            admin.firestore
-              .FieldValue
-              .serverTimestamp(),
-        }
-      );
-
-      return {
-        refunded:
-          true,
-
-        saldoAkhir:
-          saldoBaru,
-      };
-    }
-  );
-}
-
 /*
 |--------------------------------------------------------------------------
 | EDPOIN - TRANSACTION REQUEST
@@ -3894,6 +3202,8 @@ exports.edpoinTransactionRequest =
         normalizeString(
           data.customer_no
         );
+
+      const transactionPin = normalizeString(data.transaction_pin || data.pin);
 
       const requestId =
         normalizeString(
@@ -3941,6 +3251,12 @@ exports.edpoinTransactionRequest =
           await getTrustedProductPrice(
             productCode
           );
+
+        await pinSecurity.verifyTransactionPin(uid, transactionPin);
+        const activeUser = await pinSecurity.assertActiveUser(uid);
+        if (activeUser.role !== "user") {
+          throw new HttpsError("permission-denied", "Hanya akun pengguna yang dapat melakukan pembelian.");
+        }
 
         const refId =
           requestId
@@ -4054,6 +3370,9 @@ exports.edpoinTransactionRequest =
               true,
           };
         }
+
+        // Validate credentials before any debit; leave reused requests readable without a provider call.
+        edpoinCredentials();
 
         await transaksiRef.create(
           {
@@ -4230,167 +3549,64 @@ exports.edpoinTransactionRequest =
             .trim()
             .toUpperCase();
 
-        if (
-          providerStatus ===
-            "SUKSES" ||
-          providerStatus ===
-            "SUCCESS"
-        ) {
-          await transaksiRef.set(
-            {
-              status:
-                "SUCCESS",
-
-              response:
-                resultData,
-
-              providerReference:
-                resultData.ref_id ||
-                resultData.reference ||
-                resultData.sn ||
-                null,
-
-              completedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
-          return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              resultData,
-          };
-        }
-
-        if (
-          providerStatus ===
-            "GAGAL" ||
-          providerStatus ===
-            "FAILED" ||
-          providerStatus ===
-            "FAIL"
-        ) {
-          const refund =
-            await refundEdpoinBalance(
-              {
-                transactionRef:
-                  transaksiRef,
-
-                reason:
-                  `Refund transaksi EDPOIN: ${
-                    resultData.message ||
-                    result.message ||
-                    "Provider menyatakan gagal."
-                  }`,
-              }
-            );
-
-          await transaksiRef.set(
-            {
-              status:
-                "FAILED",
-
-              response:
-                resultData,
-
-              failureReason:
-                resultData.message ||
-                result.message ||
-                "Transaksi EDPOIN gagal.",
-
-              refunded:
-                refund.refunded ===
-                  true ||
-                refund.reason ===
-                  "ALREADY_REFUNDED",
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
-          return {
-            success:
-              false,
-
-            ref_id:
-              refId,
-
-            status:
-              "FAILED",
-
-            refunded:
-              refund.refunded ===
-                true ||
-              refund.reason ===
-                "ALREADY_REFUNDED",
-
-            message:
-              resultData.message ||
-              result.message ||
-              "Transaksi gagal dan saldo telah dikembalikan.",
-
-            response:
-              resultData,
-          };
-        }
-
-        await transaksiRef.set(
-          {
-            status:
-              "PENDING",
-
-            response:
-              resultData,
-
-            updatedAt:
-              admin.firestore
-                .FieldValue
-                .serverTimestamp(),
-          },
-          {
-            merge:
-              true,
+        if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
+          const finalization = await applyLegacySuccess(transaksiRef, resultData);
+          if (finalization.conflict) {
+            return {
+              success: false,
+              ref_id: refId,
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              message: "Status provider berbeda dengan status lokal. Admin perlu memeriksa transaksi.",
+              response: resultData,
+            };
           }
-        );
+          return {
+            success: true,
+            ref_id: refId,
+            status: "SUCCESS",
+            response: resultData,
+            reused: finalization.reused === true,
+          };
+        }
 
-        return {
-          success:
-            true,
-
-          ref_id:
-            refId,
-
-          status:
-            "PENDING",
-
-          response:
+        if (providerStatus === "GAGAL" || providerStatus === "FAILED" || providerStatus === "FAIL") {
+          const finalization = await applyLegacyFailure(
+            transaksiRef,
             resultData,
+            "EDPOIN",
+            `Refund transaksi EDPOIN: ${resultData.message || result.message || "Provider menyatakan gagal."}`
+          );
+          if (finalization.conflict) {
+            return {
+              success: false,
+              ref_id: refId,
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              message: "Status provider berbeda dengan status lokal. Admin perlu memeriksa transaksi.",
+              response: resultData,
+            };
+          }
+          return {
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            refunded: finalization.refunded === true,
+            message: resultData.message || result.message || (finalization.refunded ? "Transaksi gagal dan saldo telah dikembalikan." : "Transaksi gagal diproses."),
+            response: resultData,
+          };
+        }
+
+        const pendingResult = await applyLegacyPending(transaksiRef, resultData);
+        return {
+          success: pendingResult.success === true,
+          ref_id: refId,
+          status: pendingResult.status,
+          reconciliationRequired: pendingResult.status === "RECONCILIATION_REQUIRED",
+          message: pendingResult.conflict
+            ? "Status transaksi perlu diperiksa admin. Jangan lakukan pembelian ulang."
+            : (resultData.message || result.message || ""),
+          response: resultData,
         };
       } catch (error) {
         if (
@@ -4448,6 +3664,10 @@ exports.requestWithdrawal = onCall(
     }
 
     const uid = request.auth.uid;
+    const activeUser = await pinSecurity.assertActiveUser(uid);
+    if (activeUser.role !== "user") {
+      throw new HttpsError("permission-denied", "Penarikan hanya tersedia untuk akun pengguna.");
+    }
     const data = request.data || {};
     const requestId = normalizeString(data.request_id);
     const amount = toSafeInteger(data.amount);
@@ -4690,3 +3910,495 @@ exports.adminReviewWithdrawal = onCall(
   }
 );
 
+
+
+/*
+|--------------------------------------------------------------------------
+| LEGACY PPOB RECONCILIATION
+|--------------------------------------------------------------------------
+| Protects older callable paths that create digiflazz_transactions and
+| edpoin_transactions. Every retry uses the original provider reference.
+|--------------------------------------------------------------------------
+*/
+
+function legacyTimestampMillis(value) {
+  return value && typeof value.toDate === "function" ? value.toDate().getTime() : 0;
+}
+
+async function recordLegacyReconciliation(ref, providerData, reason) {
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const latest = snap.data() || {};
+    const status = String(latest.status || "").trim().toUpperCase();
+    tx.set(reconciliationRef, {
+      transactionId: ref.id,
+      uid: latest.uid || null,
+      localStatus: status,
+      providerStatus: providerData.status || null,
+      providerMessage: providerData.message || null,
+      reason,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    tx.update(ref, {
+      reconciliationRequired: true,
+      providerConflict: reason,
+      status: status === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function applyLegacySuccess(ref, providerData) {
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {status: "NOT_FOUND", success: false};
+    const current = snap.data() || {};
+    const currentStatus = String(current.status || "").trim().toUpperCase();
+    const providerReference = providerData.ref_id || providerData.reference || providerData.sn || null;
+
+    if (current.balanceRefunded === true || current.refunded === true) {
+      const reason = "PROVIDER_SUCCESS_AFTER_REFUND";
+      const nextStatus = currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED";
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus || null,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      tx.update(ref, {
+        status: nextStatus,
+        reconciliationRequired: true,
+        providerConflict: reason,
+        response: providerData,
+        providerStatus: providerData.status || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {status: "RECONCILIATION_REQUIRED", success: false, conflict: true};
+    }
+
+    if (currentStatus === "SUCCESS") {
+      tx.update(ref, {
+        response: providerData,
+        providerStatus: providerData.status || null,
+        providerReference: current.providerReference || providerReference,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {status: "SUCCESS", success: true, reused: true};
+    }
+
+    if (["FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
+      const reason = "PROVIDER_SUCCESS_AFTER_LOCAL_FAILURE_OR_REFUND";
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus || null,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      tx.update(ref, {
+        reconciliationRequired: true,
+        providerConflict: reason,
+        response: providerData,
+        providerStatus: providerData.status || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {status: "RECONCILIATION_REQUIRED", success: false, conflict: true};
+    }
+
+    tx.update(ref, {
+      status: "SUCCESS",
+      response: providerData,
+      providerStatus: providerData.status || null,
+      providerReference,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return {status: "SUCCESS", success: true, reused: false};
+  });
+}
+
+async function applyLegacyFailure(ref, providerData, providerName, reason) {
+  const ledgerRef = db.collection("balance_ledger").doc();
+  const mutasiRef = db.collection("mutasi_saldo").doc();
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  const providerReason = reason || providerData.message || "Provider menyatakan transaksi gagal.";
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {status: "NOT_FOUND", success: false};
+    const current = snap.data() || {};
+    const currentStatus = String(current.status || "").trim().toUpperCase();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (currentStatus === "SUCCESS") {
+      const refundedAlready = current.balanceRefunded === true || current.refunded === true;
+      const conflictReason = refundedAlready
+        ? "LOCAL_SUCCESS_WITH_REFUNDED_BALANCE_AND_PROVIDER_FAILURE"
+        : "PROVIDER_FAILURE_AFTER_LOCAL_SUCCESS";
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason: conflictReason,
+        createdAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      tx.update(ref, {
+        status: refundedAlready ? "RECONCILIATION_REQUIRED" : "SUCCESS",
+        reconciliationRequired: true,
+        providerConflict: conflictReason,
+        updatedAt: now,
+      });
+      return {
+        status: refundedAlready ? "RECONCILIATION_REQUIRED" : "SUCCESS",
+        success: false,
+        conflict: true,
+        refunded: refundedAlready,
+      };
+    }
+
+    if (currentStatus === "RECONCILIATION_REQUIRED") {
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason: "PROVIDER_FAILURE_DURING_RECONCILIATION",
+        createdAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      return {status: currentStatus, success: false, conflict: true, refunded: false};
+    }
+
+    // Terminal failure is idempotent only after its refund state is complete.
+    if (currentStatus === "FAILED" &&
+        (current.balanceRefunded === true || current.refunded === true || current.balanceDebited !== true)) {
+      tx.update(ref, {
+        response: providerData,
+        providerStatus: providerData.status || null,
+        failureReason: current.failureReason || providerData.message || providerReason,
+        updatedAt: now,
+      });
+      return {
+        status: "FAILED",
+        success: false,
+        refunded: current.balanceRefunded === true || current.refunded === true,
+        reused: true,
+      };
+    }
+
+    let refund = {refunded: false, amount: 0};
+    if (current.balanceRefunded === true || current.refunded === true) {
+      refund = {
+        refunded: true,
+        amount: toSafeInteger(current.refundAmount) ?? toSafeInteger(current.amount) ?? 0,
+      };
+    } else if (current.balanceDebited === true) {
+      const uid = normalizeString(current.uid);
+      const amount = toSafeInteger(current.trustedPrice) ?? toSafeInteger(current.amount);
+      if (!uid || amount === null || amount <= 0) throw new Error("INVALID_REFUND_DATA");
+      const userRef = db.collection("users").doc(uid);
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new Error("USER_NOT_FOUND");
+      const userData = userSnap.data() || {};
+      const before = toSafeInteger(userData[BALANCE_FIELD]);
+      if (before === null || before < 0) throw new Error("INVALID_BALANCE");
+      const after = before + amount;
+      if (!Number.isSafeInteger(after)) throw new Error("BALANCE_OVERFLOW");
+
+      tx.update(userRef, {
+        [BALANCE_FIELD]: after,
+        updatedAt: now,
+      });
+      tx.create(ledgerRef, {
+        uid,
+        type: "CREDIT",
+        amount,
+        before,
+        after,
+        reason: providerReason,
+        source: providerName + "_REFUND",
+        transactionId: ref.id,
+        createdAt: now,
+      });
+      tx.create(mutasiRef, {
+        uid,
+        tipe: "MASUK",
+        nominal: amount,
+        saldoAwal: before,
+        saldoAkhir: after,
+        keterangan: providerReason,
+        sumber: providerName + "_REFUND",
+        transactionId: ref.id,
+        waktu: now,
+      });
+      refund = {
+        refunded: true,
+        amount,
+        refundSaldoAwal: before,
+        refundSaldoAkhir: after,
+        refundLedgerId: ledgerRef.id,
+        refundMutasiId: mutasiRef.id,
+      };
+    }
+
+    tx.update(ref, {
+      status: "FAILED",
+      response: providerData,
+      providerStatus: providerData.status || null,
+      failureReason: providerData.message || providerReason,
+      refunded: refund.refunded,
+      balanceRefunded: refund.refunded,
+      ...(refund.refunded ? {
+        refundAmount: refund.amount,
+        refundSaldoAwal: refund.refundSaldoAwal ?? current.refundSaldoAwal ?? null,
+        refundSaldoAkhir: refund.refundSaldoAkhir ?? current.refundSaldoAkhir ?? null,
+        refundLedgerId: refund.refundLedgerId ?? current.refundLedgerId ?? null,
+        refundMutasiId: refund.refundMutasiId ?? current.refundMutasiId ?? null,
+        refundedAt: now,
+      } : {}),
+      completedAt: now,
+      updatedAt: now,
+    });
+    return {status: "FAILED", success: false, refunded: refund.refunded, reused: false};
+  });
+}
+
+async function applyLegacyPending(ref, providerData) {
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(ref.id);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {status: "NOT_FOUND", success: false};
+    const current = snap.data() || {};
+    const currentStatus = String(current.status || "").trim().toUpperCase();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const fundsWereRefunded = current.balanceRefunded === true || current.refunded === true;
+    if (fundsWereRefunded ||
+        (currentStatus === "FAILED" && current.balanceDebited === true)) {
+      const reason = fundsWereRefunded
+        ? "PENDING_PROVIDER_STATUS_AFTER_REFUND"
+        : "PENDING_PROVIDER_STATUS_AFTER_FAILED_DEBIT";
+      const nextStatus = currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED";
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus || null,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason,
+        createdAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      tx.update(ref, {
+        status: nextStatus,
+        reconciliationRequired: true,
+        providerConflict: reason,
+        response: providerData,
+        providerStatus: providerData.status || null,
+        updatedAt: now,
+      });
+      return {status: nextStatus, success: false, conflict: true};
+    }
+
+    if (["SUCCESS", "FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
+      return {
+        status: currentStatus,
+        success: currentStatus === "SUCCESS",
+        conflict: currentStatus === "RECONCILIATION_REQUIRED",
+        terminal: true,
+      };
+    }
+
+    tx.update(ref, {
+      status: "PENDING",
+      response: providerData,
+      providerStatus: providerData.status || null,
+      providerMessage: providerData.message || "Menunggu konfirmasi provider.",
+      updatedAt: now,
+    });
+    return {status: "PENDING", success: true};
+  });
+}
+
+exports.reconcileLegacyProviderTransactions = onSchedule(
+    {
+      schedule: "every 5 minutes",
+      timeZone: "Asia/Jakarta",
+      region: REGION,
+      timeoutSeconds: 540,
+      maxInstances: 1,
+      secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY, EDPOIN_USERNAME, EDPOIN_API_KEY],
+    },
+    async () => {
+      const cutoff = Date.now() - 2 * 60 * 1000;
+      const pendingStatuses = ["CREATED", "PROCESSING", "PENDING"];
+      const collections = [
+        {name: "digiflazz_transactions", provider: "DIGIFLAZZ"},
+        {name: "edpoin_transactions", provider: "EDPOIN"},
+      ];
+
+      for (const item of collections) {
+        const snapshot = await db.collection(item.name)
+            .where("status", "in", pendingStatuses)
+            .orderBy("updatedAt", "asc").limit(100).get();
+
+        for (const doc of snapshot.docs) {
+          const original = doc.data() || {};
+          if (legacyTimestampMillis(original.updatedAt) > cutoff) continue;
+
+          const ref = doc.ref;
+          const freshSnap = await ref.get();
+          if (!freshSnap.exists) continue;
+          const current = freshSnap.data() || {};
+          const currentStatus = String(current.status || "").trim().toUpperCase();
+          if (!pendingStatuses.includes(currentStatus)) continue;
+
+          if (current.balanceDebited !== true) {
+            await ref.update({
+              status: "FAILED",
+              failureReason: "Permintaan kedaluwarsa sebelum saldo dipotong.",
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            continue;
+          }
+
+          if (current.balanceRefunded === true || current.refunded === true) {
+            await recordLegacyReconciliation(ref, {
+              status: current.providerStatus || null,
+              message: current.failureReason || null,
+            }, "REFUNDED_TRANSACTION_LEFT_IN_NONTERMINAL_STATE");
+            continue;
+          }
+
+          const refId = String(current.refId || doc.id);
+          try {
+            let providerData;
+            if (item.provider === "DIGIFLAZZ") {
+              const credentials = digiflazzCredentials();
+              const sku = normalizeString(current.buyerSkuCode || current.buyer_sku_code);
+              const customerNo = normalizeString(current.customerNo || current.customer_no);
+              if (!sku || !customerNo) throw new Error("Data transaksi Digiflazz tidak lengkap.");
+              const response = await digiflazzRequest("transaction", {
+                username: credentials.username,
+                buyer_sku_code: sku,
+                customer_no: customerNo,
+                ref_id: refId,
+                sign: md5(credentials.username + credentials.apiKey + refId),
+              });
+              providerData = response.data || response;
+            } else {
+              const credentials = edpoinCredentials();
+              const productCode = normalizeString(current.productCode || current.product_code);
+              const customerNo = normalizeString(current.customerNo || current.customer_no);
+              const amount = toSafeInteger(current.amount);
+              if (!productCode || !customerNo || amount === null || amount <= 0) {
+                throw new Error("Data transaksi EDPOIN tidak lengkap.");
+              }
+              const response = await edpoinRequest("transaction", {
+                username: credentials.username,
+                api_key: credentials.apiKey,
+                product_code: productCode,
+                customer_no: customerNo,
+                ref_id: refId,
+                amount,
+                sign: md5(credentials.username + credentials.apiKey + refId),
+              });
+              providerData = response.data || response;
+            }
+
+            const providerStatus = String(providerData.status || "").trim().toUpperCase();
+            const isSuccess = providerStatus === "SUKSES" || providerStatus === "SUCCESS";
+            const isFailure = ["GAGAL", "FAILED", "FAIL", "FAILURE"].includes(providerStatus);
+
+            await ref.update({
+              providerStatus: providerData.status || null,
+              lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              reconciliationAttempts: admin.firestore.FieldValue.increment(1),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            if (isSuccess) {
+              await applyLegacySuccess(ref, providerData);
+            } else if (isFailure) {
+              await applyLegacyFailure(
+                ref,
+                providerData,
+                item.provider,
+                providerData.message || "Provider menyatakan transaksi gagal."
+              );
+            } else {
+              await applyLegacyPending(ref, providerData);
+            }
+          } catch (error) {
+            await ref.update({
+              lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              reconciliationAttempts: admin.firestore.FieldValue.increment(1),
+              lastReconcileError: String(error.message || "Unknown reconciliation error").slice(0, 300),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+        // Repair old records where FAILED was written but the refund transaction
+        // never completed. Refund only when the provider's stored outcome is
+        // conclusively failure; ambiguous cases are escalated, never auto-credited.
+        const failedSnapshot = await db.collection(item.name)
+            .where("status", "==", "FAILED")
+            .where("balanceDebited", "==", true)
+            .orderBy("updatedAt", "asc")
+            .limit(100).get();
+
+        for (const doc of failedSnapshot.docs) {
+          const current = doc.data() || {};
+          if (legacyTimestampMillis(current.updatedAt) > cutoff) continue;
+          if (current.balanceRefunded === true || current.refunded === true) continue;
+
+          const providerStatus = String(current.providerStatus || "").trim().toUpperCase();
+          const providerData = current.response && typeof current.response === "object"
+            ? current.response
+            : {status: current.providerStatus || null, message: current.failureReason || null};
+
+          try {
+            if (["GAGAL", "FAILED", "FAIL", "FAILURE"].includes(providerStatus)) {
+              await applyLegacyFailure(
+                doc.ref,
+                providerData,
+                item.provider,
+                current.failureReason || providerData.message || "Memulihkan refund lama yang belum selesai."
+              );
+            } else if (["SUKSES", "SUCCESS"].includes(providerStatus)) {
+              await applyLegacySuccess(doc.ref, providerData);
+            } else {
+              await recordLegacyReconciliation(
+                doc.ref,
+                providerData,
+                "FAILED_BUT_REFUND_NOT_CONFIRMED"
+              );
+            }
+          } catch (error) {
+            await doc.ref.update({
+              lastReconcileError: String(error.message || "Unknown reconciliation error").slice(0, 300),
+              lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
+      }
+    },
+);

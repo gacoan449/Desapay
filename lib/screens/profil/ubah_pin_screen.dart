@@ -46,14 +46,18 @@ class _UbahPinScreenState extends State<UbahPinScreen> {
   // CEK PIN USER
   // ============================================================
   Future<void> _checkPin() async {
-    final result = await _pinService.hasPin();
-
-    if (!mounted) return;
-
-    setState(() {
-      _hasPin = result;
-      _loading = false;
-    });
+    try {
+      final result = await _pinService.hasPin();
+      if (!mounted) return;
+      setState(() {
+        _hasPin = result;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showMessage('Status PIN tidak dapat diperiksa. Periksa koneksi lalu buka kembali halaman ini.');
+    }
   }
 
   // ============================================================

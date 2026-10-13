@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../config/warna.dart';
@@ -636,6 +638,47 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
   // BACKEND -> UPDATE STATUS
   // ==========================================================
 
+  Future<String?> _mintaPinTransaksi() async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Verifikasi PIN transaksi'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(labelText: 'PIN 6 digit', counterText: ''),
+            onSubmitted: (_) {
+              final value = controller.text.trim();
+              if (RegExp(r'^\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+            },
+          ),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (RegExp(r'^\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+              },
+              child: const Text('Lanjutkan'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
   Future<void> _prosesTransaksi() async {
     final nomor = _nomorController.text.trim();
 
@@ -669,14 +712,6 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
 
     final harga = _parseDouble(
       _selectedProductData!['harga'],
-    );
-
-    final cost = _parseDouble(
-      _selectedProductData!['cost'],
-    );
-
-    final margin = _parseDouble(
-      _selectedProductData!['margin'],
     );
 
     if (harga <= 0) {
@@ -714,53 +749,31 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       // API KEY DIGIFLAZZ TIDAK PERNAH MASUK KE APK.
       // --------------------------------------------------------
 
+      final pin = await _mintaPinTransaksi();
+      if (pin == null || !mounted) return;
+
+      // Client-side pricing is intentionally omitted. The backend validates
+      // the authoritative product price and creates the request after PIN verification.
       final requestRef = FirebaseFirestore.instance
           .collection('transaction_requests')
           .doc();
-
       final requestId = requestRef.id;
-
-      await requestRef.set({
-        'requestId': requestId,
-
-        // USER
-        'uid': user.uid,
-
-        // PRODUK
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast2',
+      ).httpsCallable('createPpobTransaction');
+      final created = await callable.call(<String, dynamic>{
+        'request_id': requestId,
+        'pin': pin,
         'sku': _selectedSku,
-        'buyer_sku_code': _selectedSku,
-        'productName':
-            _selectedProductData!['nama']?.toString() ?? '-',
-        'category':
-            _selectedProductData!['category']?.toString() ??
-                widget.kategori,
-        'brand':
-            _selectedProductData!['brand']?.toString() ?? '',
-
-        // TUJUAN
-        'customerNo': nomor,
         'customer_no': nomor,
-
-        // HARGA
-        'amount': harga.round(),
-        'sellingPrice': harga.round(),
-        'cost': cost.round(),
-        'margin': margin.round(),
-
-        // STATUS
-        'status': 'WAITING',
-        'isTest': false,
-        'testMode': false,
-        'digiflazzSent': false,
-
-        // SUMBER
+        'type': 'PPOB',
+        'category': widget.kategori,
         'source': 'PPOB_GENERIC',
-        'categoryScreen': widget.kategori,
-
-        // WAKTU
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       });
+      if (created.data is! Map ||
+          (created.data as Map)['request_id']?.toString() != requestId) {
+        throw StateError('Respons pembuatan transaksi tidak valid.');
+      }
 
       if (!mounted) return;
 
@@ -812,7 +825,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
               status == 'GAGAL' ||
               status == 'ERROR' ||
               status == 'CANCELLED' ||
-              status == 'CANCELED') {
+              status == 'CANCELED' ||
+              status == 'REFUND_PENDING' ||
+              status == 'RECONCILIATION_REQUIRED') {
             if (!completer.isCompleted) {
               completer.complete(data);
             }
@@ -844,6 +859,14 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
 
       final status =
           result['status']?.toString().toUpperCase() ?? '';
+
+      if (result['reconciliationRequired'] == true) {
+        _showMessage(
+          'Status transaksi perlu pemeriksaan admin. Jangan lakukan pembelian ulang.',
+          danger: true,
+        );
+        return;
+      }
 
       final message =
           result['message']?.toString() ??
@@ -888,6 +911,22 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         return;
       }
 
+      if (status == 'REFUND_PENDING') {
+        _showMessage(
+          'Transaksi gagal, tetapi pengembalian saldo sedang diproses. Jangan lakukan pembelian ulang dulu.',
+          danger: true,
+        );
+        return;
+      }
+
+      if (status == 'RECONCILIATION_REQUIRED') {
+        _showMessage(
+          'Status transaksi memerlukan pemeriksaan admin. Jangan ulangi pembelian.',
+          danger: true,
+        );
+        return;
+      }
+
       // --------------------------------------------------------
       // TIMEOUT / MASIH DIPROSES
       // --------------------------------------------------------
@@ -895,11 +934,16 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       _showMessage(
         'Transaksi masih diproses. Silakan cek riwayat transaksi.',
       );
-    } catch (e) {
+    } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-
       _showMessage(
-        'Gagal membuat transaksi. Silakan coba lagi.',
+        e.message ?? 'Transaksi tidak dapat diproses.',
+        danger: true,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(
+        'Gagal membuat transaksi. Periksa koneksi dan status transaksi sebelum mencoba kembali.',
         danger: true,
       );
     } finally {

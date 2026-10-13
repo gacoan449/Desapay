@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "fix/transaction-pin-security"]
   workflow_dispatch:
 
 jobs:
@@ -36,6 +36,7 @@ jobs:
           test -f functions/index.js
           test -f functions/bootstrap.js
           test -f functions/transactionFlow.js
+          test -f functions/pinSecurity.js
           test -f functions/notificationBridge.js
           test -f functions/package.json
           test -f firebase.json
@@ -65,6 +66,7 @@ jobs:
           node --check index.js
           node --check bootstrap.js
           node --check transactionFlow.js
+          node --check pinSecurity.js
           node --check notificationBridge.js
       - name: Analyze Flutter
         run: flutter analyze --no-fatal-infos --no-fatal-warnings

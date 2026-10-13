@@ -58,7 +58,7 @@ Future<void> main() async {
     //
     // =======================================================
 
-    FirebaseFunctions.instance;
+    FirebaseFunctions.instanceFor(region: 'asia-southeast2');
 
     debugPrint(
       '✅ DesaPay Firebase berhasil terhubung: '

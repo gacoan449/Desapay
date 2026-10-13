@@ -13,6 +13,8 @@ abstract class IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String transactionPin,
+    required String requestId,
   });
 
   Future<Map<String, dynamic>> mintaTiketDeposit({
@@ -31,7 +33,9 @@ abstract class IDigiflazzService {
 }
 
 class DigiflazzService implements IDigiflazzService {
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'asia-southeast2',
+  );
 
   @override
   Future<List<dynamic>> ambilSemuaProduk() async {
@@ -76,18 +80,44 @@ class DigiflazzService implements IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String transactionPin,
+    required String requestId,
   }) async {
     try {
       final result = await _functions.httpsCallable('digiflazzKirimTransaksi').call({
         'buyer_sku_code': buyerSkuCode,
         'customer_no': customerNo,
+        'transaction_pin': transactionPin,
+        'request_id': requestId,
       });
       final data = result.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return {'status': 'Gagal', 'message': 'Format respon transaksi tidak valid.'};
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Error fungsi digiflazzKirimTransaksi: ${e.code}');
+      const definitiveFailureCodes = <String>{
+        'invalid-argument',
+        'unauthenticated',
+        'permission-denied',
+        'failed-precondition',
+        'not-found',
+        'already-exists',
+        'resource-exhausted',
+      };
+      final definitiveFailure = definitiveFailureCodes.contains(e.code);
+      return {
+        'status': definitiveFailure ? 'Gagal' : 'PENDING',
+        'code': e.code,
+        'message': definitiveFailure
+            ? (e.message ?? 'Transaksi tidak dapat diproses.')
+            : 'Status transaksi belum dapat dipastikan. Periksa riwayat sebelum mencoba lagi.',
+      };
     } catch (e) {
       debugPrint('Error fungsi digiflazzKirimTransaksi: $e');
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan transaksi di server.'};
+      return {
+        'status': 'PENDING',
+        'message': 'Status transaksi belum dapat dipastikan. Periksa riwayat sebelum mencoba lagi.',
+      };
     }
   }
 

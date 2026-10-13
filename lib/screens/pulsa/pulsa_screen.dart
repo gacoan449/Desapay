@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/services.dart';
 
 import '../../config/warna.dart';
 
@@ -506,6 +508,47 @@ class _PulsaScreenState extends State<PulsaScreen> {
     );
   }
 
+  Future<String?> _mintaPinTransaksi() async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Verifikasi PIN transaksi'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(labelText: 'PIN 6 digit', counterText: ''),
+            onSubmitted: (_) {
+              final value = controller.text.trim();
+              if (RegExp(r'^\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+            },
+          ),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (RegExp(r'^\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+              },
+              child: const Text('Lanjutkan'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
   // =========================================================
   // BUAT TRANSAKSI
   // =========================================================
@@ -547,6 +590,9 @@ class _PulsaScreenState extends State<PulsaScreen> {
       );
       return;
     }
+
+    final pin = await _mintaPinTransaksi();
+    if (pin == null || !mounted) return;
 
     setState(() {
       _sedangTransaksi = true;
@@ -602,40 +648,23 @@ class _PulsaScreenState extends State<PulsaScreen> {
           .collection('transaction_requests')
           .doc();
 
-      await transaksiRef.set({
-        'transactionId': transaksiRef.id,
-        'uid': _uid,
-
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast2',
+      ).httpsCallable('createPpobTransaction');
+      final created = await callable.call(<String, dynamic>{
+        'request_id': transaksiRef.id,
+        'pin': pin,
+        'sku': sku,
+        'customer_no': nomor,
         'type': 'PULSA',
         'category': 'PULSA',
-
-        'sku': sku,
-
-        'productName':
-            produk['name']?.toString() ?? '-',
-
-        'brand':
-            produk['brand']?.toString() ??
-                _operatorTerdeteksi,
-
-        'customerNo': nomor,
-
-        'operator':
-            _operatorTerdeteksi,
-
-        'amount': harga,
-
-        'paymentMethod':
-            'SALDO_UTAMA',
-
-        'status': 'WAITING',
-
-        'createdAt':
-            FieldValue.serverTimestamp(),
-
-        'updatedAt':
-            FieldValue.serverTimestamp(),
+        'operator': _operatorTerdeteksi,
+        'source': 'PULSA',
       });
+      if (created.data is! Map ||
+          (created.data as Map)['request_id']?.toString() != transaksiRef.id) {
+        throw StateError('Respons pembuatan transaksi tidak valid.');
+      }
 
       if (!mounted) return;
 
@@ -709,7 +738,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
                 data['sn']?.toString() ?? '';
 
             final message =
-                data['message']?.toString() ?? '';
+                (data['providerMessage'] ?? data['message'])?.toString() ?? '';
 
             if (status == 'WAITING' ||
                 status == 'PROCESSING' ||
@@ -730,6 +759,41 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     ),
                   ],
                 ),
+              );
+            }
+
+            if (data['reconciliationRequired'] == true ||
+                status == 'RECONCILIATION_REQUIRED') {
+              return AlertDialog(
+                title: const Text("Transaksi Perlu Pemeriksaan"),
+                content: const Text(
+                  "Status dari provider berbeda dengan status saldo. Admin perlu memeriksa transaksi ini. Jangan lakukan pembelian ulang.",
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text("Tutup"),
+                  ),
+                ],
+              );
+            }
+
+            if (status == 'REFUND_PENDING') {
+              return AlertDialog(
+                title: const Text("Pengembalian Saldo Diproses"),
+                content: Text(
+                  message.isNotEmpty
+                      ? message
+                      : "Transaksi gagal. Pengembalian saldo sedang dicoba kembali. Jangan lakukan pembelian ulang dulu.",
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text("Tutup"),
+                  ),
+                ],
               );
             }
 

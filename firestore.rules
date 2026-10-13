@@ -66,9 +66,20 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // PIN is stored in a server-only collection and may only be accessed by Admin SDK.
+    match /transaction_pins/{uid} {
+      allow read, write: if false;
+    }
+
+    // Financial reconciliation details are restricted to administrators.
+    match /transaction_reconciliation/{transactionId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /transaction_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.status == "WAITING" && ((request.resource.data.buyer_sku_code is string && request.resource.data.buyer_sku_code.size() > 0) || (request.resource.data.sku is string && request.resource.data.sku.size() > 0)) && request.resource.data.customerNo is string && request.resource.data.customerNo.size() > 0 && request.resource.data.keys().hasOnly(["requestId", "transactionId", "uid", "type", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "operator", "amount", "sellingPrice", "cost", "margin", "paymentMethod", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt", "updatedAt"]);
+      allow create: if false; // Requests are created by createPpobTransaction after server-side PIN validation.
       allow update, delete: if false;
     }
 
