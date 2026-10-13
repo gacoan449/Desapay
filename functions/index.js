@@ -121,29 +121,11 @@ function generateRefId(uid) {
 }
 
 function isValidRequestId(value) {
-  if (
-    typeof value !== "string"
-  ) {
-    return false;
-  }
-
-  const requestId =
-    value.trim();
-
-  if (!requestId) {
-    return true;
-  }
-
-  if (
-    requestId.length >
-    MAX_REQUEST_ID_LENGTH
-  ) {
-    return false;
-  }
-
-  return /^[A-Za-z0-9_-]+$/.test(
-    requestId
-  );
+  if (typeof value !== "string") return false;
+  const requestId = value.trim();
+  return requestId.length >= 8 &&
+    requestId.length <= MAX_REQUEST_ID_LENGTH &&
+    /^[A-Za-z0-9_-]+$/.test(requestId);
 }
 
 function normalizeString(value) {
@@ -1618,7 +1600,6 @@ exports.digiflazzKirimTransaksi =
         );
 
       const transactionPin = normalizeString(data.transaction_pin || data.pin);
-      await pinSecurity.verifyTransactionPin(uid, transactionPin);
 
       const requestId =
         normalizeString(
@@ -1666,6 +1647,8 @@ exports.digiflazzKirimTransaksi =
           await getTrustedProductPrice(
             buyerSkuCode
           );
+
+        await pinSecurity.verifyTransactionPin(uid, transactionPin);
 
         const refId =
           requestId
@@ -3963,7 +3946,6 @@ exports.edpoinTransactionRequest =
         );
 
       const transactionPin = normalizeString(data.transaction_pin || data.pin);
-      await pinSecurity.verifyTransactionPin(uid, transactionPin);
 
       const requestId =
         normalizeString(
@@ -4011,6 +3993,8 @@ exports.edpoinTransactionRequest =
           await getTrustedProductPrice(
             productCode
           );
+
+        await pinSecurity.verifyTransactionPin(uid, transactionPin);
 
         const refId =
           requestId
