@@ -26,6 +26,7 @@ abstract class ITransaksiService {
     required Produk produk,
     required String nomorTujuan,
     required String metodePembayaran,
+    required String transactionPin,
   });
 }
 
@@ -53,96 +54,58 @@ class TransaksiService implements ITransaksiService {
     required Produk produk,
     required String nomorTujuan,
     required String metodePembayaran,
+    required String transactionPin,
   }) async {
-    // 1. Validasi Awal Parameter Input Finansial
     if (nomorTujuan.trim().length < 4) {
       return const HasilEksekusiTransaksi(
         isSukses: false,
-        pesan: "Nomor tujuan atau ID pelanggan tidak valid. Periksa kembali.",
+        pesan: "Nomor tujuan atau ID pelanggan tidak valid.",
       );
     }
 
-    // Pembuatan ID Referensi Unik Sistem DesaPay (Sesuai Regulasi Pencegahan Double Payment)
-    final String generatedRefId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
-
-    // 2. Proteksi Finansial 1: Uji dan Kurangi Saldo Pengguna Lewat Jalur Transaksi Atomic
-    if (metodePembayaran.toUpperCase() == 'SALDO') {
-      final SaldoUpdateResult hasilPotongSaldo = await _saldoService.updateSaldo(
-        uid: uid,
-        nominal: produk.harga,
-        isTambah: false,
-        keterangan: "Pembelian ${produk.nama} ke $nomorTujuan",
+    if (metodePembayaran.toUpperCase() != 'SALDO') {
+      return const HasilEksekusiTransaksi(
+        isSukses: false,
+        pesan: "Pembelian produk hanya mendukung saldo DesaPay.",
       );
-
-      if (!hasilPotongSaldo.isSuccess) {
-        return HasilEksekusiTransaksi(
-          isSukses: false,
-          pesan: hasilPotongSaldo.message,
-        );
-      }
     }
 
-    // 3. Tembak API Pihak Ketiga (Digiflazz Gateway Engine)
-    final Map<String, dynamic> responDigiflazz = await _digiflazzService.kirimTransaksi(
+    // Debit, refund, status, and ledger are exclusively server-owned.
+    // Do not debit/refund from Flutter: the callable already performs the
+    // authoritative price lookup and atomic balance operation.
+    final respon = await _digiflazzService.kirimTransaksi(
       buyerSkuCode: produk.kode,
       customerNo: nomorTujuan.trim(),
+      transactionPin: transactionPin,
     );
 
-    final String statusRespon = (responDigiflazz['status'] ?? 'Gagal').toString().toLowerCase();
-    final String pesanRespon = responDigiflazz['message'] ?? 'Transaksi sedang diproses oleh aggregator';
+    final statusText =
+        (respon['status'] ?? 'FAILED').toString().trim().toUpperCase();
+    final refId = (respon['ref_id'] ?? '').toString();
+    final message = (respon['message'] ?? respon['msg'] ?? '').toString();
 
-    StatusTransaksi statusAkhir = StatusTransaksi.pending;
-    bool isTransaksiBerhasil = false;
-
-    if (statusRespon == 'sukses') {
-      statusAkhir = StatusTransaksi.sukses;
-      isTransaksiBerhasil = true;
-    } else if (statusRespon == 'gagal') {
-      statusAkhir = StatusTransaksi.gagal;
-      isTransaksiBerhasil = false;
+    if (statusText == 'SUCCESS' || statusText == 'SUKSES') {
+      return HasilEksekusiTransaksi(
+        isSukses: true,
+        pesan: message.isEmpty ? "Transaksi berhasil diproses." : message,
+        refId: refId,
+        statusAkhir: StatusTransaksi.sukses,
+      );
     }
 
-    // 4. Siapkan Rekaman Model Objek Transaksi Resmi DesaPay (Type-Safe)
-    final Transaksi modelTransaksiLog = Transaksi(
-      uid: uid,
-      kodeProduk: produk.kode,
-      namaProduk: produk.nama,
-      nomorTujuan: nomorTujuan.trim(),
-      hargaNominal: produk.harga,
-      refId: generatedRefId,
-      status: statusAkhir,
-      metodePembayaran: metodePembayaran.toUpperCase(),
-      waktu: DateTime.now(),
-    );
-
-    // 5. Simpan Data Rekam Jejak Ke Firebase Cloud Firestore Melalui RiwayatService
-    await _riwayatService.simpan(modelTransaksiLog);
-
-    // 6. Rollback Engine: Mekanisme Refund Otomatis Jika Deteksi Status Digiflazz Menyatakan 'Gagal'
-    if (statusAkhir == StatusTransaksi.gagal && metodePembayaran.toUpperCase() == 'SALDO') {
-      await _saldoService.updateSaldo(
-        uid: uid,
-        nominal: produk.harga,
-        isTambah: true,
-        keterangan: "REFUND: Gagal isi ${produk.nama} ke $nomorTujuan",
-      );
-      
+    if (statusText == 'FAILED' || statusText == 'GAGAL' || statusText == 'FAIL') {
       return HasilEksekusiTransaksi(
         isSukses: false,
-        pesan: "Transaksi Gagal dari Provider: $pesanRespon. Saldo Anda telah dikembalikan secara utuh.",
-        refId: generatedRefId,
+        pesan: message.isEmpty ? "Transaksi gagal. Periksa riwayat transaksi." : message,
+        refId: refId,
         statusAkhir: StatusTransaksi.gagal,
       );
     }
 
-    // 7. Hasilkan Konfirmasi Final untuk Disajikan ke Halaman UI Resi Pengguna
     return HasilEksekusiTransaksi(
-      isSukses: isTransaksiBerhasil || statusAkhir == StatusTransaksi.pending,
-      pesan: statusAkhir == StatusTransaksi.sukses 
-          ? "Transaksi berhasil diproses!" 
-          : "Transaksi Anda sedang dalam antrean jaringan pusat.",
-      refId: generatedRefId,
-      statusAkhir: statusAkhir,
+      isSukses: false,
+      pesan: "Transaksi sedang diproses. Periksa status sebelum mencoba kembali.",
+      refId: refId,
+      statusAkhir: StatusTransaksi.pending,
     );
-  }
-}
+  }}
