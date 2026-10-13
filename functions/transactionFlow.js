@@ -331,28 +331,29 @@ async function finalize(requestRef, status, providerData, refundReason) {
   const current = requestSnap.data() || {};
   const currentStatus = text(current.status).toUpperCase();
 
-  if (currentStatus === "SUCCESS" || currentStatus === "FAILED") {
-    if (currentStatus === "FAILED" && status === "SUCCESS" && current.balanceRefunded === true) {
-      const details = {
-        transactionId: requestRef.id,
-        uid: current.uid || null,
-        localStatus: currentStatus,
-        providerStatus: providerData.status || null,
-        providerRc: providerData.rc || null,
-        providerMessage: providerData.message || null,
-        reason: "PROVIDER_SUCCESS_AFTER_REFUND",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
-      await db.collection("transaction_reconciliation").doc(requestRef.id).set(details, {merge: true});
-      await requestRef.update({
-        reconciliationRequired: true,
-        providerConflict: "SUCCESS_AFTER_REFUND",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
+  if (status === "SUCCESS" && current.balanceRefunded === true) {
+    const details = {
+      transactionId: requestRef.id,
+      uid: current.uid || null,
+      localStatus: currentStatus,
+      providerStatus: providerData.status || null,
+      providerRc: providerData.rc || null,
+      providerMessage: providerData.message || null,
+      reason: "PROVIDER_SUCCESS_AFTER_REFUND",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await db.collection("transaction_reconciliation").doc(requestRef.id).set(details, {merge: true});
+    await requestRef.update({
+      status: currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED",
+      reconciliationRequired: true,
+      providerConflict: "SUCCESS_AFTER_REFUND",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     return;
   }
+
+  if (currentStatus === "SUCCESS" || currentStatus === "FAILED") return;
 
   if (status === "FAILED") {
     try {
