@@ -64,7 +64,7 @@ class Transaksi {
       kodeProduk: (data['kodeProduk'] ?? data['buyer_sku_code'] ?? data['sku'] ?? '').toString(),
       namaProduk: (data['namaProduk'] ?? data['productName'] ?? 'Transaksi DesaPay').toString(),
       nomorTujuan: (data['nomorTujuan'] ?? data['customerNo'] ?? data['customer_no'] ?? '').toString(),
-      hargaNominal: parseAmount(data['hargaNominal'] ?? data['sellingPrice'] ?? data['amount']),
+      hargaNominal: parseAmount(data['hargaNominal'] ?? data['amount'] ?? data['sellingPrice']),
       refId: (data['refId'] ?? data['providerRefId'] ?? data['transactionId'] ?? data['requestId'] ?? doc.id).toString(),
       status: statusEnum,
       waktu: waktuParsed,
