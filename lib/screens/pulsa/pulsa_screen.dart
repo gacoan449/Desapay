@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/services.dart';
 
 import '../../config/warna.dart';
 
@@ -504,6 +506,1447 @@ class _PulsaScreenState extends State<PulsaScreen> {
         );
       },
     );
+  }
+
+  Future<String?> _mintaPinTransaksi() async {
+    final controller = TextEditingController();
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Verifikasi PIN transaksi'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+          decoration: const InputDecoration(
+            labelText: 'PIN 6 digit',
+            counterText: '',
+          ),
+          onSubmitted: (_) {
+            final value = controller.text.trim();
+            if (RegExp(r'^\\d{6}
+  Future<void> _buatPermintaanTransaksi(
+    Map<String, dynamic> produk,
+  ) async {
+    if (_sedangTransaksi) return;
+
+    if (_uid == null) {
+      _tampilkanPesan("Anda belum login.");
+      return;
+    }
+
+    final nomor = nomorController.text.trim();
+
+    final sku = produk['sku']?.toString() ?? '';
+
+    final harga =
+        _toNum(produk['sellingPrice']).toInt();
+
+    if (nomor.length < 10) {
+      _tampilkanPesan(
+        "Nomor HP tidak valid.",
+      );
+      return;
+    }
+
+    if (sku.isEmpty) {
+      _tampilkanPesan(
+        "SKU produk tidak valid.",
+      );
+      return;
+    }
+
+    if (harga <= 0) {
+      _tampilkanPesan(
+        "Harga produk tidak valid.",
+      );
+      return;
+    }
+
+    final pin = await _mintaPinTransaksi();
+    if (pin == null || !mounted) return;
+
+    setState(() {
+      _sedangTransaksi = true;
+    });
+
+    try {
+      // =====================================================
+      // CEK SALDO USER SEBELUM MEMBUAT REQUEST
+      // =====================================================
+
+      final userRef =
+          _db.collection('users').doc(_uid);
+
+      final userSnapshot =
+          await userRef.get();
+
+      if (!userSnapshot.exists) {
+        throw Exception(
+          "Data pengguna tidak ditemukan.",
+        );
+      }
+
+      final userData =
+          userSnapshot.data() ?? {};
+
+      final saldo = _toNum(
+        userData['saldo'] ??
+            userData['balance'] ??
+            userData['saldoUtama'] ??
+            userData['wallet'] ??
+            0,
+      );
+
+      if (saldo < harga) {
+        if (mounted) {
+          _tampilkanPesan(
+            "Saldo tidak cukup. Saldo: Rp ${rupiah(saldo)}",
+          );
+        }
+
+        setState(() {
+          _sedangTransaksi = false;
+        });
+
+        return;
+      }
+
+      // =====================================================
+      // TRANSAKSI
+      // =====================================================
+
+      final transaksiRef = _db
+          .collection('transaction_requests')
+          .doc();
+
+      final call = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast2',
+      ).httpsCallable('createPpobTransaction');
+      final created = await call.call(<String, dynamic>{
+        'request_id': transaksiRef.id,
+        'pin': pin,
+        'sku': sku,
+        'customer_no': nomor,
+        'type': 'PULSA',
+        'category': 'PULSA',
+        'operator': _operatorTerdeteksi,
+        'source': 'PULSA',
+      });
+      if (created.data is! Map ||
+          (created.data as Map)['request_id']?.toString() != transaksiRef.id) {
+        throw StateError('Respons pembuatan transaksi tidak valid.');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _sedangTransaksi = false;
+      });
+
+      _tampilkanDialogMenunggu(
+        transaksiRef.id,
+        produk,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _sedangTransaksi = false;
+      });
+
+      _tampilkanPesan(
+        "Gagal membuat transaksi: $e",
+      );
+    }
+  }
+
+  // =========================================================
+  // MONITOR TRANSAKSI
+  // =========================================================
+
+  void _tampilkanDialogMenunggu(
+    String transactionId,
+    Map<String, dynamic> produk,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StreamBuilder<
+            DocumentSnapshot<Map<String, dynamic>>>(
+          stream: _db
+              .collection('transaction_requests')
+              .doc(transactionId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const AlertDialog(
+                title: Text(
+                  "Memproses Transaksi",
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      "Menghubungkan ke sistem...",
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final data =
+                snapshot.data?.data() ?? {};
+
+            final status =
+                (data['status'] ?? 'WAITING')
+                    .toString()
+                    .toUpperCase();
+
+            final sn =
+                data['sn']?.toString() ?? '';
+
+            final message =
+                data['message']?.toString() ?? '';
+
+            if (status == 'WAITING' ||
+                status == 'PROCESSING' ||
+                status == 'PENDING') {
+              return const AlertDialog(
+                title:
+                    Text("Transaksi Diproses"),
+                content: Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      "Transaksi sedang diproses. Mohon tunggu...",
+                      textAlign:
+                          TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            if (status == 'SUCCESS' ||
+                status == 'SUKSES') {
+              return AlertDialog(
+                title: const Text(
+                  "Transaksi Berhasil",
+                ),
+                content: Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      produk['name']
+                              ?.toString() ??
+                          '-',
+                      textAlign:
+                          TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Nomor: ${nomorController.text}",
+                    ),
+                    if (sn.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        "SN: $sn",
+                        textAlign:
+                            TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        dialogContext,
+                      );
+
+                      nomorController.clear();
+
+                      setState(() {
+                        _operatorTerdeteksi = "";
+                        _daftarPulsaReguler = [];
+                        _produkTerpilih = null;
+                      });
+                    },
+                    child:
+                        const Text("Selesai"),
+                  ),
+                ],
+              );
+            }
+
+            return AlertDialog(
+              title:
+                  const Text("Transaksi Gagal"),
+              content: Column(
+                mainAxisSize:
+                    MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.cancel,
+                    color: Colors.red,
+                    size: 64,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message.isNotEmpty
+                        ? message
+                        : "Transaksi tidak dapat diproses.",
+                    textAlign:
+                        TextAlign.center,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                    );
+                  },
+                  child:
+                      const Text("Tutup"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // =========================================================
+  // INVOICE ROW
+  // =========================================================
+
+  Widget _buildInvoiceRow(
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 13,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // PESAN
+  // =========================================================
+
+  void _tampilkanPesan(String pesan) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(pesan),
+        backgroundColor:
+            WarnaDesaPay.danger,
+      ),
+    );
+  }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor:
+          const Color(0xffF8FAFC),
+
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor:
+            WarnaDesaPay.primary,
+        foregroundColor:
+            Colors.white,
+        title: const Text(
+          "Isi Ulang Pulsa",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
+          ),
+          onPressed: () =>
+              Navigator.pop(context),
+        ),
+      ),
+
+      body: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.white,
+            padding:
+                const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Nomor Handphone Tujuan",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller:
+                      nomorController,
+                  keyboardType:
+                      TextInputType.phone,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onChanged:
+                      _deteksiOperatorOtomatis,
+                  decoration:
+                      InputDecoration(
+                    filled: true,
+                    fillColor:
+                        const Color(0xFFF1F5F9),
+                    hintText:
+                        "Contoh: 08xxxxxxxxxx",
+                    prefixIcon:
+                        Icon(
+                      Icons
+                          .phone_android_rounded,
+                      color:
+                          WarnaDesaPay.primary,
+                    ),
+                    suffixIcon:
+                        _operatorTerdeteksi.isEmpty
+                            ? null
+                            : Padding(
+                                padding:
+                                    const EdgeInsets.only(
+                                  right: 12,
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    padding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration:
+                                        BoxDecoration(
+                                      color:
+                                          _getOperatorColor(),
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        10,
+                                      ),
+                                    ),
+                                    child:
+                                        Text(
+                                      _operatorTerdeteksi,
+                                      style:
+                                          TextStyle(
+                                        color:
+                                            _operatorTerdeteksi ==
+                                                    "INDOSAT"
+                                                ? Colors.black87
+                                                : Colors.white,
+                                        fontWeight:
+                                            FontWeight.w900,
+                                        fontSize:
+                                            10,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(
+                      vertical: 16,
+                    ),
+                    border:
+                        OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+                      borderSide:
+                          BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          if (_operatorTerdeteksi.isNotEmpty)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 6,
+              ),
+              child: Text(
+                "Pilih Nominal Pulsa Reguler",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ),
+
+          Expanded(
+            child: _sedangMemuat
+                ? const Center(
+                    child:
+                        CircularProgressIndicator(),
+                  )
+                : nomorController.text.length < 4
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .center,
+                          children: [
+                            Icon(
+                              Icons
+                                  .contact_phone_rounded,
+                              size: 64,
+                              color: Colors
+                                  .grey
+                                  .shade300,
+                            ),
+                            const SizedBox(
+                              height: 12,
+                            ),
+                            const Text(
+                              "Masukkan nomor HP untuk memuat katalog pulsa.",
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _daftarPulsaReguler
+                            .isEmpty
+                        ? const Center(
+                            child: Text(
+                              "Produk pulsa tidak tersedia untuk operator ini.",
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.grey,
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            physics:
+                                const BouncingScrollPhysics(),
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 6,
+                            ),
+                            itemCount:
+                                _daftarPulsaReguler
+                                    .length,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.3,
+                            ),
+                            itemBuilder:
+                                (context, index) {
+                              final produk =
+                                  _daftarPulsaReguler[
+                                      index];
+
+                              return CustomBounce(
+                                onTap: () {
+                                  _prosesBottomSheetInvoice(
+                                    produk,
+                                  );
+                                },
+                                child:
+                                    Container(
+                                  padding:
+                                      const EdgeInsets.all(
+                                    16,
+                                  ),
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        Colors.white,
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      20,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors
+                                            .black
+                                            .withOpacity(
+                                          0.02,
+                                        ),
+                                        blurRadius:
+                                            8,
+                                        offset:
+                                            const Offset(
+                                          0,
+                                          2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  child:
+                                      Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment
+                                            .center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      Text(
+                                        produk['name']
+                                                ?.toString() ??
+                                            "-",
+                                        maxLines: 2,
+                                        overflow:
+                                            TextOverflow
+                                                .ellipsis,
+                                        style:
+                                            const TextStyle(
+                                          color:
+                                              Colors.black87,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          fontSize:
+                                              13,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        "Rp ${rupiah(produk['sellingPrice'])}",
+                                        style:
+                                            TextStyle(
+                                          color:
+                                              WarnaDesaPay
+                                                  .primary,
+                                          fontWeight:
+                                              FontWeight
+                                                  .w900,
+                                          fontSize:
+                                              16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+).hasMatch(value)) {
+              Navigator.of(dialogContext).pop(value);
+            }
+          },
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (RegExp(r'^\\d{6}
+  Future<void> _buatPermintaanTransaksi(
+    Map<String, dynamic> produk,
+  ) async {
+    if (_sedangTransaksi) return;
+
+    if (_uid == null) {
+      _tampilkanPesan("Anda belum login.");
+      return;
+    }
+
+    final nomor = nomorController.text.trim();
+
+    final sku = produk['sku']?.toString() ?? '';
+
+    final harga =
+        _toNum(produk['sellingPrice']).toInt();
+
+    if (nomor.length < 10) {
+      _tampilkanPesan(
+        "Nomor HP tidak valid.",
+      );
+      return;
+    }
+
+    if (sku.isEmpty) {
+      _tampilkanPesan(
+        "SKU produk tidak valid.",
+      );
+      return;
+    }
+
+    if (harga <= 0) {
+      _tampilkanPesan(
+        "Harga produk tidak valid.",
+      );
+      return;
+    }
+
+    setState(() {
+      _sedangTransaksi = true;
+    });
+
+    try {
+      // =====================================================
+      // CEK SALDO USER SEBELUM MEMBUAT REQUEST
+      // =====================================================
+
+      final userRef =
+          _db.collection('users').doc(_uid);
+
+      final userSnapshot =
+          await userRef.get();
+
+      if (!userSnapshot.exists) {
+        throw Exception(
+          "Data pengguna tidak ditemukan.",
+        );
+      }
+
+      final userData =
+          userSnapshot.data() ?? {};
+
+      final saldo = _toNum(
+        userData['saldo'] ??
+            userData['balance'] ??
+            userData['saldoUtama'] ??
+            userData['wallet'] ??
+            0,
+      );
+
+      if (saldo < harga) {
+        if (mounted) {
+          _tampilkanPesan(
+            "Saldo tidak cukup. Saldo: Rp ${rupiah(saldo)}",
+          );
+        }
+
+        setState(() {
+          _sedangTransaksi = false;
+        });
+
+        return;
+      }
+
+      // =====================================================
+      // TRANSAKSI
+      // =====================================================
+
+      final transaksiRef = _db
+          .collection('transaction_requests')
+          .doc();
+
+      await transaksiRef.set({
+        'transactionId': transaksiRef.id,
+        'uid': _uid,
+
+        'type': 'PULSA',
+        'category': 'PULSA',
+
+        'sku': sku,
+
+        'productName':
+            produk['name']?.toString() ?? '-',
+
+        'brand':
+            produk['brand']?.toString() ??
+                _operatorTerdeteksi,
+
+        'customerNo': nomor,
+
+        'operator':
+            _operatorTerdeteksi,
+
+        'amount': harga,
+
+        'paymentMethod':
+            'SALDO_UTAMA',
+
+        'status': 'WAITING',
+
+        'createdAt':
+            FieldValue.serverTimestamp(),
+
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        _sedangTransaksi = false;
+      });
+
+      _tampilkanDialogMenunggu(
+        transaksiRef.id,
+        produk,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _sedangTransaksi = false;
+      });
+
+      _tampilkanPesan(
+        "Gagal membuat transaksi: $e",
+      );
+    }
+  }
+
+  // =========================================================
+  // MONITOR TRANSAKSI
+  // =========================================================
+
+  void _tampilkanDialogMenunggu(
+    String transactionId,
+    Map<String, dynamic> produk,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StreamBuilder<
+            DocumentSnapshot<Map<String, dynamic>>>(
+          stream: _db
+              .collection('transaction_requests')
+              .doc(transactionId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const AlertDialog(
+                title: Text(
+                  "Memproses Transaksi",
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      "Menghubungkan ke sistem...",
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final data =
+                snapshot.data?.data() ?? {};
+
+            final status =
+                (data['status'] ?? 'WAITING')
+                    .toString()
+                    .toUpperCase();
+
+            final sn =
+                data['sn']?.toString() ?? '';
+
+            final message =
+                data['message']?.toString() ?? '';
+
+            if (status == 'WAITING' ||
+                status == 'PROCESSING' ||
+                status == 'PENDING') {
+              return const AlertDialog(
+                title:
+                    Text("Transaksi Diproses"),
+                content: Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      "Transaksi sedang diproses. Mohon tunggu...",
+                      textAlign:
+                          TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            if (status == 'SUCCESS' ||
+                status == 'SUKSES') {
+              return AlertDialog(
+                title: const Text(
+                  "Transaksi Berhasil",
+                ),
+                content: Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      produk['name']
+                              ?.toString() ??
+                          '-',
+                      textAlign:
+                          TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Nomor: ${nomorController.text}",
+                    ),
+                    if (sn.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        "SN: $sn",
+                        textAlign:
+                            TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        dialogContext,
+                      );
+
+                      nomorController.clear();
+
+                      setState(() {
+                        _operatorTerdeteksi = "";
+                        _daftarPulsaReguler = [];
+                        _produkTerpilih = null;
+                      });
+                    },
+                    child:
+                        const Text("Selesai"),
+                  ),
+                ],
+              );
+            }
+
+            return AlertDialog(
+              title:
+                  const Text("Transaksi Gagal"),
+              content: Column(
+                mainAxisSize:
+                    MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.cancel,
+                    color: Colors.red,
+                    size: 64,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message.isNotEmpty
+                        ? message
+                        : "Transaksi tidak dapat diproses.",
+                    textAlign:
+                        TextAlign.center,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                    );
+                  },
+                  child:
+                      const Text("Tutup"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // =========================================================
+  // INVOICE ROW
+  // =========================================================
+
+  Widget _buildInvoiceRow(
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 13,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // PESAN
+  // =========================================================
+
+  void _tampilkanPesan(String pesan) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(pesan),
+        backgroundColor:
+            WarnaDesaPay.danger,
+      ),
+    );
+  }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor:
+          const Color(0xffF8FAFC),
+
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor:
+            WarnaDesaPay.primary,
+        foregroundColor:
+            Colors.white,
+        title: const Text(
+          "Isi Ulang Pulsa",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
+          ),
+          onPressed: () =>
+              Navigator.pop(context),
+        ),
+      ),
+
+      body: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.white,
+            padding:
+                const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Nomor Handphone Tujuan",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller:
+                      nomorController,
+                  keyboardType:
+                      TextInputType.phone,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onChanged:
+                      _deteksiOperatorOtomatis,
+                  decoration:
+                      InputDecoration(
+                    filled: true,
+                    fillColor:
+                        const Color(0xFFF1F5F9),
+                    hintText:
+                        "Contoh: 08xxxxxxxxxx",
+                    prefixIcon:
+                        Icon(
+                      Icons
+                          .phone_android_rounded,
+                      color:
+                          WarnaDesaPay.primary,
+                    ),
+                    suffixIcon:
+                        _operatorTerdeteksi.isEmpty
+                            ? null
+                            : Padding(
+                                padding:
+                                    const EdgeInsets.only(
+                                  right: 12,
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    padding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration:
+                                        BoxDecoration(
+                                      color:
+                                          _getOperatorColor(),
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        10,
+                                      ),
+                                    ),
+                                    child:
+                                        Text(
+                                      _operatorTerdeteksi,
+                                      style:
+                                          TextStyle(
+                                        color:
+                                            _operatorTerdeteksi ==
+                                                    "INDOSAT"
+                                                ? Colors.black87
+                                                : Colors.white,
+                                        fontWeight:
+                                            FontWeight.w900,
+                                        fontSize:
+                                            10,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(
+                      vertical: 16,
+                    ),
+                    border:
+                        OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+                      borderSide:
+                          BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          if (_operatorTerdeteksi.isNotEmpty)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 6,
+              ),
+              child: Text(
+                "Pilih Nominal Pulsa Reguler",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ),
+
+          Expanded(
+            child: _sedangMemuat
+                ? const Center(
+                    child:
+                        CircularProgressIndicator(),
+                  )
+                : nomorController.text.length < 4
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .center,
+                          children: [
+                            Icon(
+                              Icons
+                                  .contact_phone_rounded,
+                              size: 64,
+                              color: Colors
+                                  .grey
+                                  .shade300,
+                            ),
+                            const SizedBox(
+                              height: 12,
+                            ),
+                            const Text(
+                              "Masukkan nomor HP untuk memuat katalog pulsa.",
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _daftarPulsaReguler
+                            .isEmpty
+                        ? const Center(
+                            child: Text(
+                              "Produk pulsa tidak tersedia untuk operator ini.",
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.grey,
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            physics:
+                                const BouncingScrollPhysics(),
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 6,
+                            ),
+                            itemCount:
+                                _daftarPulsaReguler
+                                    .length,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.3,
+                            ),
+                            itemBuilder:
+                                (context, index) {
+                              final produk =
+                                  _daftarPulsaReguler[
+                                      index];
+
+                              return CustomBounce(
+                                onTap: () {
+                                  _prosesBottomSheetInvoice(
+                                    produk,
+                                  );
+                                },
+                                child:
+                                    Container(
+                                  padding:
+                                      const EdgeInsets.all(
+                                    16,
+                                  ),
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        Colors.white,
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      20,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors
+                                            .black
+                                            .withOpacity(
+                                          0.02,
+                                        ),
+                                        blurRadius:
+                                            8,
+                                        offset:
+                                            const Offset(
+                                          0,
+                                          2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  child:
+                                      Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment
+                                            .center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      Text(
+                                        produk['name']
+                                                ?.toString() ??
+                                            "-",
+                                        maxLines: 2,
+                                        overflow:
+                                            TextOverflow
+                                                .ellipsis,
+                                        style:
+                                            const TextStyle(
+                                          color:
+                                              Colors.black87,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          fontSize:
+                                              13,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        "Rp ${rupiah(produk['sellingPrice'])}",
+                                        style:
+                                            TextStyle(
+                                          color:
+                                              WarnaDesaPay
+                                                  .primary,
+                                          fontWeight:
+                                              FontWeight
+                                                  .w900,
+                                          fontSize:
+                                              16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+).hasMatch(value)) {
+                Navigator.of(dialogContext).pop(value);
+              }
+            },
+            child: const Text('Lanjutkan'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return pin;
   }
 
   // =========================================================
