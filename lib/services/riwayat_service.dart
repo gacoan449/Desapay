@@ -55,3 +55,4 @@ class RiwayatService implements IRiwayatService {
           return semuaTransaksi;
         });
   }
+}
