@@ -714,14 +714,6 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       _selectedProductData!['harga'],
     );
 
-    final cost = _parseDouble(
-      _selectedProductData!['cost'],
-    );
-
-    final margin = _parseDouble(
-      _selectedProductData!['margin'],
-    );
-
     if (harga <= 0) {
       _showMessage(
         'Harga produk tidak valid.',
@@ -757,53 +749,31 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       // API KEY DIGIFLAZZ TIDAK PERNAH MASUK KE APK.
       // --------------------------------------------------------
 
+      final pin = await _mintaPinTransaksi();
+      if (pin == null || !mounted) return;
+
+      // Client-side pricing is intentionally omitted. The backend validates
+      // the authoritative product price and creates the request after PIN verification.
       final requestRef = FirebaseFirestore.instance
           .collection('transaction_requests')
           .doc();
-
       final requestId = requestRef.id;
-
-      await requestRef.set({
-        'requestId': requestId,
-
-        // USER
-        'uid': user.uid,
-
-        // PRODUK
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast2',
+      ).httpsCallable('createPpobTransaction');
+      final created = await callable.call(<String, dynamic>{
+        'request_id': requestId,
+        'pin': pin,
         'sku': _selectedSku,
-        'buyer_sku_code': _selectedSku,
-        'productName':
-            _selectedProductData!['nama']?.toString() ?? '-',
-        'category':
-            _selectedProductData!['category']?.toString() ??
-                widget.kategori,
-        'brand':
-            _selectedProductData!['brand']?.toString() ?? '',
-
-        // TUJUAN
-        'customerNo': nomor,
         'customer_no': nomor,
-
-        // HARGA
-        'amount': harga.round(),
-        'sellingPrice': harga.round(),
-        'cost': cost.round(),
-        'margin': margin.round(),
-
-        // STATUS
-        'status': 'WAITING',
-        'isTest': false,
-        'testMode': false,
-        'digiflazzSent': false,
-
-        // SUMBER
+        'type': 'PPOB',
+        'category': widget.kategori,
         'source': 'PPOB_GENERIC',
-        'categoryScreen': widget.kategori,
-
-        // WAKTU
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       });
+      if (created.data is! Map ||
+          (created.data as Map)['request_id']?.toString() != requestId) {
+        throw StateError('Respons pembuatan transaksi tidak valid.');
+      }
 
       if (!mounted) return;
 
