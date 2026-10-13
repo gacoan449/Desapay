@@ -825,7 +825,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
               status == 'GAGAL' ||
               status == 'ERROR' ||
               status == 'CANCELLED' ||
-              status == 'CANCELED') {
+              status == 'CANCELED' ||
+              status == 'REFUND_PENDING' ||
+              status == 'RECONCILIATION_REQUIRED') {
             if (!completer.isCompleted) {
               completer.complete(data);
             }
@@ -901,6 +903,22 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         return;
       }
 
+      if (status == 'REFUND_PENDING') {
+        _showMessage(
+          'Transaksi gagal, tetapi pengembalian saldo sedang diproses. Jangan lakukan pembelian ulang dulu.',
+          danger: true,
+        );
+        return;
+      }
+
+      if (status == 'RECONCILIATION_REQUIRED') {
+        _showMessage(
+          'Status transaksi memerlukan pemeriksaan admin. Jangan ulangi pembelian.',
+          danger: true,
+        );
+        return;
+      }
+
       // --------------------------------------------------------
       // TIMEOUT / MASIH DIPROSES
       // --------------------------------------------------------
@@ -908,11 +926,16 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       _showMessage(
         'Transaksi masih diproses. Silakan cek riwayat transaksi.',
       );
-    } catch (e) {
+    } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-
       _showMessage(
-        'Gagal membuat transaksi. Silakan coba lagi.',
+        e.message ?? 'Transaksi tidak dapat diproses.',
+        danger: true,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(
+        'Gagal membuat transaksi. Periksa koneksi dan status transaksi sebelum mencoba kembali.',
         danger: true,
       );
     } finally {
