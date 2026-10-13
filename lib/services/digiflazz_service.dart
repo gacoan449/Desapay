@@ -13,6 +13,7 @@ abstract class IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String transactionPin,
   });
 
   Future<Map<String, dynamic>> mintaTiketDeposit({
@@ -31,7 +32,9 @@ abstract class IDigiflazzService {
 }
 
 class DigiflazzService implements IDigiflazzService {
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'asia-southeast2',
+  );
 
   @override
   Future<List<dynamic>> ambilSemuaProduk() async {
@@ -76,11 +79,13 @@ class DigiflazzService implements IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String transactionPin,
   }) async {
     try {
       final result = await _functions.httpsCallable('digiflazzKirimTransaksi').call({
         'buyer_sku_code': buyerSkuCode,
         'customer_no': customerNo,
+        'transaction_pin': transactionPin,
       });
       final data = result.data;
       if (data is Map) return Map<String, dynamic>.from(data);
