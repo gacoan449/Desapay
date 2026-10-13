@@ -14,6 +14,7 @@ abstract class IDigiflazzService {
     required String buyerSkuCode,
     required String customerNo,
     required String transactionPin,
+    required String requestId,
   });
 
   Future<Map<String, dynamic>> mintaTiketDeposit({
@@ -80,16 +81,25 @@ class DigiflazzService implements IDigiflazzService {
     required String buyerSkuCode,
     required String customerNo,
     required String transactionPin,
+    required String requestId,
   }) async {
     try {
       final result = await _functions.httpsCallable('digiflazzKirimTransaksi').call({
         'buyer_sku_code': buyerSkuCode,
         'customer_no': customerNo,
         'transaction_pin': transactionPin,
+        'request_id': requestId,
       });
       final data = result.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return {'status': 'Gagal', 'message': 'Format respon transaksi tidak valid.'};
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Error fungsi digiflazzKirimTransaksi: ${e.code}');
+      return {
+        'status': 'Gagal',
+        'code': e.code,
+        'message': e.message ?? 'Transaksi tidak dapat diproses.',
+      };
     } catch (e) {
       debugPrint('Error fungsi digiflazzKirimTransaksi: $e');
       return {'status': 'Gagal', 'message': 'Terjadi gangguan transaksi di server.'};
