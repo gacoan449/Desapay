@@ -10,9 +10,45 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) && request.resource.data.uid == uid && request.resource.data.balance == 0 && request.resource.data.poin == 0 && request.resource.data.member == "Silver" && request.resource.data.role == "user";
-      allow update: if isAdmin() || (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "displayName", "photoUrl", "phone", "email", "updatedAt"]));
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          "uid", "nama", "name", "displayName", "email", "phone",
+          "balance", "poin", "member", "role", "fotoProfil", "fotoKtp",
+          "fotoSelfie", "photoUrl", "ktpUrl", "selfieUrl", "kycStatus",
+          "status", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.balance == 0
+        && request.resource.data.poin == 0
+        && request.resource.data.member == "Silver"
+        && request.resource.data.role == "user"
+        && request.resource.data.kycStatus == "BELUM"
+        && request.resource.data.status == "Aktif"
+        && request.resource.data.fotoKtp == ""
+        && request.resource.data.fotoSelfie == ""
+        && request.resource.data.ktpUrl == ""
+        && request.resource.data.selfieUrl == "";
+      allow update: if isAdmin() || (isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name", "displayName", "photoUrl", "phone", "email", "updatedAt",
+          "nama", "fotoProfil", "fotoKtp", "fotoSelfie", "ktpUrl", "selfieUrl",
+          "securityUpdatedAt"
+        ]));
       allow delete: if isAdmin();
+    }
+
+    match /keluhan_pelanggan/{ticketId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "Pending"
+        && request.resource.data.pesan is string
+        && request.resource.data.pesan.size() > 0
+        && request.resource.data.pesan.size() <= 2000
+        && request.resource.data.keys().hasOnly([
+          "uid", "namaUser", "phoneUser", "pesan", "status", "waktuMasuk"
+        ]);
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     match /transaction_requests/{requestId} {
