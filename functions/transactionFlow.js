@@ -73,7 +73,10 @@ exports.createPpobTransaction = onCall(
         return {success: true, request_id: requestId, status: text(old.status) || "WAITING", reused: true};
       }
 
-      await pinSecurity.assertActiveUser(uid);
+      const user = await pinSecurity.assertActiveUser(uid);
+      if (user.role !== "user") {
+        throw new HttpsError("permission-denied", "Hanya akun pengguna yang dapat melakukan pembelian.");
+      }
       const product = await getProduct(sku);
       if (!product) throw new HttpsError("not-found", "Produk tidak ditemukan.");
       const trusted = trustedPrice(product);
