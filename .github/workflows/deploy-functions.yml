@@ -9,7 +9,6 @@ on:
       - "firebase.json"
       - "firestore.rules"
       - "firestore.indexes.json"
-      - "storage.rules"
       - ".github/workflows/deploy-functions.yml"
   workflow_dispatch:
 
@@ -47,10 +46,15 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           node -e "const fs=require('fs');const p=process.env.RUNNER_TEMP+'/firebase-service-account.json';const d=JSON.parse(fs.readFileSync(p,'utf8'));if(!d.project_id||!d.private_key||!d.client_email)throw new Error('Service Account JSON tidak lengkap');console.log('Service Account JSON valid.');"
-      - name: Deploy Firebase backend
+      - name: Deploy Firebase backend (Functions and Firestore)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: |
           firebase deploy \
-            --only functions,firestore,storage \
+            --only functions,firestore \
             --project "${{ secrets.FIREBASE_PROJECT_ID }}"
+
+      - name: Storage rules deployment notice
+        if: always()
+        run: |
+          echo "::warning::Storage rules were not deployed by this workflow because the configured service account lacks firebasestorage.defaultBucket.get (HTTP 403). Grant the required Firebase Storage permissions and deploy storage rules separately after verifying the default bucket exists."
