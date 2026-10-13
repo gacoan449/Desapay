@@ -1650,6 +1650,10 @@ exports.digiflazzKirimTransaksi =
           );
 
         await pinSecurity.verifyTransactionPin(uid, transactionPin);
+        const activeUser = await pinSecurity.assertActiveUser(uid);
+        if (activeUser.role !== "user") {
+          throw new HttpsError("permission-denied", "Hanya akun pengguna yang dapat melakukan pembelian.");
+        }
 
         const refId =
           requestId
@@ -1763,6 +1767,9 @@ exports.digiflazzKirimTransaksi =
               true,
           };
         }
+
+        // Validate credentials before any debit; leave reused requests readable without a provider call.
+        digiflazzCredentials();
 
         await transaksiRef.create(
           {
@@ -3996,6 +4003,10 @@ exports.edpoinTransactionRequest =
           );
 
         await pinSecurity.verifyTransactionPin(uid, transactionPin);
+        const activeUser = await pinSecurity.assertActiveUser(uid);
+        if (activeUser.role !== "user") {
+          throw new HttpsError("permission-denied", "Hanya akun pengguna yang dapat melakukan pembelian.");
+        }
 
         const refId =
           requestId
@@ -4109,6 +4120,9 @@ exports.edpoinTransactionRequest =
               true,
           };
         }
+
+        // Validate credentials before any debit; leave reused requests readable without a provider call.
+        edpoinCredentials();
 
         await transaksiRef.create(
           {
@@ -4503,7 +4517,10 @@ exports.requestWithdrawal = onCall(
     }
 
     const uid = request.auth.uid;
-    await pinSecurity.assertActiveUser(uid);
+    const activeUser = await pinSecurity.assertActiveUser(uid);
+    if (activeUser.role !== "user") {
+      throw new HttpsError("permission-denied", "Penarikan hanya tersedia untuk akun pengguna.");
+    }
     const data = request.data || {};
     const requestId = normalizeString(data.request_id);
     const amount = toSafeInteger(data.amount);
