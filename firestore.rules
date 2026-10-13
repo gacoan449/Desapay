@@ -34,6 +34,12 @@ service cloud.firestore {
           "nama", "fotoProfil", "fotoKtp", "fotoSelfie", "ktpUrl", "selfieUrl",
           "securityUpdatedAt", "kycStatus"
         ])
+        && (!(resource.data.kycStatus == "Terverifikasi"
+          || resource.data.kycStatus == "TERVERIFIKASI"
+          || resource.data.kycStatus == "APPROVED")
+          || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            "fotoKtp", "fotoSelfie", "ktpUrl", "selfieUrl"
+          ]))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["kycStatus"])
           || (request.resource.data.kycStatus == "Pending"
             && resource.data.kycStatus != "Terverifikasi"
