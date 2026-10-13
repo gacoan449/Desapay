@@ -31,7 +31,8 @@ abstract class IDigiflazzService {
 }
 
 class DigiflazzService implements IDigiflazzService {
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final FirebaseFunctions _functions =
+      FirebaseFunctions.instanceFor(region: 'asia-southeast2');
 
   @override
   Future<List<dynamic>> ambilSemuaProduk() async {
