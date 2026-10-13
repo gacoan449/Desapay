@@ -600,7 +600,7 @@ async function processRequest(requestRef) {
   }
 
   const trustedCost = integer(productData.cost) ?? 0;
-  const providerRefId = text(data.providerRefId) || `dp-${requestRef.id}`;
+  const providerRefId = text(data.providerRefId) || `dp-${crypto.createHash("sha256").update(requestRef.id, "utf8").digest("hex").slice(0, 32)}`;
   const productName = text(productData.name || productData.nama || data.productName) || sku;
   await requestRef.update({
     trustedPrice: trusted.price,
