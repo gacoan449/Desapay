@@ -537,6 +537,69 @@ async function finalize(requestRef, status, providerData, refundReason) {
   await notify(current.uid, title, body, requestRef.id, finalStatus);
 }
 
+async function setProviderPending(requestRef, providerData, extraFields = {}) {
+  const reconciliationRef = db.collection("transaction_reconciliation").doc(requestRef.id);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(requestRef);
+    if (!snap.exists) return {status: "NOT_FOUND"};
+    const current = snap.data() || {};
+    const currentStatus = text(current.status).toUpperCase();
+    const fundsWereRefunded = current.balanceRefunded === true || current.refunded === true;
+
+    // Never downgrade or overwrite a terminal result with an old PENDING/timeout response.
+    if (currentStatus === "SUCCESS" || currentStatus === "RECONCILIATION_REQUIRED") {
+      return {status: currentStatus, reused: true};
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const providerFields = {
+      providerStatus: providerData.status || "PENDING",
+      providerRc: providerData.rc || null,
+      providerMessage: providerData.message || "Menunggu konfirmasi provider.",
+      providerSn: providerData.sn || null,
+      providerData,
+    };
+
+    if (fundsWereRefunded ||
+        (currentStatus === "FAILED" && current.balanceDebited === true)) {
+      const reason = fundsWereRefunded
+        ? "PENDING_PROVIDER_STATUS_AFTER_REFUND"
+        : "PENDING_PROVIDER_STATUS_AFTER_FAILED_DEBIT";
+      const nextStatus = currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED";
+      tx.set(reconciliationRef, {
+        transactionId: requestRef.id,
+        uid: current.uid || null,
+        localStatus: currentStatus || null,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason,
+        createdAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      tx.update(requestRef, {
+        status: nextStatus,
+        reconciliationRequired: true,
+        providerConflict: reason,
+        ...providerFields,
+        ...extraFields,
+        updatedAt: now,
+      });
+      return {status: nextStatus, reconciliationRequired: true};
+    }
+
+    if (currentStatus === "FAILED") return {status: "FAILED", reused: true};
+
+    tx.update(requestRef, {
+      status: "PROCESSING",
+      providerDispatchState: "UNKNOWN",
+      ...providerFields,
+      ...extraFields,
+      updatedAt: now,
+    });
+    return {status: "PROCESSING", reused: false};
+  });
+}
+
 async function sendToDigiflazz(requestData, refId) {
   const username = DIGIFLAZZ_USERNAME.value();
   const apiKey = DIGIFLAZZ_API_KEY.value();
@@ -687,15 +750,6 @@ async function processRequest(requestRef) {
   try {
     const provider = await sendToDigiflazz({...data, buyer_sku_code: sku, customerNo}, providerRefId);
     const status = normalizeStatus(provider.status);
-    await requestRef.update({
-      providerStatus: provider.status || null,
-      providerRc: normalizeRc(provider.rc),
-      providerMessage: provider.message || null,
-      providerSn: provider.sn || null,
-      providerData: provider,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
     if (status === "SUCCESS") {
       await requestRef.update({providerDispatchState: "CONFIRMED", updatedAt: admin.firestore.FieldValue.serverTimestamp()});
       await finalize(requestRef, "SUCCESS", provider);
@@ -703,23 +757,18 @@ async function processRequest(requestRef) {
       await requestRef.update({providerDispatchState: "CONFIRMED", updatedAt: admin.firestore.FieldValue.serverTimestamp()});
       await finalize(requestRef, "FAILED", provider);
     } else {
-      await requestRef.update({
-        status: "PROCESSING",
-        providerStatus: provider.status || "PENDING",
+      await setProviderPending(requestRef, provider, {
         providerDispatchState: "UNKNOWN",
-        providerMessage: provider.message || "Menunggu konfirmasi provider",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
   } catch (error) {
-    await requestRef.update({
-      status: "PROCESSING",
-      providerStatus: "UNKNOWN",
+    await setProviderPending(requestRef, {
+      status: "UNKNOWN",
+      message: "Status provider belum dapat dipastikan. Sistem akan melakukan rekonsiliasi otomatis.",
+    }, {
       providerDispatchState: "UNKNOWN",
-      providerMessage: "Status provider belum dapat dipastikan. Sistem akan melakukan rekonsiliasi otomatis.",
       lastProviderError: text(error.message).slice(0, 300),
       lastProviderErrorAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
 }
@@ -902,12 +951,8 @@ exports.reconcilePendingTransactions = onSchedule(
             await finalize(doc.ref, status, provider,
                 provider.message || "Transaksi gagal berdasarkan status provider");
           } else {
-            await doc.ref.update({
-              status: "PROCESSING",
-              providerStatus: provider.status || "PENDING",
+            await setProviderPending(doc.ref, provider, {
               providerDispatchState: "UNKNOWN",
-              providerMessage: provider.message || "Menunggu konfirmasi provider",
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
           }
         } catch (error) {
