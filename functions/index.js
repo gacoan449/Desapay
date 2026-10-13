@@ -3960,6 +3960,30 @@ async function applyLegacySuccess(ref, providerData) {
     const currentStatus = String(current.status || "").trim().toUpperCase();
     const providerReference = providerData.ref_id || providerData.reference || providerData.sn || null;
 
+    if (current.balanceRefunded === true || current.refunded === true) {
+      const reason = "PROVIDER_SUCCESS_AFTER_REFUND";
+      const nextStatus = currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED";
+      tx.set(reconciliationRef, {
+        transactionId: ref.id,
+        uid: current.uid || null,
+        localStatus: currentStatus || null,
+        providerStatus: providerData.status || null,
+        providerMessage: providerData.message || null,
+        reason,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      tx.update(ref, {
+        status: nextStatus,
+        reconciliationRequired: true,
+        providerConflict: reason,
+        response: providerData,
+        providerStatus: providerData.status || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {status: "RECONCILIATION_REQUIRED", success: false, conflict: true};
+    }
+
     if (currentStatus === "SUCCESS") {
       tx.update(ref, {
         response: providerData,
@@ -3970,8 +3994,7 @@ async function applyLegacySuccess(ref, providerData) {
       return {status: "SUCCESS", success: true, reused: true};
     }
 
-    if (["FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus) ||
-        current.balanceRefunded === true || current.refunded === true) {
+    if (["FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
       const reason = "PROVIDER_SUCCESS_AFTER_LOCAL_FAILURE_OR_REFUND";
       tx.set(reconciliationRef, {
         transactionId: ref.id,
@@ -4019,7 +4042,10 @@ async function applyLegacyFailure(ref, providerData, providerName, reason) {
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     if (currentStatus === "SUCCESS") {
-      const conflictReason = "PROVIDER_FAILURE_AFTER_LOCAL_SUCCESS";
+      const refundedAlready = current.balanceRefunded === true || current.refunded === true;
+      const conflictReason = refundedAlready
+        ? "LOCAL_SUCCESS_WITH_REFUNDED_BALANCE_AND_PROVIDER_FAILURE"
+        : "PROVIDER_FAILURE_AFTER_LOCAL_SUCCESS";
       tx.set(reconciliationRef, {
         transactionId: ref.id,
         uid: current.uid || null,
@@ -4031,11 +4057,17 @@ async function applyLegacyFailure(ref, providerData, providerName, reason) {
         updatedAt: now,
       }, {merge: true});
       tx.update(ref, {
+        status: refundedAlready ? "RECONCILIATION_REQUIRED" : "SUCCESS",
         reconciliationRequired: true,
         providerConflict: conflictReason,
         updatedAt: now,
       });
-      return {status: "SUCCESS", success: false, conflict: true, refunded: false};
+      return {
+        status: refundedAlready ? "RECONCILIATION_REQUIRED" : "SUCCESS",
+        success: false,
+        conflict: true,
+        refunded: refundedAlready,
+      };
     }
 
     if (currentStatus === "RECONCILIATION_REQUIRED") {
@@ -4155,17 +4187,13 @@ async function applyLegacyPending(ref, providerData) {
     const currentStatus = String(current.status || "").trim().toUpperCase();
     const now = admin.firestore.FieldValue.serverTimestamp();
 
-    if (["SUCCESS", "FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
-      return {
-        status: currentStatus,
-        success: currentStatus === "SUCCESS",
-        conflict: currentStatus === "RECONCILIATION_REQUIRED",
-        terminal: true,
-      };
-    }
-
-    if (current.balanceRefunded === true || current.refunded === true) {
-      const reason = "PENDING_PROVIDER_STATUS_AFTER_REFUND";
+    const fundsWereRefunded = current.balanceRefunded === true || current.refunded === true;
+    if (fundsWereRefunded ||
+        (currentStatus === "FAILED" && current.balanceDebited === true)) {
+      const reason = fundsWereRefunded
+        ? "PENDING_PROVIDER_STATUS_AFTER_REFUND"
+        : "PENDING_PROVIDER_STATUS_AFTER_FAILED_DEBIT";
+      const nextStatus = currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED";
       tx.set(reconciliationRef, {
         transactionId: ref.id,
         uid: current.uid || null,
@@ -4177,14 +4205,23 @@ async function applyLegacyPending(ref, providerData) {
         updatedAt: now,
       }, {merge: true});
       tx.update(ref, {
-        status: "RECONCILIATION_REQUIRED",
+        status: nextStatus,
         reconciliationRequired: true,
         providerConflict: reason,
         response: providerData,
         providerStatus: providerData.status || null,
         updatedAt: now,
       });
-      return {status: "RECONCILIATION_REQUIRED", success: false, conflict: true};
+      return {status: nextStatus, success: false, conflict: true};
+    }
+
+    if (["SUCCESS", "FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
+      return {
+        status: currentStatus,
+        success: currentStatus === "SUCCESS",
+        conflict: currentStatus === "RECONCILIATION_REQUIRED",
+        terminal: true,
+      };
     }
 
     tx.update(ref, {
