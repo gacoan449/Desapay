@@ -738,7 +738,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
                 data['sn']?.toString() ?? '';
 
             final message =
-                data['message']?.toString() ?? '';
+                (data['providerMessage'] ?? data['message'])?.toString() ?? '';
 
             if (status == 'WAITING' ||
                 status == 'PROCESSING' ||
@@ -759,6 +759,41 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     ),
                   ],
                 ),
+              );
+            }
+
+            if (data['reconciliationRequired'] == true ||
+                status == 'RECONCILIATION_REQUIRED') {
+              return AlertDialog(
+                title: const Text("Transaksi Perlu Pemeriksaan"),
+                content: const Text(
+                  "Status dari provider berbeda dengan status saldo. Admin perlu memeriksa transaksi ini. Jangan lakukan pembelian ulang.",
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text("Tutup"),
+                  ),
+                ],
+              );
+            }
+
+            if (status == 'REFUND_PENDING') {
+              return AlertDialog(
+                title: const Text("Pengembalian Saldo Diproses"),
+                content: Text(
+                  message.isNotEmpty
+                      ? message
+                      : "Transaksi gagal. Pengembalian saldo sedang dicoba kembali. Jangan lakukan pembelian ulang dulu.",
+                  textAlign: TextAlign.center,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text("Tutup"),
+                  ),
+                ],
               );
             }
 
