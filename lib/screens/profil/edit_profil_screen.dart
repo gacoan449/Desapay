@@ -146,14 +146,30 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
         // 4. Simpan semua data & URL foto ke Firestore
         await user.updateDisplayName(namaTrim);
-        await _firestore.collection("users").doc(user.uid).update({
+        final updateData = <String, dynamic>{
           "nama": namaTrim,
           "email": emailTrim,
           "phone": phoneTrim,
           "fotoProfil": finalProfilUrl,
           "fotoKtp": finalKtpUrl,
           "fotoSelfie": finalSelfieUrl,
-        });
+        };
+
+        final dokumenKycLengkap =
+            finalKtpUrl != null && finalKtpUrl.isNotEmpty &&
+            finalSelfieUrl != null && finalSelfieUrl.isNotEmpty;
+        final adaDokumenBaru =
+            _imageKtpBaru != null || _imageSelfieBaru != null;
+        final statusSudahTerverifikasi =
+            _kycStatus.toUpperCase() == "TERVERIFIKASI" ||
+            _kycStatus.toUpperCase() == "APPROVED";
+
+        // Client hanya boleh mengajukan status Pending, tidak dapat menyetujui KYC.
+        if (dokumenKycLengkap && adaDokumenBaru && !statusSudahTerverifikasi) {
+          updateData["kycStatus"] = "Pending";
+        }
+
+        await _firestore.collection("users").doc(user.uid).update(updateData);
 
         if (!mounted) return;
         _tampilkanSnackBar("Data Profil & Dokumen berhasil disimpan!", isError: false);
