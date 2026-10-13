@@ -4460,7 +4460,7 @@ exports.requestWithdrawal = onCall(
     }
 
     const destination = validateWithdrawalDestination(data);
-    const withdrawalId = `${uid}_${requestId}`;
+    const withdrawalId = `wd-${crypto.createHash("sha256").update(`${uid}:${requestId}`, "utf8").digest("hex")}`;
     const withdrawalRef = db.collection("withdrawal_requests").doc(withdrawalId);
     const userRef = db.collection("users").doc(uid);
     const ledgerRef = db.collection("balance_ledger").doc();
