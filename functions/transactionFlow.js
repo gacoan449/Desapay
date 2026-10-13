@@ -297,6 +297,12 @@ async function finalize(requestRef, status, providerData, refundReason) {
 
       const current = requestSnap.data() || {};
       const currentStatus = text(current.status).toUpperCase();
+      const fundsWereRefunded = current.balanceRefunded === true || current.refunded === true;
+      // Recover an old FAILED record if its debit was never refunded.
+      const unresolvedFailedDebit = currentStatus === "FAILED" &&
+        normalizedStatus === "FAILED" &&
+        current.balanceDebited === true &&
+        !fundsWereRefunded;
       const isTerminal = ["SUCCESS", "FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus);
 
       const writeConflict = (reason, nextStatus = currentStatus) => {
@@ -322,9 +328,16 @@ async function finalize(requestRef, status, providerData, refundReason) {
         return {action: "conflict", current, finalStatus: nextStatus};
       };
 
-      // A terminal state is immutable. Different terminal provider results
-      // are recorded for human reconciliation rather than rewriting the ledger.
-      if (isTerminal) {
+      // A success reported after any refund is always a reconciliation conflict,
+      // even if an older code path already wrote SUCCESS inconsistently.
+      if (normalizedStatus === "SUCCESS" && fundsWereRefunded) {
+        const nextStatus = currentStatus === "FAILED" ? "FAILED" : "RECONCILIATION_REQUIRED";
+        return writeConflict("PROVIDER_SUCCESS_AFTER_REFUND", nextStatus);
+      }
+
+      // A terminal state is immutable, except to repair a confirmed failure
+      // whose earlier debit was never refunded.
+      if (isTerminal && !unresolvedFailedDebit) {
         if (currentStatus === normalizedStatus) {
           tx.update(requestRef, {
             ...providerFields,
@@ -342,10 +355,6 @@ async function finalize(requestRef, status, providerData, refundReason) {
         );
       }
 
-      if (normalizedStatus === "SUCCESS" && current.balanceRefunded === true) {
-        return writeConflict("PROVIDER_SUCCESS_AFTER_REFUND", "RECONCILIATION_REQUIRED");
-      }
-
       const now = admin.firestore.FieldValue.serverTimestamp();
 
       if (normalizedStatus === "SUCCESS") {
@@ -361,7 +370,7 @@ async function finalize(requestRef, status, providerData, refundReason) {
       // Failure, refund, and terminal status are committed atomically. If a
       // success callback wins first, this transaction retries and sees SUCCESS.
       let refundInfo = {};
-      if (current.balanceRefunded === true) {
+      if (fundsWereRefunded) {
         refundInfo = {
           balanceRefunded: true,
           refundAmount: integer(current.refundAmount) ?? integer(current.trustedPrice) ?? integer(current.amount) ?? 0,
@@ -418,7 +427,7 @@ async function finalize(requestRef, status, providerData, refundReason) {
         status: "FAILED",
         ...providerFields,
         ...refundInfo,
-        ...(current.balanceDebited !== true && current.balanceRefunded !== true
+        ...(current.balanceDebited !== true && !fundsWereRefunded
           ? {balanceRefunded: false}
           : {}),
         completedAt: now,
@@ -440,7 +449,7 @@ async function finalize(requestRef, status, providerData, refundReason) {
           if (!snap.exists) return;
           const current = snap.data() || {};
           const currentStatus = text(current.status).toUpperCase();
-          if (["SUCCESS", "FAILED"].includes(currentStatus)) {
+          if (["SUCCESS", "FAILED", "RECONCILIATION_REQUIRED"].includes(currentStatus)) {
             if (currentStatus === "SUCCESS") {
               tx.set(reconciliationRef, {
                 transactionId: requestRef.id,
