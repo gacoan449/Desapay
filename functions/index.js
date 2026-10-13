@@ -4889,12 +4889,7 @@ exports.reconcileLegacyProviderTransactions = onSchedule(
                 providerData.message || "Provider menyatakan transaksi gagal."
               );
             } else {
-              await ref.update({
-                status: "PENDING",
-                response: providerData,
-                providerMessage: providerData.message || "Menunggu konfirmasi provider.",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
+              await applyLegacyPending(ref, providerData);
             }
           } catch (error) {
             await ref.update({
@@ -4905,6 +4900,51 @@ exports.reconcileLegacyProviderTransactions = onSchedule(
             });
           }
         }
+        // Repair old records where FAILED was written but the refund transaction
+        // never completed. Refund only when the provider's stored outcome is
+        // conclusively failure; ambiguous cases are escalated, never auto-credited.
+        const failedSnapshot = await db.collection(item.name)
+            .where("status", "==", "FAILED")
+            .where("balanceDebited", "==", true)
+            .orderBy("updatedAt", "asc")
+            .limit(100).get();
+
+        for (const doc of failedSnapshot.docs) {
+          const current = doc.data() || {};
+          if (legacyTimestampMillis(current.updatedAt) > cutoff) continue;
+          if (current.balanceRefunded === true || current.refunded === true) continue;
+
+          const providerStatus = String(current.providerStatus || "").trim().toUpperCase();
+          const providerData = current.response && typeof current.response === "object"
+            ? current.response
+            : {status: current.providerStatus || null, message: current.failureReason || null};
+
+          try {
+            if (["GAGAL", "FAILED", "FAIL", "FAILURE"].includes(providerStatus)) {
+              await applyLegacyFailure(
+                doc.ref,
+                providerData,
+                item.provider,
+                current.failureReason || providerData.message || "Memulihkan refund lama yang belum selesai."
+              );
+            } else if (["SUKSES", "SUCCESS"].includes(providerStatus)) {
+              await applyLegacySuccess(doc.ref, providerData);
+            } else {
+              await recordLegacyReconciliation(
+                doc.ref,
+                providerData,
+                "FAILED_BUT_REFUND_NOT_CONFIRMED"
+              );
+            }
+          } catch (error) {
+            await doc.ref.update({
+              lastReconcileError: String(error.message || "Unknown reconciliation error").slice(0, 300),
+              lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
       }
     },
 );
