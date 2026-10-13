@@ -16,11 +16,13 @@ class _PenarikanSaldoScreenState extends State<PenarikanSaldoScreen> {
   final _service = WithdrawalService();
   final _provider = TextEditingController();
   final _account = TextEditingController();
+  final _accountName = TextEditingController();
+  String? _requestId;
   String _type = 'BANK';
   bool _busy = false;
 
   @override
-  void dispose() { _amount.dispose(); _provider.dispose(); _account.dispose(); super.dispose(); }
+  void dispose() { _amount.dispose(); _provider.dispose(); _account.dispose(); _accountName.dispose(); super.dispose(); }
 
   String _rp(num n) => 'Rp ${n.toStringAsFixed(0)}';
 
@@ -31,16 +33,17 @@ class _PenarikanSaldoScreenState extends State<PenarikanSaldoScreen> {
     if (user == null || amount == null) return;
     setState(() => _busy = true);
     try {
-      final id = '${DateTime.now().microsecondsSinceEpoch}_${user.uid.substring(0, user.uid.length.clamp(1, 8))}';
+      final id = _requestId ??= '${DateTime.now().microsecondsSinceEpoch}_${user.uid.substring(0, user.uid.length > 8 ? 8 : user.uid.length)}';
       final result = await _service.requestWithdrawal(
         requestId: id,
         amount: amount,
         destinationType: _type,
         destinationName: _provider.text.trim(),
         destinationAccount: _account.text.trim(),
-        destinationAccountName: user.displayName?.trim().isNotEmpty == true ? user.displayName!.trim() : (user.phoneNumber ?? user.email ?? user.uid),
+        destinationAccountName: _accountName.text.trim(),
       );
       if (!mounted) return;
+      _requestId = null;
       _amount.clear();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Permintaan ${result['status'] ?? 'PENDING'}. Saldo ditahan hingga diproses admin.')));
     } on FirebaseFunctionsException catch (e) {
@@ -63,13 +66,15 @@ class _PenarikanSaldoScreenState extends State<PenarikanSaldoScreen> {
             const SizedBox(height: 8),
             const Text('Saldo ditahan saat permintaan dibuat dan otomatis dikembalikan jika ditolak admin.'),
             const SizedBox(height: 16),
-            TextFormField(controller: _amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Nominal (Rp)', border: OutlineInputBorder()), validator: (v) { final n = int.tryParse((v ?? '').trim()); return n == null || n < 10000 || n > 100000000 ? 'Nominal Rp10.000–Rp100.000.000.' : null; }),
+            TextFormField(controller: _amount, keyboardType: TextInputType.number, onChanged: (_) => _requestId = null, decoration: const InputDecoration(labelText: 'Nominal (Rp)', border: OutlineInputBorder()), validator: (v) { final n = int.tryParse((v ?? '').trim()); return n == null || n < 10000 || n > 100000000 ? 'Nominal Rp10.000–Rp100.000.000.' : null; }),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(value: _type, decoration: const InputDecoration(labelText: 'Jenis tujuan', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'BANK', child: Text('Transfer Bank')), DropdownMenuItem(value: 'E-WALLET', child: Text('E-Wallet'))], onChanged: _busy ? null : (v) => setState(() => _type = v ?? 'BANK')),
+            DropdownButtonFormField<String>(value: _type, decoration: const InputDecoration(labelText: 'Jenis tujuan', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'BANK', child: Text('Transfer Bank')), DropdownMenuItem(value: 'E-WALLET', child: Text('E-Wallet'))], onChanged: _busy ? null : (v) => setState(() { _type = v ?? 'BANK'; _requestId = null; })),
             const SizedBox(height: 12),
-            TextFormField(controller: _provider, decoration: InputDecoration(labelText: _type == 'BANK' ? 'Nama bank' : 'Nama e-wallet', border: const OutlineInputBorder()), validator: (v) => (v ?? '').trim().isEmpty ? 'Wajib diisi.' : null),
+            TextFormField(controller: _provider, onChanged: (_) => _requestId = null, decoration: InputDecoration(labelText: _type == 'BANK' ? 'Nama bank' : 'Nama e-wallet', border: const OutlineInputBorder()), validator: (v) => (v ?? '').trim().isEmpty ? 'Wajib diisi.' : null),
             const SizedBox(height: 12),
-            TextFormField(controller: _account, decoration: const InputDecoration(labelText: 'Nomor rekening / akun', border: OutlineInputBorder()), validator: (v) => (v ?? '').trim().isEmpty ? 'Wajib diisi.' : null),
+            TextFormField(controller: _account, onChanged: (_) => _requestId = null, decoration: const InputDecoration(labelText: 'Nomor rekening / akun', border: OutlineInputBorder()), validator: (v) => (v ?? '').trim().isEmpty ? 'Wajib diisi.' : null),
+            const SizedBox(height: 12),
+            TextFormField(controller: _accountName, onChanged: (_) => _requestId = null, decoration: const InputDecoration(labelText: 'Nama pemilik rekening / akun', border: OutlineInputBorder()), validator: (v) => (v ?? '').trim().isEmpty ? 'Wajib diisi.' : null),
             const SizedBox(height: 16),
             FilledButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'Mengirim...' : 'Ajukan Penarikan')),
           ])))),
