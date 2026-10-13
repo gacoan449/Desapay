@@ -798,7 +798,8 @@ exports.reconcilePendingTransactions = onSchedule(
     async () => {
       const cutoff = Date.now() - 2 * 60 * 1000;
       const processing = await db.collection("transaction_requests")
-          .where("status", "==", "PROCESSING").limit(100).get();
+          .where("status", "==", "PROCESSING")
+          .orderBy("updatedAt", "asc").limit(100).get();
 
       for (const doc of processing.docs) {
         const data = doc.data() || {};
@@ -876,7 +877,8 @@ exports.reconcilePendingTransactions = onSchedule(
 
       // Retry any refund that failed after the provider conclusively reported failure.
       const refundPending = await db.collection("transaction_requests")
-          .where("status", "==", "REFUND_PENDING").limit(100).get();
+          .where("status", "==", "REFUND_PENDING")
+          .orderBy("updatedAt", "asc").limit(100).get();
       for (const doc of refundPending.docs) {
         const data = doc.data() || {};
         const updatedAt = data.updatedAt && typeof data.updatedAt.toDate === "function"
