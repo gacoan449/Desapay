@@ -2116,7 +2116,22 @@ exports.digiflazzCekTransaksi =
         */
 
         const localStatus = String(transaksi.status || "").trim().toUpperCase();
-        if (localStatus === "FAILED") {
+        if (localStatus === "RECONCILIATION_REQUIRED") {
+          return {
+            success: false,
+            ref_id: refId,
+            status: "RECONCILIATION_REQUIRED",
+            reconciliationRequired: true,
+            message: "Transaksi ini sedang menunggu pemeriksaan admin.",
+            response: transaksi.response || null,
+            reused: true,
+          };
+        }
+
+        if (localStatus === "FAILED" &&
+            (transaksi.balanceRefunded === true ||
+             transaksi.refunded === true ||
+             transaksi.balanceDebited !== true)) {
           return {
             success: false,
             ref_id: refId,
@@ -2127,9 +2142,7 @@ exports.digiflazzCekTransaksi =
           };
         }
 
-        if (
-          String(transaksi.status || "").trim().toUpperCase() === "SUCCESS"
-        ) {
+        if (localStatus === "SUCCESS") {
           return {
             success: true,
             ref_id: refId,
