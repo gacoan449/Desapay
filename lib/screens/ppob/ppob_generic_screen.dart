@@ -860,6 +860,14 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       final status =
           result['status']?.toString().toUpperCase() ?? '';
 
+      if (result['reconciliationRequired'] == true) {
+        _showMessage(
+          'Status transaksi perlu pemeriksaan admin. Jangan lakukan pembelian ulang.',
+          danger: true,
+        );
+        return;
+      }
+
       final message =
           result['message']?.toString() ??
               result['msg']?.toString() ??
