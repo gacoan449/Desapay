@@ -20,11 +20,21 @@ class _BantuanCsScreenState extends State<BantuanCsScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw StateError("Silakan login kembali untuk mengirim keluhan.");
+      }
+
+      final pesan = _pesanController.text.trim();
+      if (pesan.isEmpty || pesan.length > 2000) {
+        throw StateError("Pesan harus berisi 1–2000 karakter.");
+      }
+
       await FirebaseFirestore.instance.collection("keluhan_pelanggan").add({
-        "namaUser": user?.displayName ?? "Pengguna DesaPay",
-        "phoneUser": user?.phoneNumber ?? user?.email ?? "-",
-        "pesan": _pesanController.text.trim(),
-        "status": "Pending", // Status masuk ke dashboard admin
+        "uid": user.uid,
+        "namaUser": user.displayName ?? "Pengguna DesaPay",
+        "phoneUser": user.phoneNumber ?? user.email ?? "-",
+        "pesan": pesan,
+        "status": "Pending",
         "waktuMasuk": FieldValue.serverTimestamp(),
       });
 
