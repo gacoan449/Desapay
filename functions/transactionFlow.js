@@ -435,10 +435,29 @@ exports.processTransactionRequest = onDocumentCreated(
       try {
         await processRequest(requestRef);
       } catch (error) {
+        // Jangan menimpa status refund yang gagal atau status terminal.
+        // Jika saldo sudah dipotong dan hasil provider belum pasti, pertahankan
+        // transaksi untuk rekonsiliasi; jangan menyatakan gagal/refund secara palsu.
+        const latestSnap = await requestRef.get();
+        if (!latestSnap.exists) return;
+        const latest = latestSnap.data() || {};
+        const status = text(latest.status).toUpperCase();
+
+        if (status === "SUCCESS" || status === "FAILED" || status === "REFUND_PENDING") {
+          return;
+        }
+
+        const balanceWasDebited = latest.balanceDebited === true &&
+          latest.balanceRefunded !== true;
+
         await requestRef.update({
-          status: "FAILED",
-          providerStatus: "SYSTEM_ERROR",
-          providerMessage: "Terjadi kesalahan sistem. Silakan hubungi CS.",
+          status: balanceWasDebited ? "PROCESSING" : "FAILED",
+          providerStatus: balanceWasDebited
+            ? (latest.providerStatus || "PENDING")
+            : "SYSTEM_ERROR",
+          providerMessage: balanceWasDebited
+            ? "Status transaksi sedang diverifikasi. Jangan lakukan pembayaran ulang."
+            : "Terjadi kesalahan sistem. Silakan hubungi CS.",
           internalError: error.message,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
