@@ -27,6 +27,7 @@ abstract class ITransaksiService {
     required String nomorTujuan,
     required String metodePembayaran,
     required String transactionPin,
+    required String requestId,
   });
 }
 
@@ -55,6 +56,7 @@ class TransaksiService implements ITransaksiService {
     required String nomorTujuan,
     required String metodePembayaran,
     required String transactionPin,
+    required String requestId,
   }) async {
     if (nomorTujuan.trim().length < 4) {
       return const HasilEksekusiTransaksi(
@@ -77,6 +79,7 @@ class TransaksiService implements ITransaksiService {
       buyerSkuCode: produk.kode,
       customerNo: nomorTujuan.trim(),
       transactionPin: transactionPin,
+      requestId: requestId,
     );
 
     final statusText =
@@ -108,4 +111,5 @@ class TransaksiService implements ITransaksiService {
       refId: refId,
       statusAkhir: StatusTransaksi.pending,
     );
-  }}
+  }
+}
