@@ -15,11 +15,11 @@ const {
 
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const pinSecurity = require("./pinSecurity");
 
 admin.initializeApp();
 
 const db = admin.firestore();
+const pinSecurity = require("./pinSecurity");
 
 /*
 |--------------------------------------------------------------------------
