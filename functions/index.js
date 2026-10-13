@@ -2222,30 +2222,29 @@ exports.digiflazzCekTransaksi =
         }
 
         if (
-          String(
-            transaksi.status ||
-              ""
-          )
-            .trim()
-            .toUpperCase() ===
-          "SUCCESS"
+          String(transaksi.status || "").trim().toUpperCase() === "SUCCESS"
         ) {
           return {
-            success:
-              true,
+            success: true,
+            ref_id: refId,
+            status: "SUCCESS",
+            response: transaksi.response || null,
+            reused: true,
+          };
+        }
 
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              transaksi.response ||
-              null,
-
-            reused:
-              true,
+        if (transaksi.balanceRefunded === true || transaksi.refunded === true) {
+          await recordLegacyReconciliation(
+            transaksiRef,
+            {status: transaksi.providerStatus || null, message: transaksi.failureReason || null},
+            "REFUNDED_TRANSACTION_LEFT_IN_NONTERMINAL_STATE"
+          );
+          return {
+            success: false,
+            ref_id: refId,
+            status: "RECONCILIATION_REQUIRED",
+            message: "Transaksi sudah direfund dan perlu pemeriksaan admin. Jangan lakukan pembelian ulang.",
+            reused: true,
           };
         }
 
