@@ -529,7 +529,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
             decoration: const InputDecoration(labelText: 'PIN 6 digit', counterText: ''),
             onSubmitted: (_) {
               final value = controller.text.trim();
-              if (RegExp(r'^\\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+              if (RegExp(r'^\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
             },
           ),
           actions: <Widget>[
@@ -537,7 +537,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
             FilledButton(
               onPressed: () {
                 final value = controller.text.trim();
-                if (RegExp(r'^\\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+                if (RegExp(r'^\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
               },
               child: const Text('Lanjutkan'),
             ),
