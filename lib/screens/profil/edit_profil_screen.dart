@@ -121,42 +121,55 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         String? finalProfilUrl = _fotoProfilUrl;
         String? finalKtpUrl = _fotoKtpUrl;
         String? finalSelfieUrl = _fotoSelfieUrl;
-        String finalKycStatus = _kycStatus;
+        
 
         // 1. Upload Foto Profil jika ada yang baru
         if (_imageProfilBaru != null) {
-          final url = await _uploadKeStorage(_imageProfilBaru!, 'users/${user.uid}/profil.jpg');
-          if (url != null) finalProfilUrl = url;
+          final url = await _uploadKeStorage(_imageProfilBaru!, 'profiles/${user.uid}/profil_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          if (url == null) throw StateError("Gagal mengunggah foto profil.");
+          finalProfilUrl = url;
         }
 
         // 2. Upload KTP jika ada yang baru
         if (_imageKtpBaru != null) {
-          final url = await _uploadKeStorage(_imageKtpBaru!, 'users/${user.uid}/ktp.jpg');
-          if (url != null) finalKtpUrl = url;
+          final url = await _uploadKeStorage(_imageKtpBaru!, 'kyc/${user.uid}/ktp_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          if (url == null) throw StateError("Gagal mengunggah foto KTP.");
+          finalKtpUrl = url;
         }
 
         // 3. Upload Selfie jika ada yang baru
         if (_imageSelfieBaru != null) {
-          final url = await _uploadKeStorage(_imageSelfieBaru!, 'users/${user.uid}/selfie.jpg');
-          if (url != null) finalSelfieUrl = url;
-        }
-
-        // Jika KTP dan Selfie baru diupload, otomatis ubah status KYC jadi Pending (Menunggu divalidasi admin)
-        if (_imageKtpBaru != null && _imageSelfieBaru != null) {
-          finalKycStatus = "Pending";
+          final url = await _uploadKeStorage(_imageSelfieBaru!, 'kyc/${user.uid}/selfie_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          if (url == null) throw StateError("Gagal mengunggah foto selfie.");
+          finalSelfieUrl = url;
         }
 
         // 4. Simpan semua data & URL foto ke Firestore
         await user.updateDisplayName(namaTrim);
-        await _firestore.collection("users").doc(user.uid).update({
+        final updateData = <String, dynamic>{
           "nama": namaTrim,
           "email": emailTrim,
           "phone": phoneTrim,
           "fotoProfil": finalProfilUrl,
           "fotoKtp": finalKtpUrl,
           "fotoSelfie": finalSelfieUrl,
-          "kycStatus": finalKycStatus,
-        });
+        };
+
+        final dokumenKycLengkap =
+            finalKtpUrl != null && finalKtpUrl.isNotEmpty &&
+            finalSelfieUrl != null && finalSelfieUrl.isNotEmpty;
+        final adaDokumenBaru =
+            _imageKtpBaru != null || _imageSelfieBaru != null;
+        final statusSudahTerverifikasi =
+            _kycStatus.toUpperCase() == "TERVERIFIKASI" ||
+            _kycStatus.toUpperCase() == "APPROVED";
+
+        // Client hanya boleh mengajukan status Pending, tidak dapat menyetujui KYC.
+        if (dokumenKycLengkap && adaDokumenBaru && !statusSudahTerverifikasi) {
+          updateData["kycStatus"] = "Pending";
+        }
+
+        await _firestore.collection("users").doc(user.uid).update(updateData);
 
         if (!mounted) return;
         _tampilkanSnackBar("Data Profil & Dokumen berhasil disimpan!", isError: false);

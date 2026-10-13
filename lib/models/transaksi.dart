@@ -32,34 +32,43 @@ class Transaksi {
 
   /// Factory untuk memparsing dokumen dari Firestore Snapshot secara aman (Type-Safe)
   factory Transaksi.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
-    
-    // Konversi enum status secara aman
-    StatusTransaksi statusEnum = StatusTransaksi.pending;
-    final String dbStatus = (data['status'] ?? 'PENDING').toString().toLowerCase();
-    if (dbStatus == 'sukses') {
+    final data = doc.data() ?? <String, dynamic>{};
+
+    final rawStatus = (data['status'] ?? 'PENDING').toString().toLowerCase();
+    StatusTransaksi statusEnum;
+    if (rawStatus == 'sukses' || rawStatus == 'success' || rawStatus == 'berhasil') {
       statusEnum = StatusTransaksi.sukses;
-    } else if (dbStatus == 'gagal') {
+    } else if (rawStatus == 'gagal' || rawStatus == 'failed' || rawStatus == 'failure') {
       statusEnum = StatusTransaksi.gagal;
+    } else {
+      statusEnum = StatusTransaksi.pending;
     }
 
-    // Parsing Timestamp Server Firebase secara aman
+    final rawTime = data['waktu'] ?? data['createdAt'] ?? data['created_at'];
     DateTime? waktuParsed;
-    if (data['waktu'] != null && data['waktu'] is Timestamp) {
-      waktuParsed = (data['waktu'] as Timestamp).toDate();
+    if (rawTime is Timestamp) {
+      waktuParsed = rawTime.toDate();
+    } else if (rawTime is DateTime) {
+      waktuParsed = rawTime;
+    }
+
+    int parseAmount(dynamic value) {
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
     }
 
     return Transaksi(
       id: doc.id,
       uid: data['uid']?.toString() ?? '',
-      kodeProduk: data['kodeProduk']?.toString() ?? '',
-      namaProduk: data['namaProduk']?.toString() ?? 'Transaksi DesaPay',
-      nomorTujuan: data['nomorTujuan']?.toString() ?? '',
-      hargaNominal: int.tryParse(data['hargaNominal'].toString()) ?? 0,
-      refId: data['refId']?.toString() ?? '',
+      kodeProduk: (data['kodeProduk'] ?? data['buyer_sku_code'] ?? data['sku'] ?? '').toString(),
+      namaProduk: (data['namaProduk'] ?? data['productName'] ?? 'Transaksi DesaPay').toString(),
+      nomorTujuan: (data['nomorTujuan'] ?? data['customerNo'] ?? data['customer_no'] ?? '').toString(),
+      hargaNominal: parseAmount(data['hargaNominal'] ?? data['amount'] ?? data['sellingPrice']),
+      refId: (data['refId'] ?? data['providerRefId'] ?? data['transactionId'] ?? data['requestId'] ?? doc.id).toString(),
       status: statusEnum,
       waktu: waktuParsed,
-      metodePembayaran: data['metodePembayaran']?.toString() ?? 'SALDO',
+      metodePembayaran: (data['metodePembayaran'] ?? data['paymentMethod'] ?? 'SALDO').toString(),
     );
   }
 
