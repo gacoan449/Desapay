@@ -510,28 +510,26 @@ class _PulsaScreenState extends State<PulsaScreen> {
 
   Future<String?> _mintaPinTransaksi() async {
     final controller = TextEditingController();
-    final pin = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Verifikasi PIN transaksi'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-          decoration: const InputDecoration(
-            labelText: 'PIN 6 digit',
-            counterText: '',
-          ),
-          onSubmitted: (_) {
-            final value = controller.text.trim();
-            if (RegExp(r'^\\d{6}
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Verifikasi PIN transaksi'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(labelText: 'PIN 6 digit', counterText: ''),
+            onSubmitted: (_) {
+              final value = controller.text.trim();
+              if (RegExp(r'^\\d{6}
   Future<void> _buatPermintaanTransaksi(
     Map<String, dynamic> produk,
   ) async {
@@ -627,10 +625,10 @@ class _PulsaScreenState extends State<PulsaScreen> {
           .collection('transaction_requests')
           .doc();
 
-      final call = FirebaseFunctions.instanceFor(
+      final callable = FirebaseFunctions.instanceFor(
         region: 'asia-southeast2',
       ).httpsCallable('createPpobTransaction');
-      final created = await call.call(<String, dynamic>{
+      final created = await callable.call(<String, dynamic>{
         'request_id': transaksiRef.id,
         'pin': pin,
         'sku': sku,
@@ -1220,20 +1218,15 @@ class _PulsaScreenState extends State<PulsaScreen> {
     );
   }
 }
-).hasMatch(value)) {
-              Navigator.of(dialogContext).pop(value);
-            }
-          },
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Batal'),
+).hasMatch(value)) Navigator.of(dialogContext).pop(value);
+            },
           ),
-          FilledButton(
-            onPressed: () {
-              final value = controller.text.trim();
-              if (RegExp(r'^\\d{6}
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (RegExp(r'^\\d{6}
   Future<void> _buatPermintaanTransaksi(
     Map<String, dynamic> produk,
   ) async {
@@ -1936,17 +1929,16 @@ class _PulsaScreenState extends State<PulsaScreen> {
     );
   }
 }
-).hasMatch(value)) {
-                Navigator.of(dialogContext).pop(value);
-              }
-            },
-            child: const Text('Lanjutkan'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    return pin;
+).hasMatch(value)) Navigator.of(dialogContext).pop(value);
+              },
+              child: const Text('Lanjutkan'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   // =========================================================
