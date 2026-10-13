@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../config/warna.dart';
@@ -635,6 +637,47 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
   // BACKEND -> DIGIFLAZZ
   // BACKEND -> UPDATE STATUS
   // ==========================================================
+
+  Future<String?> _mintaPinTransaksi() async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Verifikasi PIN transaksi'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(labelText: 'PIN 6 digit', counterText: ''),
+            onSubmitted: (_) {
+              final value = controller.text.trim();
+              if (RegExp(r'^\\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+            },
+          ),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (RegExp(r'^\\d{6}$').hasMatch(value)) Navigator.of(dialogContext).pop(value);
+              },
+              child: const Text('Lanjutkan'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
 
   Future<void> _prosesTransaksi() async {
     final nomor = _nomorController.text.trim();
