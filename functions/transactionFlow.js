@@ -613,7 +613,7 @@ exports.processTransactionRequest = onDocumentCreated(
         const latest = latestSnap.data() || {};
         const status = text(latest.status).toUpperCase();
 
-        if (status === "SUCCESS" || status === "FAILED" || status === "REFUND_PENDING") {
+        if (status === "SUCCESS" || status === "FAILED" || status === "REFUND_PENDING" || status === "RECONCILIATION_REQUIRED") {
           return;
         }
 
@@ -654,8 +654,44 @@ exports.reconcilePendingTransactions = onSchedule(
         const updatedAt = data.updatedAt && typeof data.updatedAt.toDate === "function"
           ? data.updatedAt.toDate().getTime()
           : 0;
-        if (updatedAt > cutoff || data.balanceDebited !== true ||
-            data.balanceRefunded === true || !text(data.providerRefId)) continue;
+        if (updatedAt > cutoff) continue;
+
+        // A refund may have committed while the final status update failed.
+        // Close that state without dispatching a fresh provider request.
+        if (data.balanceRefunded === true) {
+          const knownProviderStatus = normalizeStatus(data.providerStatus);
+          if (knownProviderStatus === "FAILED") {
+            try {
+              await finalize(doc.ref, "FAILED", {
+                status: data.providerStatus,
+                rc: data.providerRc || "",
+                message: data.providerMessage || data.message || "Transaksi gagal",
+                sn: data.providerSn || "",
+              }, data.providerMessage || "Transaksi gagal");
+            } catch (_) {
+              // A repeated run will retry history/notification finalization safely.
+            }
+          } else {
+            await db.collection("transaction_reconciliation").doc(doc.id).set({
+              transactionId: doc.id,
+              uid: data.uid || null,
+              localStatus: data.status || "PROCESSING",
+              providerStatus: data.providerStatus || null,
+              providerMessage: data.providerMessage || null,
+              reason: "BALANCE_REFUNDED_PROVIDER_STATUS_UNCONFIRMED",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, {merge: true});
+            await doc.ref.update({
+              status: "RECONCILIATION_REQUIRED",
+              reconciliationRequired: true,
+              providerConflict: "BALANCE_REFUNDED_PROVIDER_STATUS_UNCONFIRMED",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+          continue;
+        }
+        if (data.balanceDebited !== true || !text(data.providerRefId)) continue;
 
         try {
           const provider = await sendToDigiflazz(data, text(data.providerRefId));
