@@ -764,7 +764,39 @@ exports.processTransactionRequest = onDocumentCreated(
         const latest = latestSnap.data() || {};
         const status = text(latest.status).toUpperCase();
 
-        if (status === "SUCCESS" || status === "FAILED" || status === "REFUND_PENDING" || status === "RECONCILIATION_REQUIRED") {
+        if (status === "RECONCILIATION_REQUIRED" || status === "REFUND_PENDING") {
+          return;
+        }
+
+        if (status === "SUCCESS" || status === "FAILED") {
+          // The financial terminal transition may already have committed before a
+          // history/notification write failed. Retry those idempotent side effects.
+          const providerData = latest.providerData && typeof latest.providerData === "object"
+            ? latest.providerData
+            : {
+              status: latest.providerStatus || status,
+              rc: latest.providerRc || "",
+              message: latest.providerMessage || latest.message || "",
+              sn: latest.providerSn || "",
+            };
+          try {
+            await writeHistory(requestRef, status, providerData);
+            const title = status === "SUCCESS" ? "Transaksi berhasil" : "Transaksi gagal";
+            const body = status === "SUCCESS"
+              ? `Transaksi ${latest.productName || latest.buyer_sku_code || "PPOB"} berhasil.`
+              : (latest.balanceRefunded === true
+                ? "Transaksi gagal. Saldo telah dikembalikan."
+                : (latest.balanceDebited === true
+                  ? "Transaksi gagal. Silakan hubungi CS untuk pemeriksaan saldo."
+                  : "Transaksi gagal. Tidak ada saldo yang terpotong."));
+            await notify(latest.uid, title, body, requestRef.id, status);
+          } catch (sideEffectError) {
+            await requestRef.update({
+              finalizationSideEffectError: text(sideEffectError.message).slice(0, 300),
+              finalizationSideEffectRetryAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
           return;
         }
 
