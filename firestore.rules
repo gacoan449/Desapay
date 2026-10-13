@@ -32,8 +32,17 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "name", "displayName", "photoUrl", "phone", "email", "updatedAt",
           "nama", "fotoProfil", "fotoKtp", "fotoSelfie", "ktpUrl", "selfieUrl",
-          "securityUpdatedAt"
-        ]));
+          "securityUpdatedAt", "kycStatus"
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["kycStatus"])
+          || (request.resource.data.kycStatus == "Pending"
+            && resource.data.kycStatus != "Terverifikasi"
+            && resource.data.kycStatus != "TERVERIFIKASI"
+            && resource.data.kycStatus != "APPROVED"
+            && request.resource.data.fotoKtp is string
+            && request.resource.data.fotoKtp.size() > 0
+            && request.resource.data.fotoSelfie is string
+            && request.resource.data.fotoSelfie.size() > 0)));
       allow delete: if isAdmin();
     }
 
