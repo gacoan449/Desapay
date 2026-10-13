@@ -103,13 +103,30 @@ function legacyRecord(userData) {
 }
 
 async function getTransactionPinStatus(uid) {
-  await assertActiveUser(uid);
-  const [pinSnap, userSnap] = await Promise.all([
-    pinDocument(uid).get(),
-    db.collection("users").doc(uid).get(),
-  ]);
-  const legacy = legacyRecord(userSnap.data() || {});
-  return {hasPin: pinSnap.exists || legacy !== null};
+  const userRef = db.collection("users").doc(uid);
+  const pinRef = pinDocument(uid);
+  return db.runTransaction(async (tx) => {
+    const [userSnap, pinSnap] = await Promise.all([tx.get(userRef), tx.get(pinRef)]);
+    if (!userSnap.exists) fail("not-found", "Akun pengguna tidak ditemukan.");
+    const userData = userSnap.data() || {};
+    if (!activeStatus(userData)) fail("permission-denied", "Akun tidak aktif.");
+    const legacy = legacyRecord(userData);
+    if (!pinSnap.exists && legacy) {
+      tx.create(pinRef, {
+        uid,
+        ...legacy,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      tx.update(userRef, {
+        pinHash: admin.firestore.FieldValue.delete(),
+        pinFailedAttempts: admin.firestore.FieldValue.delete(),
+        pinLockedUntil: admin.firestore.FieldValue.delete(),
+      });
+      return {hasPin: true};
+    }
+    return {hasPin: pinSnap.exists || legacy !== null};
+  });
 }
 
 async function setTransactionPin(uid, pin) {
@@ -170,6 +187,13 @@ async function verifyTransactionPin(uid, pin) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
       tx.set(pinRef, updated, {merge: true});
+      if (!pinSnap.exists && legacyRecord(userData)) {
+        tx.update(userRef, {
+          pinHash: admin.firestore.FieldValue.delete(),
+          pinFailedAttempts: admin.firestore.FieldValue.delete(),
+          pinLockedUntil: admin.firestore.FieldValue.delete(),
+        });
+      }
       return {
         error: shouldLock
           ? ["resource-exhausted", "PIN salah 5 kali. PIN dikunci selama 15 menit."]
@@ -242,6 +266,13 @@ async function changeTransactionPin(uid, oldPin, newPin) {
           : null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, {merge: true});
+      if (!pinSnap.exists && legacyRecord(userData)) {
+        tx.update(userRef, {
+          pinHash: admin.firestore.FieldValue.delete(),
+          pinFailedAttempts: admin.firestore.FieldValue.delete(),
+          pinLockedUntil: admin.firestore.FieldValue.delete(),
+        });
+      }
       return {
         error: shouldLock
           ? ["resource-exhausted", "PIN salah 5 kali. PIN dikunci selama 15 menit."]
