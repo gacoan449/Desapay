@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../config/warna.dart';
 import '../../services/firestore_service.dart';
+import '../../services/pin_service.dart';
 
 class PpobGenericScreen extends StatefulWidget {
   final String kategori;
@@ -627,6 +628,38 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     });
   }
 
+  Future<String?> _mintaPinPembelian() async {
+    final controller = TextEditingController();
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Verifikasi PIN Transaksi'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          maxLength: 6,
+          decoration: const InputDecoration(labelText: 'PIN transaksi 6 digit', counterText: ''),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () {
+              if (RegExp(r'^\d{6}$').hasMatch(controller.text)) {
+                Navigator.pop(dialogContext, controller.text);
+              }
+            },
+            child: const Text('Verifikasi & Bayar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return pin;
+  }
+
   // ==========================================================
   // EKSEKUSI PEMBELIAN
   //
@@ -720,11 +753,24 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
 
       final requestId = requestRef.id;
 
+      final pin = await _mintaPinPembelian();
+      if (pin == null) {
+        if (mounted) setState(() => _isProcessingTransaction = false);
+        return;
+      }
+      final pinAuthorizationId = await PinService().authorizePurchase(
+        pin: pin,
+        requestId: requestId,
+        sku: _selectedSku!,
+        customerNo: nomor,
+      );
+
       await requestRef.set({
         'requestId': requestId,
 
         // USER
         'uid': user.uid,
+        'pinAuthorizationId': pinAuthorizationId,
 
         // PRODUK
         'sku': _selectedSku,

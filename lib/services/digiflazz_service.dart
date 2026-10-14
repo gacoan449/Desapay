@@ -13,6 +13,8 @@ abstract class IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String requestId,
+    required String pinAuthorizationId,
   });
 
   Future<Map<String, dynamic>> mintaTiketDeposit({
@@ -31,7 +33,8 @@ abstract class IDigiflazzService {
 }
 
 class DigiflazzService implements IDigiflazzService {
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final FirebaseFunctions _functions =
+      FirebaseFunctions.instanceFor(region: 'asia-southeast2');
 
   @override
   Future<List<dynamic>> ambilSemuaProduk() async {
@@ -76,18 +79,48 @@ class DigiflazzService implements IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String requestId,
+    required String pinAuthorizationId,
   }) async {
     try {
       final result = await _functions.httpsCallable('digiflazzKirimTransaksi').call({
         'buyer_sku_code': buyerSkuCode,
         'customer_no': customerNo,
+        'request_id': requestId,
+        'pin_authorization_id': pinAuthorizationId,
       });
       final data = result.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return {'status': 'Gagal', 'message': 'Format respon transaksi tidak valid.'};
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Error fungsi digiflazzKirimTransaksi: ${e.code} ${e.message}');
+      const terminalCodes = {
+        'invalid-argument',
+        'unauthenticated',
+        'permission-denied',
+        'not-found',
+        'already-exists',
+        'failed-precondition',
+        'resource-exhausted',
+      };
+      if (terminalCodes.contains(e.code)) {
+        return {
+          'status': 'Gagal',
+          'message': e.message ?? 'Permintaan transaksi ditolak oleh server.',
+        };
+      }
+      // Timeout/internal error bisa terjadi setelah provider menerima transaksi.
+      // Jangan laporkan gagal atau mendorong pembelian ulang; backend merekonsiliasi.
+      return {
+        'status': 'Pending',
+        'message': 'Status transaksi sedang diverifikasi. Jangan ulangi transaksi dahulu.',
+      };
     } catch (e) {
       debugPrint('Error fungsi digiflazzKirimTransaksi: $e');
-      return {'status': 'Gagal', 'message': 'Terjadi gangguan transaksi di server.'};
+      return {
+        'status': 'Pending',
+        'message': 'Koneksi terputus; status transaksi sedang diverifikasi. Jangan ulangi transaksi dahulu.',
+      };
     }
   }
 

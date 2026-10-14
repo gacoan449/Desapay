@@ -2,10 +2,12 @@ name: Flutter Build APK
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 on:
   push:
+    branches: ["main"]
+  pull_request:
     branches: ["main"]
   workflow_dispatch:
 
@@ -65,6 +67,7 @@ jobs:
           node --check index.js
           node --check bootstrap.js
           node --check transactionFlow.js
+          node --check pinFunctions.js
           node --check notificationBridge.js
       - name: Analyze Flutter
         run: flutter analyze --no-fatal-infos --no-fatal-warnings

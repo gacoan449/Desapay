@@ -5,6 +5,7 @@ const admin = require("firebase-admin");
 const {defineSecret} = require("firebase-functions/params");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {onRequest} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 
 const db = admin.firestore();
 const REGION = "asia-southeast2";
@@ -37,6 +38,17 @@ function normalizeStatus(value) {
 
 function normalizeRc(value) {
   return text(value);
+}
+
+function isAccountDisabled(userData) {
+  const data = userData || {};
+  const status = text(data.status || data.accountStatus).toLowerCase();
+  return data.disabled === true ||
+    data.isDisabled === true ||
+    data.isBlocked === true ||
+    data.isActive === false ||
+    ["disabled", "inactive", "blocked", "banned", "suspended", "nonaktif",
+      "non-aktif", "non aktif", "tidak aktif", "dinonaktifkan", "diblokir"].includes(status);
 }
 
 async function getProduct(sku) {
@@ -82,7 +94,11 @@ async function debit(requestRef, uid, amount, sku, customerNo) {
 
     const userSnap = await tx.get(userRef);
     if (!userSnap.exists) throw new Error("USER_NOT_FOUND");
-    const saldoAwal = integer((userSnap.data() || {}).balance);
+    const userData = userSnap.data() || {};
+    if (userData.role !== "user" || isAccountDisabled(userData)) {
+      throw new Error("ACCOUNT_DISABLED");
+    }
+    const saldoAwal = integer(userData.balance);
     if (saldoAwal === null || saldoAwal < 0) throw new Error("INVALID_BALANCE");
     if (saldoAwal < amount) throw new Error("INSUFFICIENT_BALANCE");
 
@@ -190,6 +206,8 @@ async function writeHistory(requestRef, status, providerData) {
     if (historySnap.exists) {
       tx.update(historyRef, {
         status,
+        amount: integer(data.trustedPrice) ?? 0,
+        sellingPrice: integer(data.trustedPrice) ?? 0,
         providerStatus: providerData.status || null,
         providerRc: providerData.rc || null,
         message: providerData.message || null,
@@ -208,8 +226,8 @@ async function writeHistory(requestRef, status, providerData) {
       productName: data.productName || null,
       category: data.category || null,
       customerNo: data.customerNo || data.customer_no || null,
-      amount: integer(data.amount) ?? 0,
-      sellingPrice: integer(data.sellingPrice) ?? integer(data.amount) ?? 0,
+      amount: integer(data.trustedPrice) ?? 0,
+      sellingPrice: integer(data.trustedPrice) ?? 0,
       status,
       providerRefId: data.providerRefId || null,
       providerStatus: providerData.status || null,
@@ -230,46 +248,90 @@ async function notify(uid, title, body, requestId, status) {
 }
 
 async function finalize(requestRef, status, providerData, refundReason) {
-  const requestSnap = await requestRef.get();
-  if (!requestSnap.exists) return;
-  const current = requestSnap.data() || {};
-  const currentStatus = text(current.status).toUpperCase();
+  const provider = providerData || {};
+  let current = null;
+  let shouldProcess = false;
+  let needsRefund = false;
 
-  if (currentStatus === "SUCCESS" || currentStatus === "FAILED") return;
+  await db.runTransaction(async (tx) => {
+    current = null;
+    shouldProcess = false;
+    needsRefund = false;
+    const snap = await tx.get(requestRef);
+    if (!snap.exists) return;
+    current = snap.data() || {};
+    const currentStatus = text(current.status).toUpperCase();
 
-  if (status === "FAILED") {
-    try {
-      await refund(requestRef, refundReason || providerData.message || "Transaksi gagal");
-    } catch (error) {
-      await requestRef.update({
-        status: "REFUND_PENDING",
-        refundError: error.message,
-        providerStatus: providerData.status || null,
-        providerRc: providerData.rc || null,
-        message: providerData.message || "Refund gagal diproses",
+    if (currentStatus === "SUCCESS") return;
+    if (currentStatus === "FAILED" &&
+        (current.balanceRefunded === true || current.balanceDebited !== true)) return;
+
+    if (status === "SUCCESS") {
+      // FAILED/REFUND_PENDING represents an already-decided failure and cannot
+      // be overwritten by a delayed provider response.
+      if (currentStatus === "FAILED" || currentStatus === "REFUND_PENDING") return;
+      tx.update(requestRef, {
+        status: "SUCCESS",
+        providerStatus: provider.status || null,
+        providerRc: normalizeRc(provider.rc),
+        providerMessage: provider.message || null,
+        providerSn: provider.sn || null,
+        providerData: provider,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      shouldProcess = true;
+      return;
+    }
+
+    if (status !== "FAILED") return;
+    if (currentStatus === "FAILED" && current.balanceRefunded === true) return;
+    needsRefund = current.balanceDebited === true && current.balanceRefunded !== true;
+    tx.update(requestRef, {
+      status: needsRefund ? "REFUND_PENDING" : "FAILED",
+      failureReason: provider.message || refundReason || "Transaksi gagal",
+      providerStatus: provider.status || null,
+      providerRc: normalizeRc(provider.rc),
+      providerMessage: provider.message || null,
+      providerSn: provider.sn || null,
+      providerData: provider,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(needsRefund ? {} : {completedAt: admin.firestore.FieldValue.serverTimestamp()}),
+    });
+    shouldProcess = true;
+  });
+
+  if (!shouldProcess || !current) return;
+
+  if (status === "FAILED" && needsRefund) {
+    try {
+      await refund(requestRef, refundReason || provider.message || "Transaksi gagal");
+    } catch (error) {
+      await requestRef.set({
+        status: "REFUND_PENDING",
+        refundError: error.message,
+        providerStatus: provider.status || null,
+        providerRc: normalizeRc(provider.rc),
+        providerMessage: provider.message || "Refund gagal diproses",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
       throw error;
     }
+    await requestRef.update({
+      status: "FAILED",
+      balanceRefunded: true,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 
-  await requestRef.update({
-    status,
-    providerStatus: providerData.status || null,
-    providerRc: providerData.rc || null,
-    providerMessage: providerData.message || null,
-    providerSn: providerData.sn || null,
-    providerData,
-    completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await writeHistory(requestRef, status, providerData);
-
-  const title = status === "SUCCESS" ? "Transaksi berhasil" : "Transaksi gagal";
-  const body = status === "SUCCESS"
+  const finalStatus = status === "FAILED" ? "FAILED" : "SUCCESS";
+  await writeHistory(requestRef, finalStatus, provider);
+  const title = finalStatus === "SUCCESS" ? "Transaksi berhasil" : "Transaksi gagal";
+  const body = finalStatus === "SUCCESS"
     ? `Transaksi ${current.productName || current.buyer_sku_code || "PPOB"} berhasil.`
-    : `Transaksi gagal. Saldo dikembalikan.`;
-  await notify(current.uid, title, body, requestRef.id, status);
+    : (needsRefund ? "Transaksi gagal. Saldo dikembalikan." : "Transaksi gagal.");
+  await notify(current.uid, title, body, requestRef.id, finalStatus);
 }
 
 async function sendToDigiflazz(requestData, refId) {
@@ -297,6 +359,26 @@ async function sendToDigiflazz(requestData, refId) {
   return json.data || json;
 }
 
+async function consumePurchaseAuthorization(requestRef, data) {
+  const token = text(data.pinAuthorizationId);
+  if (!token || token.length !== 64) throw new Error("PIN_AUTHORIZATION_REQUIRED");
+  const authRef = db.collection("pin_authorizations").doc(token);
+  const uid = text(data.uid);
+  const sku = text(data.buyer_sku_code || data.sku);
+  const customerNo = text(data.customerNo || data.customer_no);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(authRef);
+    if (!snap.exists) throw new Error("PIN_AUTHORIZATION_INVALID");
+    const auth = snap.data() || {};
+    const expiresAt = auth.expiresAt && typeof auth.expiresAt.toMillis === "function" ? auth.expiresAt.toMillis() : 0;
+    if (auth.uid !== uid || auth.requestId !== requestRef.id || auth.sku !== sku ||
+        auth.customerNo !== customerNo || auth.consumed === true || expiresAt < Date.now()) {
+      throw new Error("PIN_AUTHORIZATION_INVALID");
+    }
+    tx.update(authRef, {consumed: true, consumedAt: admin.firestore.FieldValue.serverTimestamp()});
+  });
+}
+
 async function processRequest(requestRef) {
   const snap = await requestRef.get();
   if (!snap.exists) return;
@@ -318,7 +400,7 @@ async function processRequest(requestRef) {
   }
 
   const userSnap = await db.collection("users").doc(uid).get();
-  if (!userSnap.exists || (userSnap.data() || {}).role !== "user") {
+  if (!userSnap.exists || (userSnap.data() || {}).role !== "user" || isAccountDisabled(userSnap.data())) {
     await finalize(requestRef, "FAILED", {status: "Gagal", rc: "AUTH", message: "User tidak valid"}, "User tidak valid");
     return;
   }
@@ -337,26 +419,31 @@ async function processRequest(requestRef) {
 
   await requestRef.update({
     trustedPrice: trusted.price,
+    amount: trusted.price,
+    sellingPrice: trusted.price,
     productName: productData.name || productData.nama || data.productName || sku,
     serverValidatedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   try {
-    await debit(requestRef, uid, trusted.price, sku, customerNo);
-  } catch (error) {
-    const message = error.message === "INSUFFICIENT_BALANCE"
-      ? "Saldo tidak mencukupi"
-      : "Transaksi tidak dapat diproses";
+    await consumePurchaseAuthorization(requestRef, {...data, uid, buyer_sku_code: sku, customerNo});
+  } catch (authError) {
     await requestRef.update({
       status: "FAILED",
-      providerStatus: "NOT_SENT",
-      providerMessage: message,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      providerStatus: "PIN_REQUIRED",
+      providerMessage: "Otorisasi PIN tidak valid atau kedaluwarsa. Silakan ulangi pembelian.",
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "BALANCE", message});
-    await notify(uid, "Transaksi gagal", message, requestRef.id, "FAILED");
+    await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "PIN_REQUIRED", message: "Otorisasi PIN tidak valid."});
+    return;
+  }
+
+  if (!text(DIGIFLAZZ_USERNAME.value()) || !text(DIGIFLAZZ_API_KEY.value())) {
+    await finalize(requestRef, "FAILED", {
+      status: "Gagal", rc: "CONFIG", message: "Kredensial provider belum dikonfigurasi.",
+    }, "Provider belum dikonfigurasi");
     return;
   }
 
@@ -367,6 +454,24 @@ async function processRequest(requestRef) {
   });
 
   try {
+    await debit(requestRef, uid, trusted.price, sku, customerNo);
+  } catch (error) {
+    const message = error.message === "INSUFFICIENT_BALANCE"
+      ? "Saldo tidak mencukupi"
+      : "Transaksi tidak dapat diproses";
+    // Baca status debit terbaru dan gunakan finalizer yang mengembalikan saldo
+    // bila transaksi debit sebenarnya sudah commit sebelum error jaringan.
+    await finalize(requestRef, "FAILED", {
+      status: "Gagal", rc: "BALANCE", message,
+    }, message);
+    return;
+  }
+
+  try {
+    await requestRef.update({
+      providerSubmissionStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     const provider = await sendToDigiflazz({...data, buyer_sku_code: sku, customerNo}, providerRefId);
     const status = normalizeStatus(provider.status);
     await requestRef.update({
@@ -428,7 +533,11 @@ async function handleWebhook(req, res) {
 }
 
 exports.processTransactionRequest = onDocumentCreated(
-    {document: "transaction_requests/{requestId}", region: REGION},
+    {
+      document: "transaction_requests/{requestId}",
+      region: REGION,
+      secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY],
+    },
     async (event) => {
       const requestRef = event.data && event.data.ref;
       if (!requestRef) return;
@@ -449,6 +558,25 @@ exports.processTransactionRequest = onDocumentCreated(
 
         const balanceWasDebited = latest.balanceDebited === true &&
           latest.balanceRefunded !== true;
+        const providerMayHaveReceived = Boolean(latest.providerSubmissionStartedAt);
+
+        if (balanceWasDebited && !providerMayHaveReceived) {
+          try {
+            await finalize(requestRef, "FAILED", {
+              status: "Gagal", rc: "NOT_SENT",
+              message: "Transaksi gagal sebelum dikirim ke provider; saldo dikembalikan.",
+            }, "Gagal sebelum pengiriman ke provider");
+            return;
+          } catch (refundError) {
+            await requestRef.update({
+              status: "REFUND_PENDING",
+              refundError: refundError.message,
+              providerStatus: "NOT_SENT",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return;
+          }
+        }
 
         await requestRef.update({
           status: balanceWasDebited ? "PROCESSING" : "FAILED",
@@ -464,6 +592,111 @@ exports.processTransactionRequest = onDocumentCreated(
       }
     },
 );
+
+async function checkProviderStatus(requestData, refId) {
+  const username = DIGIFLAZZ_USERNAME.value();
+  const apiKey = DIGIFLAZZ_API_KEY.value();
+  if (!username || !apiKey) throw new Error("Credential Digiflazz belum dikonfigurasi.");
+  const body = {
+    cmd: "status",
+    username,
+    buyer_sku_code: text(requestData.buyer_sku_code || requestData.sku),
+    customer_no: text(requestData.customerNo || requestData.customer_no),
+    ref_id: refId,
+    sign: md5(username + apiKey + "status" + refId),
+  };
+  const response = await fetch(DIGIFLAZZ_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  const json = await response.json();
+  if (!response.ok) throw new Error("HTTP Digiflazz status " + response.status);
+  return json.data || json;
+}
+
+exports.reconcileDigiflazzTransactions = onSchedule(
+    {
+      schedule: "every 5 minutes",
+      region: REGION,
+      timeZone: "Asia/Jakarta",
+      timeoutSeconds: 300,
+      memory: "256MiB",
+      secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY],
+    },
+    async () => {
+      // Buang token PIN sekali pakai yang sudah kedaluwarsa agar koleksi tidak tumbuh tanpa batas.
+      const expiredAuthorizations = await db.collection("pin_authorizations")
+          .where("expiresAt", "<", admin.firestore.Timestamp.fromMillis(Date.now()))
+          .limit(200).get();
+      if (!expiredAuthorizations.empty) {
+        const cleanupBatch = db.batch();
+        expiredAuthorizations.docs.forEach((authorization) => cleanupBatch.delete(authorization.ref));
+        await cleanupBatch.commit();
+      }
+
+      const snap = await db.collection("transaction_requests")
+          .where("status", "in", ["PROCESSING", "REFUND_PENDING"])
+          .limit(100).get();
+      const now = Date.now();
+      for (const doc of snap.docs) {
+        const data = doc.data() || {};
+        const status = text(data.status).toUpperCase();
+        try {
+          if (status === "REFUND_PENDING") {
+            await finalize(doc.ref, "FAILED", data.providerData || {
+              status: data.providerStatus || "Gagal",
+              rc: data.providerRc || "REFUND_RETRY",
+              message: data.providerMessage || data.refundError || "Mencoba ulang pengembalian saldo",
+            }, "Percobaan ulang refund otomatis");
+            continue;
+          }
+
+          const submitted = data.providerSubmissionStartedAt &&
+            typeof data.providerSubmissionStartedAt.toMillis === "function"
+            ? data.providerSubmissionStartedAt.toMillis() : 0;
+          if (!submitted) {
+            const processingStarted = data.processingStartedAt &&
+              typeof data.processingStartedAt.toMillis === "function"
+              ? data.processingStartedAt.toMillis() : 0;
+            if (processingStarted && now - processingStarted >= 5 * 60 * 1000) {
+              // Tidak ada timestamp pengiriman provider: aman menyelesaikan request
+              // yang macet sebelum submission; finalize melakukan refund bila sudah debit.
+              await finalize(doc.ref, "FAILED", {
+                status: "Gagal",
+                rc: "NOT_SUBMITTED",
+                message: "Request macet sebelum pengiriman ke provider; saldo diselesaikan otomatis.",
+              }, "Request macet sebelum submission provider");
+            }
+            continue;
+          }
+          if (now - submitted < 5 * 60 * 1000) continue;
+          if (!data.providerRefId) continue;
+
+          const provider = await checkProviderStatus(data, text(data.providerRefId));
+          const resultStatus = normalizeStatus(provider.status);
+          if (resultStatus === "SUCCESS") {
+            await finalize(doc.ref, "SUCCESS", provider);
+          } else if (resultStatus === "FAILED") {
+            await finalize(doc.ref, "FAILED", provider, provider.message || "Provider mengonfirmasi transaksi gagal");
+          } else {
+            await doc.ref.update({
+              lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              providerStatus: provider.status || data.providerStatus || "PENDING",
+              providerRc: normalizeRc(provider.rc) || data.providerRc || null,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        } catch (error) {
+          loggerError("Rekonsiliasi transaksi gagal", {requestId: doc.id, message: error.message});
+        }
+      }
+    },
+);
+
+function loggerError(message, details) {
+  console.error(message, details);
+}
 
 exports.digiflazzWebhook = onRequest(
     {region: REGION, secrets: [DIGIFLAZZ_WEBHOOK_SECRET]},

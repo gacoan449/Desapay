@@ -13,6 +13,7 @@ const {
 } = require("firebase-functions/params");
 
 const logger = require("firebase-functions/logger");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -86,6 +87,19 @@ function sendJson(
   return res
     .status(statusCode)
     .json(data);
+}
+
+function isAccountDisabled(userData) {
+  const data = userData || {};
+  const status = String(data.status || data.accountStatus || "")
+    .trim()
+    .toLowerCase();
+  return data.disabled === true ||
+    data.isDisabled === true ||
+    data.isBlocked === true ||
+    data.isActive === false ||
+    ["disabled", "inactive", "blocked", "banned", "suspended", "nonaktif",
+      "non-aktif", "non aktif", "tidak aktif", "dinonaktifkan", "diblokir"].includes(status);
 }
 
 function toSafeInteger(value) {
@@ -506,6 +520,33 @@ async function getTrustedProductPrice(
   };
 }
 
+async function writeLegacyDigiflazzHistory({
+  refId, uid, buyerSkuCode, productName, category, customerNo, amount, status, providerData = {},
+}) {
+  const historyRef = db.collection("transactions").doc(refId);
+  const existing = await historyRef.get();
+  const payload = {
+    transactionId: refId,
+    requestId: refId,
+    uid,
+    sku: buyerSkuCode,
+    buyer_sku_code: buyerSkuCode,
+    productName: productName || buyerSkuCode,
+    category: category || null,
+    customerNo,
+    amount: toSafeInteger(amount) ?? 0,
+    sellingPrice: toSafeInteger(amount) ?? 0,
+    status,
+    providerStatus: providerData.status || null,
+    providerRc: providerData.rc || null,
+    message: providerData.message || null,
+    sn: providerData.sn || null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (!existing.exists) payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+  await historyRef.set(payload, {merge: true});
+}
+
 /*
 |--------------------------------------------------------------------------
 | SALDO - DEBIT TRANSAKSI DIGIFLAZZ
@@ -580,6 +621,10 @@ async function debitUserBalanceForDigiflazz({
 
       const userData =
         userSnap.data() || {};
+
+      if (isAccountDisabled(userData)) {
+        throw new Error("ACCOUNT_DISABLED");
+      }
 
       const saldoSebelumnya =
         toSafeInteger(
@@ -1725,6 +1770,43 @@ exports.digiflazzKirimTransaksi =
           };
         }
 
+        const pinAuthorizationId =
+          normalizeString(data.pin_authorization_id);
+
+        if (!/^[a-f0-9]{64}$/i.test(pinAuthorizationId)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Otorisasi PIN wajib untuk setiap pembelian."
+          );
+        }
+
+        const pinAuthorizationRef =
+          db.collection("pin_authorizations").doc(pinAuthorizationId);
+
+        await db.runTransaction(async (transaction) => {
+          const authorizationSnap = await transaction.get(pinAuthorizationRef);
+          if (!authorizationSnap.exists) {
+            throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid.");
+          }
+          const authorization = authorizationSnap.data() || {};
+          const expiresAt = authorization.expiresAt &&
+            typeof authorization.expiresAt.toMillis === "function"
+            ? authorization.expiresAt.toMillis()
+            : 0;
+          if (authorization.uid !== uid ||
+              authorization.requestId !== requestId ||
+              authorization.sku !== buyerSkuCode ||
+              authorization.customerNo !== customerNo ||
+              authorization.consumed === true ||
+              expiresAt < Date.now()) {
+            throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid atau kedaluwarsa.");
+          }
+          transaction.update(pinAuthorizationRef, {
+            consumed: true,
+            consumedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+
         await transaksiRef.create(
           {
             uid,
@@ -1764,6 +1846,13 @@ exports.digiflazzKirimTransaksi =
           }
         );
 
+        await writeLegacyDigiflazzHistory({
+          refId, uid, buyerSkuCode,
+          productName: product.name || product.nama || buyerSkuCode,
+          category: product.category || null,
+          customerNo, amount: price, status: "PROCESSING",
+        });
+
         try {
           await debitUserBalanceForDigiflazz(
             {
@@ -1800,6 +1889,14 @@ exports.digiflazzKirimTransaksi =
             }
           );
 
+          await writeLegacyDigiflazzHistory({
+            refId, uid, buyerSkuCode,
+            productName: product.name || product.nama || buyerSkuCode,
+            category: product.category || null,
+            customerNo, amount: price, status: "FAILED",
+            providerData: {status: "Gagal", rc: error.message, message: "Transaksi tidak dapat didebit"},
+          });
+
           switch (
             error.message
           ) {
@@ -1807,6 +1904,12 @@ exports.digiflazzKirimTransaksi =
               throw new HttpsError(
                 "not-found",
                 "Akun pengguna tidak ditemukan."
+              );
+
+            case "ACCOUNT_DISABLED":
+              throw new HttpsError(
+                "permission-denied",
+                "Akun dinonaktifkan dan tidak dapat melakukan transaksi."
               );
 
             case "INVALID_BALANCE":
@@ -1926,6 +2029,13 @@ exports.digiflazzKirimTransaksi =
             }
           );
 
+          await writeLegacyDigiflazzHistory({
+            refId, uid, buyerSkuCode,
+            productName: product.name || product.nama || buyerSkuCode,
+            category: product.category || null,
+            customerNo, amount: price, status: "SUCCESS", providerData: resultData,
+          });
+
           return {
             success:
               true,
@@ -1988,6 +2098,13 @@ exports.digiflazzKirimTransaksi =
             }
           );
 
+          await writeLegacyDigiflazzHistory({
+            refId, uid, buyerSkuCode,
+            productName: product.name || product.nama || buyerSkuCode,
+            category: product.category || null,
+            customerNo, amount: price, status: "FAILED", providerData: resultData,
+          });
+
           return {
             success:
               false,
@@ -2031,6 +2148,13 @@ exports.digiflazzKirimTransaksi =
               true,
           }
         );
+
+        await writeLegacyDigiflazzHistory({
+          refId, uid, buyerSkuCode,
+          productName: product.name || product.nama || buyerSkuCode,
+          category: product.category || null,
+          customerNo, amount: price, status: "PENDING", providerData: resultData,
+        });
 
         return {
           success:
@@ -2163,31 +2287,17 @@ exports.digiflazzCekTransaksi =
         |
         */
 
-        if (
-          String(
-            transaksi.status ||
-              ""
-          )
-            .trim()
-            .toUpperCase() ===
-          "SUCCESS"
-        ) {
+        const currentStatus = String(transaksi.status || "")
+          .trim().toUpperCase();
+        if (currentStatus === "SUCCESS" || currentStatus === "FAILED" ||
+            currentStatus === "REFUND_PENDING") {
           return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              transaksi.response ||
-              null,
-
-            reused:
-              true,
+            success: currentStatus === "SUCCESS",
+            ref_id: refId,
+            status: currentStatus,
+            response: transaksi.response || null,
+            refunded: transaksi.balanceRefunded === true,
+            reused: true,
           };
         }
 
@@ -2221,6 +2331,8 @@ exports.digiflazzCekTransaksi =
           await digiflazzRequest(
             "transaction",
             {
+              cmd: "status",
+
               username,
 
               buyer_sku_code:
@@ -2236,6 +2348,7 @@ exports.digiflazzCekTransaksi =
                 md5(
                   username +
                     apiKey +
+                    "status" +
                     refId
                 ),
             }
@@ -2252,114 +2365,96 @@ exports.digiflazzCekTransaksi =
             .trim()
             .toUpperCase();
 
-        if (
-          providerStatus ===
-          "SUKSES"
-        ) {
-          await transaksiRef.set(
-            {
-              status:
-                "SUCCESS",
-
-              response:
-                resultData,
-
-              completedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
+        if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
+          let transitioned = false;
+          await db.runTransaction(async (transaction) => {
+            transitioned = false;
+            const latest = await transaction.get(transaksiRef);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            transaction.update(transaksiRef, {
+              status: "SUCCESS",
+              response: resultData,
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            transitioned = true;
+          });
+          const latest = await transaksiRef.get();
+          const finalData = latest.data() || {};
+          if (finalData.status === "SUCCESS") {
+            await writeLegacyDigiflazzHistory({
+              refId, uid: transaksi.uid, buyerSkuCode,
+              productName: transaksi.productName || buyerSkuCode,
+              category: transaksi.category || null,
+              customerNo, amount: transaksi.amount, status: "SUCCESS", providerData: resultData,
+            });
+          }
           return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              resultData,
+            success: finalData.status === "SUCCESS",
+            ref_id: refId,
+            status: finalData.status || "PROCESSING",
+            response: finalData.response || resultData,
+            reused: !transitioned,
           };
         }
 
-        if (
-          providerStatus ===
-          "GAGAL"
-        ) {
-          const refund =
-            await refundDigiflazzBalance(
-              {
-                transactionRef:
-                  transaksiRef,
+        if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
+          let claimed = false;
+          await db.runTransaction(async (transaction) => {
+            claimed = false;
+            const latest = await transaction.get(transaksiRef);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            transaction.update(transaksiRef, {
+              status: current.balanceDebited === true && current.balanceRefunded !== true
+                ? "REFUND_PENDING" : "FAILED",
+              response: resultData,
+              failureReason: resultData.message || "Provider menyatakan transaksi gagal.",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            claimed = true;
+          });
+          if (!claimed) {
+            const latest = await transaksiRef.get();
+            const finalData = latest.data() || {};
+            return {
+              success: finalData.status === "SUCCESS",
+              ref_id: refId,
+              status: finalData.status || "PROCESSING",
+              response: finalData.response || resultData,
+              refunded: finalData.balanceRefunded === true,
+              reused: true,
+            };
+          }
 
-                reason:
-                  `Refund transaksi Digiflazz: ${
-                    resultData.message ||
-                    "Provider menyatakan gagal."
-                  }`,
-              }
-            );
-
-          await transaksiRef.set(
-            {
-              status:
-                "FAILED",
-
-              response:
-                resultData,
-
-              failureReason:
-                resultData.message ||
-                "Transaksi Digiflazz gagal.",
-
-              refunded:
-                refund.refunded ===
-                  true ||
-                refund.reason ===
-                  "ALREADY_REFUNDED",
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
+          const refund = await refundDigiflazzBalance({
+            transactionRef: transaksiRef,
+            reason: `Refund transaksi Digiflazz: ${resultData.message || "Provider menyatakan gagal."}`,
+          });
+          await transaksiRef.update({
+            status: "FAILED",
+            refunded: refund.refunded === true || refund.reason === "ALREADY_REFUNDED" ||
+              refund.reason === "BALANCE_NOT_DEBITED",
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          await writeLegacyDigiflazzHistory({
+            refId, uid: transaksi.uid, buyerSkuCode,
+            productName: transaksi.productName || buyerSkuCode,
+            category: transaksi.category || null,
+            customerNo, amount: transaksi.amount, status: "FAILED", providerData: resultData,
+          });
           return {
-            success:
-              false,
-
-            ref_id:
-              refId,
-
-            status:
-              "FAILED",
-
-            refunded:
-              refund.refunded ===
-                true ||
-              refund.reason ===
-                "ALREADY_REFUNDED",
-
-            response:
-              resultData,
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            refunded: refund.refunded === true || refund.reason === "ALREADY_REFUNDED",
+            response: resultData,
           };
         }
 
@@ -2381,6 +2476,12 @@ exports.digiflazzCekTransaksi =
               true,
           }
         );
+        await writeLegacyDigiflazzHistory({
+          refId, uid: transaksi.uid, buyerSkuCode,
+          productName: transaksi.productName || buyerSkuCode,
+          category: transaksi.category || null,
+          customerNo, amount: transaksi.amount, status: "PENDING", providerData: resultData,
+        });
 
         return {
           success:
@@ -2415,6 +2516,132 @@ exports.digiflazzCekTransaksi =
       }
     }
   );
+
+exports.reconcileLegacyDigiflazzTransactions = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    region: REGION,
+    timeZone: "Asia/Jakarta",
+    timeoutSeconds: 300,
+    memory: "256MiB",
+    secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY],
+  },
+  async () => {
+    const snapshot = await db.collection("digiflazz_transactions")
+      .where("status", "in", ["PROCESSING", "PENDING", "REFUND_PENDING"])
+      .limit(100).get();
+    for (const doc of snapshot.docs) {
+      const ref = doc.ref;
+      const data = doc.data() || {};
+      const status = normalizeString(data.status).toUpperCase();
+      try {
+        if (status === "REFUND_PENDING") {
+          await refundDigiflazzBalance({transactionRef: ref, reason: "Percobaan ulang refund otomatis"});
+          const latest = await ref.get();
+          if (latest.exists && (latest.data() || {}).status !== "SUCCESS") {
+            await ref.update({status: "FAILED", refunded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+            await writeLegacyDigiflazzHistory({
+              refId: doc.id, uid: data.uid, buyerSkuCode: data.buyerSkuCode,
+              productName: data.productName || data.buyerSkuCode, category: data.category || null,
+              customerNo: data.customerNo, amount: data.amount, status: "FAILED",
+              providerData: data.response || {status: "Gagal", message: "Refund berhasil dicoba ulang"},
+            });
+          }
+          continue;
+        }
+        const updatedAt = data.updatedAt && typeof data.updatedAt.toMillis === "function"
+          ? data.updatedAt.toMillis()
+          : (data.createdAt && typeof data.createdAt.toMillis === "function" ? data.createdAt.toMillis() : 0);
+        if (!updatedAt || Date.now() - updatedAt < 5 * 60 * 1000) continue;
+        const refId = normalizeString(data.refId);
+        const sku = normalizeString(data.buyerSkuCode);
+        const customerNo = normalizeString(data.customerNo);
+        if (!refId || !sku || !customerNo) continue;
+
+        const {username, apiKey} = digiflazzCredentials();
+        const result = await digiflazzRequest("transaction", {
+          cmd: "status",
+          username,
+          buyer_sku_code: sku,
+          customer_no: customerNo,
+          ref_id: refId,
+          sign: md5(username + apiKey + "status" + refId),
+        });
+        const provider = result.data || {};
+        const providerStatus = normalizeString(provider.status).toUpperCase();
+
+        if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
+          let transitioned = false;
+          await db.runTransaction(async (tx) => {
+            transitioned = false;
+            const latest = await tx.get(ref);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            tx.update(ref, {
+              status: "SUCCESS",
+              response: provider,
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            transitioned = true;
+          });
+          if (transitioned) {
+            await writeLegacyDigiflazzHistory({
+              refId, uid: data.uid, buyerSkuCode: sku,
+              productName: data.productName || sku, category: data.category || null,
+              customerNo, amount: data.amount, status: "SUCCESS", providerData: provider,
+            });
+            await notifyAdminTransactionStatus(refId, "SUCCESS");
+          }
+        } else if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
+          let claimed = false;
+          await db.runTransaction(async (tx) => {
+            claimed = false;
+            const latest = await tx.get(ref);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            tx.update(ref, {
+              status: current.balanceDebited === true && current.balanceRefunded !== true ? "REFUND_PENDING" : "FAILED",
+              response: provider,
+              failureReason: provider.message || "Provider menyatakan transaksi gagal",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            claimed = true;
+          });
+          if (claimed) {
+            await refundDigiflazzBalance({transactionRef: ref, reason: provider.message || "Provider menyatakan transaksi gagal"});
+            const latest = await ref.get();
+            if (latest.exists && (latest.data() || {}).status !== "SUCCESS") {
+              await ref.update({status: "FAILED", refunded: true, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+              await writeLegacyDigiflazzHistory({
+                refId, uid: data.uid, buyerSkuCode: sku,
+                productName: data.productName || sku, category: data.category || null,
+                customerNo, amount: data.amount, status: "FAILED", providerData: provider,
+              });
+            }
+          }
+        } else {
+          await ref.update({
+            lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+            response: provider,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (error) {
+        logger.error("Rekonsiliasi transaksi Digiflazz gagal", {transactionId: doc.id, message: error.message});
+      }
+    }
+  }
+);
+
+async function notifyAdminTransactionStatus(transactionId, status) {
+  // Status transaksi sudah tersimpan; tidak membuat perubahan saldo di sini.
+  logger.info("Status transaksi Digiflazz direkonsiliasi", {transactionId, status});
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -3384,6 +3611,14 @@ async function debitUserBalanceForEdpoin({
         userSnap.data() ||
         {};
 
+      const accountStatus = normalizeString(
+        userData.status || userData.accountStatus
+      ).toLowerCase();
+      if (userData.role !== "user" ||
+          isAccountDisabled(userData)) {
+        throw new Error("ACCOUNT_DISABLED");
+      }
+
       const saldoSebelumnya =
         toSafeInteger(
           userData[
@@ -4055,6 +4290,40 @@ exports.edpoinTransactionRequest =
           };
         }
 
+        const pinAuthorizationId =
+          normalizeString(data.pin_authorization_id);
+        if (!/^[a-f0-9]{64}$/i.test(pinAuthorizationId)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Otorisasi PIN wajib untuk setiap pembelian."
+          );
+        }
+        const pinAuthorizationRef =
+          db.collection("pin_authorizations").doc(pinAuthorizationId);
+        await db.runTransaction(async (transaction) => {
+          const authorizationSnap = await transaction.get(pinAuthorizationRef);
+          if (!authorizationSnap.exists) {
+            throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid.");
+          }
+          const authorization = authorizationSnap.data() || {};
+          const expiresAt = authorization.expiresAt &&
+            typeof authorization.expiresAt.toMillis === "function"
+            ? authorization.expiresAt.toMillis()
+            : 0;
+          if (authorization.uid !== uid ||
+              authorization.requestId !== requestId ||
+              authorization.sku !== productCode ||
+              authorization.customerNo !== customerNo ||
+              authorization.consumed === true ||
+              expiresAt < Date.now()) {
+            throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid atau kedaluwarsa.");
+          }
+          transaction.update(pinAuthorizationRef, {
+            consumed: true,
+            consumedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+
         await transaksiRef.create(
           {
             uid,
@@ -4137,6 +4406,12 @@ exports.edpoinTransactionRequest =
               throw new HttpsError(
                 "not-found",
                 "Akun pengguna tidak ditemukan."
+              );
+
+            case "ACCOUNT_DISABLED":
+              throw new HttpsError(
+                "permission-denied",
+                "Akun dinonaktifkan dan tidak dapat melakukan transaksi."
               );
 
             case "INVALID_BALANCE":
