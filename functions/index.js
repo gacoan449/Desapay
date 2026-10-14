@@ -89,6 +89,19 @@ function sendJson(
     .json(data);
 }
 
+function isAccountDisabled(userData) {
+  const data = userData || {};
+  const status = String(data.status || data.accountStatus || "")
+    .trim()
+    .toLowerCase();
+  return data.disabled === true ||
+    data.isDisabled === true ||
+    data.isBlocked === true ||
+    data.isActive === false ||
+    ["disabled", "inactive", "blocked", "banned", "suspended", "nonaktif",
+      "non-aktif", "tidak aktif", "dinonaktifkan", "diblokir"].includes(status);
+}
+
 function toSafeInteger(value) {
   const number = Number(value);
 
@@ -608,6 +621,10 @@ async function debitUserBalanceForDigiflazz({
 
       const userData =
         userSnap.data() || {};
+
+      if (isAccountDisabled(userData)) {
+        throw new Error("ACCOUNT_DISABLED");
+      }
 
       const saldoSebelumnya =
         toSafeInteger(
