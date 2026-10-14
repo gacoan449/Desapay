@@ -59,18 +59,25 @@ async function verifyAndUpdate(uid, pin, {changeTo = null, purchase = null} = {}
   const authToken = purchase ? crypto.randomBytes(32).toString("hex") : null;
   const authorizationRef = purchase ? db.collection("pin_authorizations").doc(authToken) : null;
   const now = Date.now();
+  let verificationError = null;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists || !(snap.data() || {}).pinHash) fail("PIN transaksi belum dibuat.", "failed-precondition");
     const data = snap.data();
     const lockedUntil = data.lockedUntil && typeof data.lockedUntil.toMillis === "function" ? data.lockedUntil.toMillis() : 0;
-    if (lockedUntil > now) fail("PIN terkunci sementara. Coba lagi nanti.", "resource-exhausted");
+    if (lockedUntil > now) {
+      verificationError = "PIN terkunci sementara. Coba lagi nanti.";
+      return;
+    }
     const expected = hashPin(pin, data.pinSalt || "");
     if (!secureEqual(expected, data.pinHash)) {
       const attempts = (Number.isSafeInteger(data.failedAttempts) ? data.failedAttempts : 0) + 1;
       tx.update(ref, {failedAttempts: attempts >= MAX_ATTEMPTS ? 0 : attempts,
         lockedUntil: attempts >= MAX_ATTEMPTS ? admin.firestore.Timestamp.fromMillis(now + LOCK_MS) : null});
-      fail("PIN salah.");
+      verificationError = attempts >= MAX_ATTEMPTS
+        ? "PIN salah. PIN dikunci selama 15 menit."
+        : "PIN salah.";
+      return;
     }
     const update = {failedAttempts: 0, lockedUntil: null};
     if (changeTo) {
@@ -92,6 +99,7 @@ async function verifyAndUpdate(uid, pin, {changeTo = null, purchase = null} = {}
         expiresAt: admin.firestore.Timestamp.fromMillis(now + AUTH_TTL_MS)});
     }
   });
+  if (verificationError) throw new HttpsError("permission-denied", verificationError);
   return authToken;
 }
 
