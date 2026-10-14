@@ -19,8 +19,8 @@ class PinService {
     try {
       final result = await _functions.httpsCallable('pinHasPin').call();
       return result.data is Map && result.data['hasPin'] == true;
-    } on FirebaseFunctionsException {
-      rethrow;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -37,6 +37,8 @@ class PinService {
       return null;
     } on FirebaseFunctionsException catch (e) {
       return e.message ?? 'Gagal membuat PIN.';
+    } catch (_) {
+      return 'Tidak dapat terhubung ke layanan PIN. Coba lagi.';
     }
   }
 
@@ -60,6 +62,8 @@ class PinService {
       return null;
     } on FirebaseFunctionsException catch (e) {
       return e.message ?? 'Gagal mengubah PIN.';
+    } catch (_) {
+      return 'Tidak dapat terhubung ke layanan PIN. Coba lagi.';
     }
   }
 
