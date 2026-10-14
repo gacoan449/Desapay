@@ -2523,6 +2523,12 @@ exports.reconcileLegacyDigiflazzTransactions = onSchedule(
           const latest = await ref.get();
           if (latest.exists && (latest.data() || {}).status !== "SUCCESS") {
             await ref.update({status: "FAILED", refunded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+            await writeLegacyDigiflazzHistory({
+              refId: doc.id, uid: data.uid, buyerSkuCode: data.buyerSkuCode,
+              productName: data.productName || data.buyerSkuCode, category: data.category || null,
+              customerNo: data.customerNo, amount: data.amount, status: "FAILED",
+              providerData: data.response || {status: "Gagal", message: "Refund berhasil dicoba ulang"},
+            });
           }
           continue;
         }
@@ -2564,7 +2570,14 @@ exports.reconcileLegacyDigiflazzTransactions = onSchedule(
             });
             transitioned = true;
           });
-          if (transitioned) await notifyAdminTransactionStatus(refId, "SUCCESS");
+          if (transitioned) {
+            await writeLegacyDigiflazzHistory({
+              refId, uid: data.uid, buyerSkuCode: sku,
+              productName: data.productName || sku, category: data.category || null,
+              customerNo, amount: data.amount, status: "SUCCESS", providerData: provider,
+            });
+            await notifyAdminTransactionStatus(refId, "SUCCESS");
+          }
         } else if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
           let claimed = false;
           await db.runTransaction(async (tx) => {
@@ -2587,6 +2600,11 @@ exports.reconcileLegacyDigiflazzTransactions = onSchedule(
             const latest = await ref.get();
             if (latest.exists && (latest.data() || {}).status !== "SUCCESS") {
               await ref.update({status: "FAILED", refunded: true, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+              await writeLegacyDigiflazzHistory({
+                refId, uid: data.uid, buyerSkuCode: sku,
+                productName: data.productName || sku, category: data.category || null,
+                customerNo, amount: data.amount, status: "FAILED", providerData: provider,
+              });
             }
           }
         } else {
