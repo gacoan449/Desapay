@@ -1725,6 +1725,43 @@ exports.digiflazzKirimTransaksi =
           };
         }
 
+        const pinAuthorizationId =
+          normalizeString(data.pin_authorization_id);
+
+        if (!/^[a-f0-9]{64}$/i.test(pinAuthorizationId)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Otorisasi PIN wajib untuk setiap pembelian."
+          );
+        }
+
+        const pinAuthorizationRef =
+          db.collection("pin_authorizations").doc(pinAuthorizationId);
+
+        await db.runTransaction(async (transaction) => {
+          const authorizationSnap = await transaction.get(pinAuthorizationRef);
+          if (!authorizationSnap.exists) {
+            throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid.");
+          }
+          const authorization = authorizationSnap.data() || {};
+          const expiresAt = authorization.expiresAt &&
+            typeof authorization.expiresAt.toMillis === "function"
+            ? authorization.expiresAt.toMillis()
+            : 0;
+          if (authorization.uid !== uid ||
+              authorization.requestId !== requestId ||
+              authorization.sku !== buyerSkuCode ||
+              authorization.customerNo !== customerNo ||
+              authorization.consumed === true ||
+              expiresAt < Date.now()) {
+            throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid atau kedaluwarsa.");
+          }
+          transaction.update(pinAuthorizationRef, {
+            consumed: true,
+            consumedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+
         await transaksiRef.create(
           {
             uid,
