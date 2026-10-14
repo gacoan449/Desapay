@@ -14,9 +14,9 @@ function requireAuth(request) {
   if (!request.auth) throw new HttpsError("unauthenticated", "Silakan login kembali.");
   return request.auth.uid;
 }
-function validPin(pin) { return typeof pin === "string" && /^\\d{6}$/.test(pin); }
+function validPin(pin) { return typeof pin === "string" && /^\d{6}$/.test(pin); }
 function weakPin(pin) {
-  return /^(\\d)\\1{5}$/.test(pin) || pin === "123456" || pin === "654321";
+  return /^(\d)\1{5}$/.test(pin) || pin === "123456" || pin === "654321";
 }
 function hashPin(pin, salt) {
   return crypto.scryptSync(pin, salt, 64).toString("hex");
