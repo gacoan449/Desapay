@@ -92,7 +92,11 @@ async function debit(requestRef, uid, amount, sku, customerNo) {
 
     const userSnap = await tx.get(userRef);
     if (!userSnap.exists) throw new Error("USER_NOT_FOUND");
-    const saldoAwal = integer((userSnap.data() || {}).balance);
+    const userData = userSnap.data() || {};
+    if (userData.role !== "user" || isAccountDisabled(userData)) {
+      throw new Error("ACCOUNT_DISABLED");
+    }
+    const saldoAwal = integer(userData.balance);
     if (saldoAwal === null || saldoAwal < 0) throw new Error("INVALID_BALANCE");
     if (saldoAwal < amount) throw new Error("INSUFFICIENT_BALANCE");
 
