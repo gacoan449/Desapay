@@ -61,7 +61,7 @@ class TransaksiService implements ITransaksiService {
     }
 
     // Pembuatan ID Referensi Unik Sistem DesaPay (Sesuai Regulasi Pencegahan Double Payment)
-    final String generatedRefId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
+    final String generatedRefId = "DESAPAY-${DateTime.now().microsecondsSinceEpoch}";
 
     // PIN diverifikasi server dan token otorisasi hanya dapat dipakai sekali.
     final authorizationId = await PinService().authorizePurchase(
@@ -82,6 +82,7 @@ class TransaksiService implements ITransaksiService {
     );
 
     final String statusRespon = (responDigiflazz['status'] ?? 'Gagal').toString().toLowerCase();
+    final String providerRefId = (responDigiflazz['ref_id'] ?? generatedRefId).toString();
     final String pesanRespon = responDigiflazz['message'] ?? 'Transaksi sedang diproses oleh aggregator';
 
     StatusTransaksi statusAkhir = StatusTransaksi.pending;
@@ -98,10 +99,12 @@ class TransaksiService implements ITransaksiService {
     // 7. Hasilkan Konfirmasi Final untuk Disajikan ke Halaman UI Resi Pengguna
     return HasilEksekusiTransaksi(
       isSukses: isTransaksiBerhasil || statusAkhir == StatusTransaksi.pending,
-      pesan: statusAkhir == StatusTransaksi.sukses 
-          ? "Transaksi berhasil diproses!" 
-          : "Transaksi Anda sedang dalam antrean jaringan pusat.",
-      refId: generatedRefId,
+      pesan: statusAkhir == StatusTransaksi.sukses
+          ? "Transaksi berhasil diproses!"
+          : statusAkhir == StatusTransaksi.gagal
+              ? "Transaksi gagal: $pesanRespon"
+              : "Transaksi Anda sedang dalam antrean jaringan pusat.",
+      refId: providerRefId,
       statusAkhir: statusAkhir,
     );
   }
