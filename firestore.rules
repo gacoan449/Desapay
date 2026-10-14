@@ -68,9 +68,12 @@ service cloud.firestore {
 
     match /transaction_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.status == "WAITING" && ((request.resource.data.buyer_sku_code is string && request.resource.data.buyer_sku_code.size() > 0) || (request.resource.data.sku is string && request.resource.data.sku.size() > 0)) && request.resource.data.customerNo is string && request.resource.data.customerNo.size() > 0 && request.resource.data.keys().hasOnly(["requestId", "transactionId", "uid", "type", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "operator", "amount", "sellingPrice", "cost", "margin", "paymentMethod", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "createdAt", "updatedAt"]);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.status == "WAITING" && ((request.resource.data.buyer_sku_code is string && request.resource.data.buyer_sku_code.size() > 0) || (request.resource.data.sku is string && request.resource.data.sku.size() > 0)) && request.resource.data.customerNo is string && request.resource.data.customerNo.size() > 0 && request.resource.data.keys().hasOnly(["requestId", "transactionId", "uid", "type", "sku", "buyer_sku_code", "productName", "category", "brand", "customerNo", "customer_no", "operator", "amount", "sellingPrice", "cost", "margin", "paymentMethod", "status", "isTest", "testMode", "digiflazzSent", "source", "categoryScreen", "pinAuthorizationId", "createdAt", "updatedAt"]);
       allow update, delete: if false;
     }
+
+    match /user_security/{uid} { allow read, write: if false; }
+    match /pin_authorizations/{authorizationId} { allow read, write: if false; }
 
     match /withdrawal_requests/{requestId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
     match /balance_ledger/{ledgerId} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow create, update, delete: if false; }
