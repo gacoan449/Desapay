@@ -23,6 +23,7 @@ class _UbahPinScreenState extends State<UbahPinScreen> {
 
   bool _loading = true;
   bool _hasPin = false;
+  bool _pinCheckFailed = false;
 
   bool _obscureLama = true;
   bool _obscureBaru = true;
@@ -46,14 +47,27 @@ class _UbahPinScreenState extends State<UbahPinScreen> {
   // CEK PIN USER
   // ============================================================
   Future<void> _checkPin() async {
-    final result = await _pinService.hasPin();
-
-    if (!mounted) return;
-
-    setState(() {
-      _hasPin = result;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _pinCheckFailed = false;
+      });
+    }
+    try {
+      final result = await _pinService.hasPin();
+      if (!mounted) return;
+      setState(() {
+        _hasPin = result;
+        _loading = false;
+        _pinCheckFailed = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _pinCheckFailed = true;
+      });
+    }
   }
 
   // ============================================================
@@ -260,11 +274,31 @@ class _UbahPinScreenState extends State<UbahPinScreen> {
         foregroundColor: Colors.white,
       ),
 
-      body: _loading && !_hasPin
-          ? const Center(
-              child: CircularProgressIndicator(),
+      body: _pinCheckFailed
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, size: 42),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Tidak dapat memeriksa PIN ke server. Periksa koneksi lalu coba lagi.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _checkPin,
+                      child: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
+              ),
             )
-          : ListView(
+          : _loading && !_hasPin
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
               padding: const EdgeInsets.all(20),
               children: [
                 // ==================================================
