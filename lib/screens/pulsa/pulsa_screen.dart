@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
+import '../../services/pin_service.dart';
 
 class CustomBounce extends StatefulWidget {
   final Widget child;
@@ -506,6 +507,38 @@ class _PulsaScreenState extends State<PulsaScreen> {
     );
   }
 
+  Future<String?> _mintaPinPembelian() async {
+    final controller = TextEditingController();
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Verifikasi PIN Transaksi'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          maxLength: 6,
+          decoration: const InputDecoration(labelText: 'PIN transaksi 6 digit', counterText: ''),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () {
+              if (RegExp(r'^\d{6}$').hasMatch(controller.text)) {
+                Navigator.pop(dialogContext, controller.text);
+              }
+            },
+            child: const Text('Verifikasi & Bayar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return pin;
+  }
+
   // =========================================================
   // BUAT TRANSAKSI
   // =========================================================
@@ -602,9 +635,22 @@ class _PulsaScreenState extends State<PulsaScreen> {
           .collection('transaction_requests')
           .doc();
 
+      final pin = await _mintaPinPembelian();
+      if (pin == null) {
+        if (mounted) setState(() => _sedangTransaksi = false);
+        return;
+      }
+      final pinAuthorizationId = await PinService().authorizePurchase(
+        pin: pin,
+        requestId: transaksiRef.id,
+        sku: sku,
+        customerNo: nomor,
+      );
+
       await transaksiRef.set({
         'transactionId': transaksiRef.id,
         'uid': _uid,
+        'pinAuthorizationId': pinAuthorizationId,
 
         'type': 'PULSA',
         'category': 'PULSA',
