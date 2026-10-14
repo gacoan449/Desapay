@@ -2244,6 +2244,8 @@ exports.digiflazzCekTransaksi =
           await digiflazzRequest(
             "transaction",
             {
+              cmd: "status",
+
               username,
 
               buyer_sku_code:
@@ -2259,6 +2261,7 @@ exports.digiflazzCekTransaksi =
                 md5(
                   username +
                     apiKey +
+                    "status" +
                     refId
                 ),
             }
