@@ -2200,31 +2200,17 @@ exports.digiflazzCekTransaksi =
         |
         */
 
-        if (
-          String(
-            transaksi.status ||
-              ""
-          )
-            .trim()
-            .toUpperCase() ===
-          "SUCCESS"
-        ) {
+        const currentStatus = String(transaksi.status || "")
+          .trim().toUpperCase();
+        if (currentStatus === "SUCCESS" || currentStatus === "FAILED" ||
+            currentStatus === "REFUND_PENDING") {
           return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              transaksi.response ||
-              null,
-
-            reused:
-              true,
+            success: currentStatus === "SUCCESS",
+            ref_id: refId,
+            status: currentStatus,
+            response: transaksi.response || null,
+            refunded: transaksi.balanceRefunded === true,
+            reused: true,
           };
         }
 
@@ -3420,6 +3406,17 @@ async function debitUserBalanceForEdpoin({
       const userData =
         userSnap.data() ||
         {};
+
+      const accountStatus = normalizeString(
+        userData.status || userData.accountStatus
+      ).toLowerCase();
+      if (userData.role !== "user" ||
+          userData.disabled === true ||
+          userData.isDisabled === true ||
+          userData.isActive === false ||
+          ["disabled", "blocked", "suspended", "nonaktif", "dinonaktifkan", "diblokir"].includes(accountStatus)) {
+        throw new Error("ACCOUNT_DISABLED");
+      }
 
       const saldoSebelumnya =
         toSafeInteger(
