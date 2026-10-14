@@ -70,6 +70,7 @@ async function verifyAndUpdate(uid, pin, {changeTo = null, purchase = null} = {}
   const now = Date.now();
   let verificationError = null;
   await db.runTransaction(async (tx) => {
+    verificationError = null;
     const snap = await tx.get(ref);
     if (!snap.exists || !(snap.data() || {}).pinHash) fail("PIN transaksi belum dibuat.", "failed-precondition");
     const data = snap.data();
