@@ -450,15 +450,11 @@ async function processRequest(requestRef) {
     const message = error.message === "INSUFFICIENT_BALANCE"
       ? "Saldo tidak mencukupi"
       : "Transaksi tidak dapat diproses";
-    await requestRef.update({
-      status: "FAILED",
-      providerStatus: "NOT_SENT",
-      providerMessage: message,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "BALANCE", message});
-    await notify(uid, "Transaksi gagal", message, requestRef.id, "FAILED");
+    // Baca status debit terbaru dan gunakan finalizer yang mengembalikan saldo
+    // bila transaksi debit sebenarnya sudah commit sebelum error jaringan.
+    await finalize(requestRef, "FAILED", {
+      status: "Gagal", rc: "BALANCE", message,
+    }, message);
     return;
   }
 
