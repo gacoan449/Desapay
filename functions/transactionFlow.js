@@ -379,6 +379,13 @@ async function processRequest(requestRef) {
     return;
   }
 
+  if (!text(DIGIFLAZZ_USERNAME.value()) || !text(DIGIFLAZZ_API_KEY.value())) {
+    await finalize(requestRef, "FAILED", {
+      status: "Gagal", rc: "CONFIG", message: "Kredensial provider belum dikonfigurasi.",
+    }, "Provider belum dikonfigurasi");
+    return;
+  }
+
   await requestRef.update({
     trustedPrice: trusted.price,
     amount: trusted.price,
