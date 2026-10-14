@@ -13,6 +13,7 @@ const {
 } = require("firebase-functions/params");
 
 const logger = require("firebase-functions/logger");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -2441,6 +2442,112 @@ exports.digiflazzCekTransaksi =
       }
     }
   );
+
+exports.reconcileLegacyDigiflazzTransactions = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    region: REGION,
+    timeZone: "Asia/Jakarta",
+    timeoutSeconds: 300,
+    memory: "256MiB",
+    secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY],
+  },
+  async () => {
+    const snapshot = await db.collection("digiflazz_transactions")
+      .where("status", "in", ["PROCESSING", "PENDING", "REFUND_PENDING"])
+      .limit(100).get();
+    for (const doc of snapshot.docs) {
+      const ref = doc.ref;
+      const data = doc.data() || {};
+      const status = normalizeString(data.status).toUpperCase();
+      try {
+        if (status === "REFUND_PENDING") {
+          await refundDigiflazzBalance({transactionRef: ref, reason: "Percobaan ulang refund otomatis"});
+          const latest = await ref.get();
+          if (latest.exists && (latest.data() || {}).status !== "SUCCESS") {
+            await ref.update({status: "FAILED", refunded: true, updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+          }
+          continue;
+        }
+        const updatedAt = data.updatedAt && typeof data.updatedAt.toMillis === "function"
+          ? data.updatedAt.toMillis()
+          : (data.createdAt && typeof data.createdAt.toMillis === "function" ? data.createdAt.toMillis() : 0);
+        if (!updatedAt || Date.now() - updatedAt < 5 * 60 * 1000) continue;
+        const refId = normalizeString(data.refId);
+        const sku = normalizeString(data.buyerSkuCode);
+        const customerNo = normalizeString(data.customerNo);
+        if (!refId || !sku || !customerNo) continue;
+
+        const {username, apiKey} = digiflazzCredentials();
+        const result = await digiflazzRequest("transaction", {
+          cmd: "status",
+          username,
+          buyer_sku_code: sku,
+          customer_no: customerNo,
+          ref_id: refId,
+          sign: md5(username + apiKey + "status" + refId),
+        });
+        const provider = result.data || {};
+        const providerStatus = normalizeString(provider.status).toUpperCase();
+
+        if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
+          let transitioned = false;
+          await db.runTransaction(async (tx) => {
+            const latest = await tx.get(ref);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            tx.update(ref, {
+              status: "SUCCESS",
+              response: provider,
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            transitioned = true;
+          });
+          if (transitioned) await notifyAdminTransactionStatus(refId, "SUCCESS");
+        } else if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
+          let claimed = false;
+          await db.runTransaction(async (tx) => {
+            const latest = await tx.get(ref);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            tx.update(ref, {
+              status: current.balanceDebited === true && current.balanceRefunded !== true ? "REFUND_PENDING" : "FAILED",
+              response: provider,
+              failureReason: provider.message || "Provider menyatakan transaksi gagal",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            claimed = true;
+          });
+          if (claimed) {
+            await refundDigiflazzBalance({transactionRef: ref, reason: provider.message || "Provider menyatakan transaksi gagal"});
+            const latest = await ref.get();
+            if (latest.exists && (latest.data() || {}).status !== "SUCCESS") {
+              await ref.update({status: "FAILED", refunded: true, completedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+            }
+          }
+        } else {
+          await ref.update({
+            lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+            response: provider,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (error) {
+        logger.error("Rekonsiliasi transaksi Digiflazz gagal", {transactionId: doc.id, message: error.message});
+      }
+    }
+  }
+);
+
+async function notifyAdminTransactionStatus(transactionId, status) {
+  // Status transaksi sudah tersimpan; tidak membuat perubahan saldo di sini.
+  logger.info("Status transaksi Digiflazz direkonsiliasi", {transactionId, status});
+}
 
 /*
 |--------------------------------------------------------------------------
