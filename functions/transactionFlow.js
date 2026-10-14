@@ -655,7 +655,22 @@ exports.reconcileDigiflazzTransactions = onSchedule(
           const submitted = data.providerSubmissionStartedAt &&
             typeof data.providerSubmissionStartedAt.toMillis === "function"
             ? data.providerSubmissionStartedAt.toMillis() : 0;
-          if (!submitted || now - submitted < 5 * 60 * 1000) continue;
+          if (!submitted) {
+            const processingStarted = data.processingStartedAt &&
+              typeof data.processingStartedAt.toMillis === "function"
+              ? data.processingStartedAt.toMillis() : 0;
+            if (processingStarted && now - processingStarted >= 5 * 60 * 1000) {
+              // Tidak ada timestamp pengiriman provider: aman menyelesaikan request
+              // yang macet sebelum submission; finalize melakukan refund bila sudah debit.
+              await finalize(doc.ref, "FAILED", {
+                status: "Gagal",
+                rc: "NOT_SUBMITTED",
+                message: "Request macet sebelum pengiriman ke provider; saldo diselesaikan otomatis.",
+              }, "Request macet sebelum submission provider");
+            }
+            continue;
+          }
+          if (now - submitted < 5 * 60 * 1000) continue;
           if (!data.providerRefId) continue;
 
           const provider = await checkProviderStatus(data, text(data.providerRefId));
