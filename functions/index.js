@@ -3615,10 +3615,7 @@ async function debitUserBalanceForEdpoin({
         userData.status || userData.accountStatus
       ).toLowerCase();
       if (userData.role !== "user" ||
-          userData.disabled === true ||
-          userData.isDisabled === true ||
-          userData.isActive === false ||
-          ["disabled", "blocked", "suspended", "nonaktif", "dinonaktifkan", "diblokir"].includes(accountStatus)) {
+          isAccountDisabled(userData)) {
         throw new Error("ACCOUNT_DISABLED");
       }
 
