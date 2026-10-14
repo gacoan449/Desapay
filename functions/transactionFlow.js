@@ -200,8 +200,8 @@ async function writeHistory(requestRef, status, providerData) {
     if (historySnap.exists) {
       tx.update(historyRef, {
         status,
-        amount: integer(data.trustedPrice) ?? integer(data.amount) ?? 0,
-        sellingPrice: integer(data.trustedPrice) ?? integer(data.amount) ?? 0,
+        amount: integer(data.trustedPrice) ?? 0,
+        sellingPrice: integer(data.trustedPrice) ?? 0,
         providerStatus: providerData.status || null,
         providerRc: providerData.rc || null,
         message: providerData.message || null,
@@ -220,8 +220,8 @@ async function writeHistory(requestRef, status, providerData) {
       productName: data.productName || null,
       category: data.category || null,
       customerNo: data.customerNo || data.customer_no || null,
-      amount: integer(data.amount) ?? 0,
-      sellingPrice: integer(data.trustedPrice) ?? integer(data.amount) ?? 0,
+      amount: integer(data.trustedPrice) ?? 0,
+      sellingPrice: integer(data.trustedPrice) ?? 0,
       status,
       providerRefId: data.providerRefId || null,
       providerStatus: providerData.status || null,
@@ -422,13 +422,6 @@ async function processRequest(requestRef) {
     return;
   }
 
-  if (!text(DIGIFLAZZ_USERNAME.value()) || !text(DIGIFLAZZ_API_KEY.value())) {
-    await finalize(requestRef, "FAILED", {
-      status: "Gagal", rc: "CONFIG", message: "Kredensial provider belum dikonfigurasi.",
-    }, "Provider belum dikonfigurasi");
-    return;
-  }
-
   await requestRef.update({
     trustedPrice: trusted.price,
     amount: trusted.price,
@@ -437,6 +430,13 @@ async function processRequest(requestRef) {
     serverValidatedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  if (!text(DIGIFLAZZ_USERNAME.value()) || !text(DIGIFLAZZ_API_KEY.value())) {
+    await finalize(requestRef, "FAILED", {
+      status: "Gagal", rc: "CONFIG", message: "Kredensial provider belum dikonfigurasi.",
+    }, "Provider belum dikonfigurasi");
+    return;
+  }
 
   const providerRefId = `dp-${Date.now()}-${requestRef.id.slice(0, 16)}`;
   await requestRef.update({
