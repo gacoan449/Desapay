@@ -200,6 +200,8 @@ async function writeHistory(requestRef, status, providerData) {
     if (historySnap.exists) {
       tx.update(historyRef, {
         status,
+        amount: integer(data.trustedPrice) ?? integer(data.amount) ?? 0,
+        sellingPrice: integer(data.trustedPrice) ?? integer(data.amount) ?? 0,
         providerStatus: providerData.status || null,
         providerRc: providerData.rc || null,
         message: providerData.message || null,
