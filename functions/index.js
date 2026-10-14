@@ -2279,114 +2279,80 @@ exports.digiflazzCekTransaksi =
             .trim()
             .toUpperCase();
 
-        if (
-          providerStatus ===
-          "SUKSES"
-        ) {
-          await transaksiRef.set(
-            {
-              status:
-                "SUCCESS",
-
-              response:
-                resultData,
-
-              completedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
+        if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
+          let transitioned = false;
+          await db.runTransaction(async (transaction) => {
+            const latest = await transaction.get(transaksiRef);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            transaction.update(transaksiRef, {
+              status: "SUCCESS",
+              response: resultData,
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            transitioned = true;
+          });
+          const latest = await transaksiRef.get();
+          const finalData = latest.data() || {};
           return {
-            success:
-              true,
-
-            ref_id:
-              refId,
-
-            status:
-              "SUCCESS",
-
-            response:
-              resultData,
+            success: finalData.status === "SUCCESS",
+            ref_id: refId,
+            status: finalData.status || "PROCESSING",
+            response: finalData.response || resultData,
+            reused: !transitioned,
           };
         }
 
-        if (
-          providerStatus ===
-          "GAGAL"
-        ) {
-          const refund =
-            await refundDigiflazzBalance(
-              {
-                transactionRef:
-                  transaksiRef,
+        if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
+          let claimed = false;
+          await db.runTransaction(async (transaction) => {
+            const latest = await transaction.get(transaksiRef);
+            if (!latest.exists) return;
+            const current = latest.data() || {};
+            const currentStatus = normalizeString(current.status).toUpperCase();
+            if (["SUCCESS", "FAILED", "REFUND_PENDING"].includes(currentStatus)) return;
+            transaction.update(transaksiRef, {
+              status: current.balanceDebited === true && current.balanceRefunded !== true
+                ? "REFUND_PENDING" : "FAILED",
+              response: resultData,
+              failureReason: resultData.message || "Provider menyatakan transaksi gagal.",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            claimed = true;
+          });
+          if (!claimed) {
+            const latest = await transaksiRef.get();
+            const finalData = latest.data() || {};
+            return {
+              success: finalData.status === "SUCCESS",
+              ref_id: refId,
+              status: finalData.status || "PROCESSING",
+              response: finalData.response || resultData,
+              refunded: finalData.balanceRefunded === true,
+              reused: true,
+            };
+          }
 
-                reason:
-                  `Refund transaksi Digiflazz: ${
-                    resultData.message ||
-                    "Provider menyatakan gagal."
-                  }`,
-              }
-            );
-
-          await transaksiRef.set(
-            {
-              status:
-                "FAILED",
-
-              response:
-                resultData,
-
-              failureReason:
-                resultData.message ||
-                "Transaksi Digiflazz gagal.",
-
-              refunded:
-                refund.refunded ===
-                  true ||
-                refund.reason ===
-                  "ALREADY_REFUNDED",
-
-              updatedAt:
-                admin.firestore
-                  .FieldValue
-                  .serverTimestamp(),
-            },
-            {
-              merge:
-                true,
-            }
-          );
-
+          const refund = await refundDigiflazzBalance({
+            transactionRef: transaksiRef,
+            reason: `Refund transaksi Digiflazz: ${resultData.message || "Provider menyatakan gagal."}`,
+          });
+          await transaksiRef.update({
+            status: "FAILED",
+            refunded: refund.refunded === true || refund.reason === "ALREADY_REFUNDED" ||
+              refund.reason === "BALANCE_NOT_DEBITED",
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
           return {
-            success:
-              false,
-
-            ref_id:
-              refId,
-
-            status:
-              "FAILED",
-
-            refunded:
-              refund.refunded ===
-                true ||
-              refund.reason ===
-                "ALREADY_REFUNDED",
-
-            response:
-              resultData,
+            success: false,
+            ref_id: refId,
+            status: "FAILED",
+            refunded: refund.refunded === true || refund.reason === "ALREADY_REFUNDED",
+            response: resultData,
           };
         }
 
