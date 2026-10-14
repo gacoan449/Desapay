@@ -2,6 +2,8 @@ import '../models/transaksi.dart';
 import '../models/produk.dart';
 import 'digiflazz_service.dart';
 import 'pin_service.dart';
+import 'saldo_service.dart';
+import 'riwayat_service.dart';
 
 /// Objek pembungkus status keluaran dari eksekusi transaksi PPOB di DesaPay
 class HasilEksekusiTransaksi {
@@ -32,9 +34,11 @@ abstract class ITransaksiService {
 /// Implementasi Orkes Logika Bisnis Transaksi Finansial Terintegrasi (Data Layer)
 class TransaksiService implements ITransaksiService {
   final IDigiflazzService _digiflazzService;
-  /// Seluruh saldo, status, dan riwayat finansial dikelola backend.
+  // Dipertahankan untuk kompatibilitas constructor dengan pemanggil lama.
   TransaksiService({
     required IDigiflazzService digiflazzService,
+    required ISaldoService saldoService,
+    required IRiwayatService riwayatService,
   }) : _digiflazzService = digiflazzService;
 
   // =========================================================================
