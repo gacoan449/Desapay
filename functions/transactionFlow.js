@@ -242,46 +242,87 @@ async function notify(uid, title, body, requestId, status) {
 }
 
 async function finalize(requestRef, status, providerData, refundReason) {
-  const requestSnap = await requestRef.get();
-  if (!requestSnap.exists) return;
-  const current = requestSnap.data() || {};
-  const currentStatus = text(current.status).toUpperCase();
+  const provider = providerData || {};
+  let current = null;
+  let shouldProcess = false;
+  let needsRefund = false;
 
-  if (currentStatus === "SUCCESS" || currentStatus === "FAILED") return;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(requestRef);
+    if (!snap.exists) return;
+    current = snap.data() || {};
+    const currentStatus = text(current.status).toUpperCase();
 
-  if (status === "FAILED") {
-    try {
-      await refund(requestRef, refundReason || providerData.message || "Transaksi gagal");
-    } catch (error) {
-      await requestRef.update({
-        status: "REFUND_PENDING",
-        refundError: error.message,
-        providerStatus: providerData.status || null,
-        providerRc: providerData.rc || null,
-        message: providerData.message || "Refund gagal diproses",
+    if (currentStatus === "SUCCESS") return;
+    if (currentStatus === "FAILED" &&
+        (current.balanceRefunded === true || current.balanceDebited !== true)) return;
+
+    if (status === "SUCCESS") {
+      // FAILED/REFUND_PENDING represents an already-decided failure and cannot
+      // be overwritten by a delayed provider response.
+      if (currentStatus === "FAILED" || currentStatus === "REFUND_PENDING") return;
+      tx.update(requestRef, {
+        status: "SUCCESS",
+        providerStatus: provider.status || null,
+        providerRc: normalizeRc(provider.rc),
+        providerMessage: provider.message || null,
+        providerSn: provider.sn || null,
+        providerData: provider,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      shouldProcess = true;
+      return;
+    }
+
+    if (status !== "FAILED") return;
+    if (currentStatus === "FAILED" && current.balanceRefunded === true) return;
+    needsRefund = current.balanceDebited === true && current.balanceRefunded !== true;
+    tx.update(requestRef, {
+      status: needsRefund ? "REFUND_PENDING" : "FAILED",
+      failureReason: provider.message || refundReason || "Transaksi gagal",
+      providerStatus: provider.status || null,
+      providerRc: normalizeRc(provider.rc),
+      providerMessage: provider.message || null,
+      providerSn: provider.sn || null,
+      providerData: provider,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(needsRefund ? {} : {completedAt: admin.firestore.FieldValue.serverTimestamp()}),
+    });
+    shouldProcess = true;
+  });
+
+  if (!shouldProcess || !current) return;
+
+  if (status === "FAILED" && needsRefund) {
+    try {
+      await refund(requestRef, refundReason || provider.message || "Transaksi gagal");
+    } catch (error) {
+      await requestRef.set({
+        status: "REFUND_PENDING",
+        refundError: error.message,
+        providerStatus: provider.status || null,
+        providerRc: normalizeRc(provider.rc),
+        providerMessage: provider.message || "Refund gagal diproses",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
       throw error;
     }
+    await requestRef.update({
+      status: "FAILED",
+      balanceRefunded: true,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 
-  await requestRef.update({
-    status,
-    providerStatus: providerData.status || null,
-    providerRc: providerData.rc || null,
-    providerMessage: providerData.message || null,
-    providerSn: providerData.sn || null,
-    providerData,
-    completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await writeHistory(requestRef, status, providerData);
-
-  const title = status === "SUCCESS" ? "Transaksi berhasil" : "Transaksi gagal";
-  const body = status === "SUCCESS"
+  const finalStatus = status === "FAILED" ? "FAILED" : "SUCCESS";
+  await writeHistory(requestRef, finalStatus, provider);
+  const title = finalStatus === "SUCCESS" ? "Transaksi berhasil" : "Transaksi gagal";
+  const body = finalStatus === "SUCCESS"
     ? `Transaksi ${current.productName || current.buyer_sku_code || "PPOB"} berhasil.`
-    : `Transaksi gagal. Saldo dikembalikan.`;
-  await notify(current.uid, title, body, requestRef.id, status);
+    : (needsRefund ? "Transaksi gagal. Saldo dikembalikan." : "Transaksi gagal.");
+  await notify(current.uid, title, body, requestRef.id, finalStatus);
 }
 
 async function sendToDigiflazz(requestData, refId) {
