@@ -621,6 +621,16 @@ exports.reconcileDigiflazzTransactions = onSchedule(
       secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY],
     },
     async () => {
+      // Buang token PIN sekali pakai yang sudah kedaluwarsa agar koleksi tidak tumbuh tanpa batas.
+      const expiredAuthorizations = await db.collection("pin_authorizations")
+          .where("expiresAt", "<", admin.firestore.Timestamp.fromMillis(Date.now()))
+          .limit(200).get();
+      if (!expiredAuthorizations.empty) {
+        const cleanupBatch = db.batch();
+        expiredAuthorizations.docs.forEach((authorization) => cleanupBatch.delete(authorization.ref));
+        await cleanupBatch.commit();
+      }
+
       const snap = await db.collection("transaction_requests")
           .where("status", "in", ["PROCESSING", "REFUND_PENDING"])
           .limit(100).get();
