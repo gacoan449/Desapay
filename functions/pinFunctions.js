@@ -41,14 +41,23 @@ exports.pinCreate = onCall({region: REGION}, async (request) => {
   if (!validPin(pin)) fail("PIN harus terdiri dari 6 digit angka.");
   if (weakPin(pin)) fail("PIN terlalu mudah ditebak.");
   const ref = securityRef(uid);
+  const userRef = db.collection("users").doc(uid);
   const salt = crypto.randomBytes(16).toString("hex");
   const pinHash = hashPin(pin, salt);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
+    const userSnap = await tx.get(userRef);
     if (snap.exists && (snap.data() || {}).pinHash) fail("PIN sudah dibuat. Gunakan ubah PIN.");
+    if (!userSnap.exists) fail("Data akun tidak ditemukan.", "not-found");
     tx.set(ref, {pinSalt: salt, pinHash, failedAttempts: 0, lockedUntil: null,
       pinCreatedAt: admin.firestore.FieldValue.serverTimestamp(),
       pinUpdatedAt: admin.firestore.FieldValue.serverTimestamp()});
+    // Bersihkan hash SHA-256 lama yang dulu tersimpan pada dokumen profil.
+    tx.update(userRef, {
+      pinHash: admin.firestore.FieldValue.delete(),
+      pinFailedAttempts: admin.firestore.FieldValue.delete(),
+      pinLockedUntil: admin.firestore.FieldValue.delete(),
+    });
   });
   return {success: true};
 });
