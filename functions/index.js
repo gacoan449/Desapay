@@ -2012,6 +2012,13 @@ exports.digiflazzKirimTransaksi =
             }
           );
 
+          await writeLegacyDigiflazzHistory({
+            refId, uid, buyerSkuCode,
+            productName: product.name || product.nama || buyerSkuCode,
+            category: product.category || null,
+            customerNo, amount: price, status: "SUCCESS", providerData: resultData,
+          });
+
           return {
             success:
               true,
@@ -2074,6 +2081,13 @@ exports.digiflazzKirimTransaksi =
             }
           );
 
+          await writeLegacyDigiflazzHistory({
+            refId, uid, buyerSkuCode,
+            productName: product.name || product.nama || buyerSkuCode,
+            category: product.category || null,
+            customerNo, amount: price, status: "FAILED", providerData: resultData,
+          });
+
           return {
             success:
               false,
@@ -2117,6 +2131,13 @@ exports.digiflazzKirimTransaksi =
               true,
           }
         );
+
+        await writeLegacyDigiflazzHistory({
+          refId, uid, buyerSkuCode,
+          productName: product.name || product.nama || buyerSkuCode,
+          category: product.category || null,
+          customerNo, amount: price, status: "PENDING", providerData: resultData,
+        });
 
         return {
           success:
