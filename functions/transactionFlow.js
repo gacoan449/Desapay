@@ -566,8 +566,6 @@ exports.processTransactionRequest = onDocumentCreated(
             }, "Gagal sebelum pengiriman ke provider");
             return;
           } catch (refundError) {
-            const afterRefundFailure = await requestRef.get();
-            const afterData = afterRefundFailure.data() || {};
             await requestRef.update({
               status: "REFUND_PENDING",
               refundError: refundError.message,
