@@ -2282,6 +2282,7 @@ exports.digiflazzCekTransaksi =
         if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
           let transitioned = false;
           await db.runTransaction(async (transaction) => {
+            transitioned = false;
             const latest = await transaction.get(transaksiRef);
             if (!latest.exists) return;
             const current = latest.data() || {};
@@ -2309,6 +2310,7 @@ exports.digiflazzCekTransaksi =
         if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
           let claimed = false;
           await db.runTransaction(async (transaction) => {
+            claimed = false;
             const latest = await transaction.get(transaksiRef);
             if (!latest.exists) return;
             const current = latest.data() || {};
@@ -2459,6 +2461,7 @@ exports.reconcileLegacyDigiflazzTransactions = onSchedule(
         if (providerStatus === "SUKSES" || providerStatus === "SUCCESS") {
           let transitioned = false;
           await db.runTransaction(async (tx) => {
+            transitioned = false;
             const latest = await tx.get(ref);
             if (!latest.exists) return;
             const current = latest.data() || {};
@@ -2476,6 +2479,7 @@ exports.reconcileLegacyDigiflazzTransactions = onSchedule(
         } else if (providerStatus === "GAGAL" || providerStatus === "FAILED") {
           let claimed = false;
           await db.runTransaction(async (tx) => {
+            claimed = false;
             const latest = await tx.get(ref);
             if (!latest.exists) return;
             const current = latest.data() || {};
