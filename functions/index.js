@@ -1847,6 +1847,12 @@ exports.digiflazzKirimTransaksi =
                 "Akun pengguna tidak ditemukan."
               );
 
+            case "ACCOUNT_DISABLED":
+              throw new HttpsError(
+                "permission-denied",
+                "Akun dinonaktifkan dan tidak dapat melakukan transaksi."
+              );
+
             case "INVALID_BALANCE":
               throw new HttpsError(
                 "failed-precondition",
