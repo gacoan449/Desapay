@@ -45,8 +45,10 @@ function isAccountDisabled(userData) {
   const status = text(data.status || data.accountStatus).toLowerCase();
   return data.disabled === true ||
     data.isDisabled === true ||
+    data.isBlocked === true ||
     data.isActive === false ||
-    ["disabled", "blocked", "suspended", "nonaktif", "dinonaktifkan", "diblokir"].includes(status);
+    ["disabled", "inactive", "blocked", "banned", "suspended", "nonaktif",
+      "non-aktif", "tidak aktif", "dinonaktifkan", "diblokir"].includes(status);
 }
 
 async function getProduct(sku) {
