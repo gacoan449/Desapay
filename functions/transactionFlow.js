@@ -307,6 +307,26 @@ async function sendToDigiflazz(requestData, refId) {
   return json.data || json;
 }
 
+async function consumePurchaseAuthorization(requestRef, data) {
+  const token = text(data.pinAuthorizationId);
+  if (!token || token.length !== 64) throw new Error("PIN_AUTHORIZATION_REQUIRED");
+  const authRef = db.collection("pin_authorizations").doc(token);
+  const uid = text(data.uid);
+  const sku = text(data.buyer_sku_code || data.sku);
+  const customerNo = text(data.customerNo || data.customer_no);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(authRef);
+    if (!snap.exists) throw new Error("PIN_AUTHORIZATION_INVALID");
+    const auth = snap.data() || {};
+    const expiresAt = auth.expiresAt && typeof auth.expiresAt.toMillis === "function" ? auth.expiresAt.toMillis() : 0;
+    if (auth.uid !== uid || auth.requestId !== requestRef.id || auth.sku !== sku ||
+        auth.customerNo !== customerNo || auth.consumed === true || expiresAt < Date.now()) {
+      throw new Error("PIN_AUTHORIZATION_INVALID");
+    }
+    tx.update(authRef, {consumed: true, consumedAt: admin.firestore.FieldValue.serverTimestamp()});
+  });
+}
+
 async function processRequest(requestRef) {
   const snap = await requestRef.get();
   if (!snap.exists) return;
@@ -342,6 +362,20 @@ async function processRequest(requestRef) {
   const productData = trusted ? trusted.data : {};
   if (!trusted || productData.active !== true || productData.isTest === true) {
     await finalize(requestRef, "FAILED", {status: "Gagal", rc: "PRODUCT", message: "Produk tidak tersedia"}, "Produk tidak tersedia");
+    return;
+  }
+
+  try {
+    await consumePurchaseAuthorization(requestRef, {...data, uid, buyer_sku_code: sku, customerNo});
+  } catch (authError) {
+    await requestRef.update({
+      status: "FAILED",
+      providerStatus: "PIN_REQUIRED",
+      providerMessage: "Otorisasi PIN tidak valid atau kedaluwarsa. Silakan ulangi pembelian.",
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "PIN_REQUIRED", message: "Otorisasi PIN tidak valid."});
     return;
   }
 
