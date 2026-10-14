@@ -48,7 +48,7 @@ function isAccountDisabled(userData) {
     data.isBlocked === true ||
     data.isActive === false ||
     ["disabled", "inactive", "blocked", "banned", "suspended", "nonaktif",
-      "non-aktif", "tidak aktif", "dinonaktifkan", "diblokir"].includes(status);
+      "non-aktif", "non aktif", "tidak aktif", "dinonaktifkan", "diblokir"].includes(status);
 }
 
 async function getProduct(sku) {
