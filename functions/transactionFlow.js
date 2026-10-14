@@ -415,6 +415,15 @@ async function processRequest(requestRef) {
     return;
   }
 
+  await requestRef.update({
+    trustedPrice: trusted.price,
+    amount: trusted.price,
+    sellingPrice: trusted.price,
+    productName: productData.name || productData.nama || data.productName || sku,
+    serverValidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
   try {
     await consumePurchaseAuthorization(requestRef, {...data, uid, buyer_sku_code: sku, customerNo});
   } catch (authError) {
@@ -428,15 +437,6 @@ async function processRequest(requestRef) {
     await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "PIN_REQUIRED", message: "Otorisasi PIN tidak valid."});
     return;
   }
-
-  await requestRef.update({
-    trustedPrice: trusted.price,
-    amount: trusted.price,
-    sellingPrice: trusted.price,
-    productName: productData.name || productData.nama || data.productName || sku,
-    serverValidatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
 
   if (!text(DIGIFLAZZ_USERNAME.value()) || !text(DIGIFLAZZ_API_KEY.value())) {
     await finalize(requestRef, "FAILED", {
