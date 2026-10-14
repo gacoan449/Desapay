@@ -507,6 +507,33 @@ async function getTrustedProductPrice(
   };
 }
 
+async function writeLegacyDigiflazzHistory({
+  refId, uid, buyerSkuCode, productName, category, customerNo, amount, status, providerData = {},
+}) {
+  const historyRef = db.collection("transactions").doc(refId);
+  const existing = await historyRef.get();
+  const payload = {
+    transactionId: refId,
+    requestId: refId,
+    uid,
+    sku: buyerSkuCode,
+    buyer_sku_code: buyerSkuCode,
+    productName: productName || buyerSkuCode,
+    category: category || null,
+    customerNo,
+    amount: toSafeInteger(amount) ?? 0,
+    sellingPrice: toSafeInteger(amount) ?? 0,
+    status,
+    providerStatus: providerData.status || null,
+    providerRc: providerData.rc || null,
+    message: providerData.message || null,
+    sn: providerData.sn || null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (!existing.exists) payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+  await historyRef.set(payload, {merge: true});
+}
+
 /*
 |--------------------------------------------------------------------------
 | SALDO - DEBIT TRANSAKSI DIGIFLAZZ
@@ -1802,6 +1829,13 @@ exports.digiflazzKirimTransaksi =
           }
         );
 
+        await writeLegacyDigiflazzHistory({
+          refId, uid, buyerSkuCode,
+          productName: product.name || product.nama || buyerSkuCode,
+          category: product.category || null,
+          customerNo, amount: price, status: "PROCESSING",
+        });
+
         try {
           await debitUserBalanceForDigiflazz(
             {
@@ -1837,6 +1871,14 @@ exports.digiflazzKirimTransaksi =
                 true,
             }
           );
+
+          await writeLegacyDigiflazzHistory({
+            refId, uid, buyerSkuCode,
+            productName: product.name || product.nama || buyerSkuCode,
+            category: product.category || null,
+            customerNo, amount: price, status: "FAILED",
+            providerData: {status: "Gagal", rc: error.message, message: "Transaksi tidak dapat didebit"},
+          });
 
           switch (
             error.message
