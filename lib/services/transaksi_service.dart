@@ -82,7 +82,9 @@ class TransaksiService implements ITransaksiService {
     );
 
     final String statusRespon = (responDigiflazz['status'] ?? 'Gagal').toString().toLowerCase();
-    final String providerRefId = (responDigiflazz['ref_id'] ?? generatedRefId).toString();
+    final String uidPrefix = uid.substring(0, uid.length < 8 ? uid.length : 8);
+    final String providerRefId =
+        (responDigiflazz['ref_id'] ?? 'dp-$uidPrefix-$generatedRefId').toString();
     final String pesanRespon = responDigiflazz['message'] ?? 'Transaksi sedang diproses oleh aggregator';
 
     StatusTransaksi statusAkhir = StatusTransaksi.pending;
