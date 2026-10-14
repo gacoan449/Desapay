@@ -3,6 +3,7 @@ import '../models/produk.dart';
 import 'digiflazz_service.dart';
 import 'saldo_service.dart';
 import 'riwayat_service.dart';
+import 'pin_service.dart';
 
 /// Objek pembungkus status keluaran dari eksekusi transaksi PPOB di DesaPay
 class HasilEksekusiTransaksi {
@@ -26,6 +27,7 @@ abstract class ITransaksiService {
     required Produk produk,
     required String nomorTujuan,
     required String metodePembayaran,
+    required String pin,
   });
 }
 
@@ -53,6 +55,7 @@ class TransaksiService implements ITransaksiService {
     required Produk produk,
     required String nomorTujuan,
     required String metodePembayaran,
+    required String pin,
   }) async {
     // 1. Validasi Awal Parameter Input Finansial
     if (nomorTujuan.trim().length < 4) {
@@ -65,27 +68,22 @@ class TransaksiService implements ITransaksiService {
     // Pembuatan ID Referensi Unik Sistem DesaPay (Sesuai Regulasi Pencegahan Double Payment)
     final String generatedRefId = "DESAPAY-${DateTime.now().millisecondsSinceEpoch}";
 
-    // 2. Proteksi Finansial 1: Uji dan Kurangi Saldo Pengguna Lewat Jalur Transaksi Atomic
-    if (metodePembayaran.toUpperCase() == 'SALDO') {
-      final SaldoUpdateResult hasilPotongSaldo = await _saldoService.updateSaldo(
-        uid: uid,
-        nominal: produk.harga,
-        isTambah: false,
-        keterangan: "Pembelian ${produk.nama} ke $nomorTujuan",
-      );
+    // PIN diverifikasi server dan token otorisasi hanya dapat dipakai sekali.
+    final authorizationId = await PinService().authorizePurchase(
+      pin: pin,
+      requestId: generatedRefId,
+      sku: produk.kode,
+      customerNo: nomorTujuan.trim(),
+    );
 
-      if (!hasilPotongSaldo.isSuccess) {
-        return HasilEksekusiTransaksi(
-          isSukses: false,
-          pesan: hasilPotongSaldo.message,
-        );
-      }
-    }
-
-    // 3. Tembak API Pihak Ketiga (Digiflazz Gateway Engine)
-    final Map<String, dynamic> responDigiflazz = await _digiflazzService.kirimTransaksi(
+    // Saldo dan transaksi ditangani atomik oleh backend. Tidak ada debit/refund
+    // dari client, sehingga aplikasi tidak dapat memalsukan atau menggandakan saldo.
+    final Map<String, dynamic> responDigiflazz =
+        await _digiflazzService.kirimTransaksi(
       buyerSkuCode: produk.kode,
       customerNo: nomorTujuan.trim(),
+      requestId: generatedRefId,
+      pinAuthorizationId: authorizationId,
     );
 
     final String statusRespon = (responDigiflazz['status'] ?? 'Gagal').toString().toLowerCase();
@@ -117,23 +115,6 @@ class TransaksiService implements ITransaksiService {
 
     // 5. Simpan Data Rekam Jejak Ke Firebase Cloud Firestore Melalui RiwayatService
     await _riwayatService.simpan(modelTransaksiLog);
-
-    // 6. Rollback Engine: Mekanisme Refund Otomatis Jika Deteksi Status Digiflazz Menyatakan 'Gagal'
-    if (statusAkhir == StatusTransaksi.gagal && metodePembayaran.toUpperCase() == 'SALDO') {
-      await _saldoService.updateSaldo(
-        uid: uid,
-        nominal: produk.harga,
-        isTambah: true,
-        keterangan: "REFUND: Gagal isi ${produk.nama} ke $nomorTujuan",
-      );
-      
-      return HasilEksekusiTransaksi(
-        isSukses: false,
-        pesan: "Transaksi Gagal dari Provider: $pesanRespon. Saldo Anda telah dikembalikan secara utuh.",
-        refId: generatedRefId,
-        statusAkhir: StatusTransaksi.gagal,
-      );
-    }
 
     // 7. Hasilkan Konfirmasi Final untuk Disajikan ke Halaman UI Resi Pengguna
     return HasilEksekusiTransaksi(
