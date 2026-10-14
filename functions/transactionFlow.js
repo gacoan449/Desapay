@@ -248,6 +248,9 @@ async function finalize(requestRef, status, providerData, refundReason) {
   let needsRefund = false;
 
   await db.runTransaction(async (tx) => {
+    current = null;
+    shouldProcess = false;
+    needsRefund = false;
     const snap = await tx.get(requestRef);
     if (!snap.exists) return;
     current = snap.data() || {};
