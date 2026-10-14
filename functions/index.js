@@ -2367,6 +2367,14 @@ exports.digiflazzCekTransaksi =
           });
           const latest = await transaksiRef.get();
           const finalData = latest.data() || {};
+          if (finalData.status === "SUCCESS") {
+            await writeLegacyDigiflazzHistory({
+              refId, uid: transaksi.uid, buyerSkuCode,
+              productName: transaksi.productName || buyerSkuCode,
+              category: transaksi.category || null,
+              customerNo, amount: transaksi.amount, status: "SUCCESS", providerData: resultData,
+            });
+          }
           return {
             success: finalData.status === "SUCCESS",
             ref_id: refId,
@@ -2418,6 +2426,12 @@ exports.digiflazzCekTransaksi =
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
+          await writeLegacyDigiflazzHistory({
+            refId, uid: transaksi.uid, buyerSkuCode,
+            productName: transaksi.productName || buyerSkuCode,
+            category: transaksi.category || null,
+            customerNo, amount: transaksi.amount, status: "FAILED", providerData: resultData,
+          });
           return {
             success: false,
             ref_id: refId,
@@ -2445,6 +2459,12 @@ exports.digiflazzCekTransaksi =
               true,
           }
         );
+        await writeLegacyDigiflazzHistory({
+          refId, uid: transaksi.uid, buyerSkuCode,
+          productName: transaksi.productName || buyerSkuCode,
+          category: transaksi.category || null,
+          customerNo, amount: transaksi.amount, status: "PENDING", providerData: resultData,
+        });
 
         return {
           success:
