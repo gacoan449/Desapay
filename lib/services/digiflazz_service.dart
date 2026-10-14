@@ -13,6 +13,8 @@ abstract class IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String requestId,
+    required String pinAuthorizationId,
   });
 
   Future<Map<String, dynamic>> mintaTiketDeposit({
@@ -77,11 +79,15 @@ class DigiflazzService implements IDigiflazzService {
   Future<Map<String, dynamic>> kirimTransaksi({
     required String buyerSkuCode,
     required String customerNo,
+    required String requestId,
+    required String pinAuthorizationId,
   }) async {
     try {
       final result = await _functions.httpsCallable('digiflazzKirimTransaksi').call({
         'buyer_sku_code': buyerSkuCode,
         'customer_no': customerNo,
+        'request_id': requestId,
+        'pin_authorization_id': pinAuthorizationId,
       });
       final data = result.data;
       if (data is Map) return Map<String, dynamic>.from(data);
