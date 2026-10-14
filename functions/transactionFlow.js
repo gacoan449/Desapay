@@ -540,6 +540,86 @@ exports.processTransactionRequest = onDocumentCreated(
     },
 );
 
+async function checkProviderStatus(requestData, refId) {
+  const username = DIGIFLAZZ_USERNAME.value();
+  const apiKey = DIGIFLAZZ_API_KEY.value();
+  if (!username || !apiKey) throw new Error("Credential Digiflazz belum dikonfigurasi.");
+  const body = {
+    cmd: "status",
+    username,
+    buyer_sku_code: text(requestData.buyer_sku_code || requestData.sku),
+    customer_no: text(requestData.customerNo || requestData.customer_no),
+    ref_id: refId,
+    sign: md5(username + apiKey + "status" + refId),
+  };
+  const response = await fetch(DIGIFLAZZ_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  const json = await response.json();
+  if (!response.ok) throw new Error("HTTP Digiflazz status " + response.status);
+  return json.data || json;
+}
+
+exports.reconcileDigiflazzTransactions = onSchedule(
+    {
+      schedule: "every 5 minutes",
+      region: REGION,
+      timeZone: "Asia/Jakarta",
+      timeoutSeconds: 300,
+      memory: "256MiB",
+      secrets: [DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY],
+    },
+    async () => {
+      const snap = await db.collection("transaction_requests")
+          .where("status", "in", ["PROCESSING", "REFUND_PENDING"])
+          .limit(100).get();
+      const now = Date.now();
+      for (const doc of snap.docs) {
+        const data = doc.data() || {};
+        const status = text(data.status).toUpperCase();
+        try {
+          if (status === "REFUND_PENDING") {
+            await finalize(doc.ref, "FAILED", data.providerData || {
+              status: data.providerStatus || "Gagal",
+              rc: data.providerRc || "REFUND_RETRY",
+              message: data.providerMessage || data.refundError || "Mencoba ulang pengembalian saldo",
+            }, "Percobaan ulang refund otomatis");
+            continue;
+          }
+
+          const submitted = data.providerSubmissionStartedAt &&
+            typeof data.providerSubmissionStartedAt.toMillis === "function"
+            ? data.providerSubmissionStartedAt.toMillis() : 0;
+          if (!submitted || now - submitted < 5 * 60 * 1000) continue;
+          if (!data.providerRefId) continue;
+
+          const provider = await checkProviderStatus(data, text(data.providerRefId));
+          const resultStatus = normalizeStatus(provider.status);
+          if (resultStatus === "SUCCESS") {
+            await finalize(doc.ref, "SUCCESS", provider);
+          } else if (resultStatus === "FAILED") {
+            await finalize(doc.ref, "FAILED", provider, provider.message || "Provider mengonfirmasi transaksi gagal");
+          } else {
+            await doc.ref.update({
+              lastReconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              providerStatus: provider.status || data.providerStatus || "PENDING",
+              providerRc: normalizeRc(provider.rc) || data.providerRc || null,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        } catch (error) {
+          loggerError("Rekonsiliasi transaksi gagal", {requestId: doc.id, message: error.message});
+        }
+      }
+    },
+);
+
+function loggerError(message, details) {
+  console.error(message, details);
+}
+
 exports.digiflazzWebhook = onRequest(
     {region: REGION, secrets: [DIGIFLAZZ_WEBHOOK_SECRET]},
     handleWebhook,
