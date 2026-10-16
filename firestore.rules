@@ -121,8 +121,8 @@ service cloud.firestore {
     }
 
     match /belanjaku_orders/{orderId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      // Pembuatan/perubahan pesanan hanya setelah backend validasi tersedia.
+      allow read: if isAdmin() || (signedIn() && (resource.data.uid == request.auth.uid || resource.data.courierUid == request.auth.uid));
+      // Writes remain server-only; state changes go through callable functions.
       allow create, update, delete: if false;
     }
 
