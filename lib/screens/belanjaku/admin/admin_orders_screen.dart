@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 class BelanjakuAdminOrdersScreen extends StatelessWidget {
   const BelanjakuAdminOrdersScreen({super.key});
 
-  Future<void> _process(BuildContext context, String id, String action) async {
+  Future<void> _process(BuildContext context, String id, String action, {String? reason}) async {
     try {
       await FirebaseFunctions.instanceFor(region: 'asia-southeast2')
           .httpsCallable('belanjakuAdminProcessOrder')
-          .call({'orderId': id, 'action': action});
+          .call({'orderId': id, 'action': action, if (reason != null) 'reason': reason});
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tindakan pesanan berhasil diproses.')));
     } on FirebaseFunctionsException catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Tindakan gagal.')));
@@ -47,7 +47,7 @@ class BelanjakuAdminOrdersScreen extends StatelessWidget {
                   return AlertDialog(title: const Text('Batalkan pesanan'), content: TextField(controller: controller, maxLength: 300, decoration: const InputDecoration(labelText: 'Alasan')),
                     actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Kembali')), ElevatedButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Batalkan'))]);
                 });
-                if (reason != null) await _process(context, doc.id, 'CANCEL');
+                if (reason != null) await _process(context, doc.id, 'CANCEL', reason: reason);
               }, child: const Text('Batalkan')));
             }
             return Card(
