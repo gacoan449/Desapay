@@ -5100,7 +5100,98 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
   });
 });
 
-/* BELANJAKU OPS: server-authoritative order lifecycle and courier assignment. */\nexports.belanjakuAdminProcessOrder = onCall({ region: REGION }, async (request) => {\n  if (!request.auth || !(await checkAdmin(request.auth.uid))) throw new HttpsError("permission-denied", "Hanya admin yang dapat memproses pesanan.");\n  const data = request.data || {}, orderId = normalizeString(data.orderId), action = normalizeString(data.action).toUpperCase();\n  if (!orderId || !["CONFIRM", "ASSIGN_AUTO", "CANCEL"].includes(action)) throw new HttpsError("invalid-argument", "Pesanan atau tindakan tidak valid.");\n  const orderRef = db.collection("belanjaku_orders").doc(orderId);\n  if (action === "ASSIGN_AUTO") {\n    const os = await orderRef.get();\n    if (!os.exists || os.data().status !== "CONFIRMED") throw new HttpsError("failed-precondition", "Pesanan harus dikonfirmasi sebelum penugasan.");\n    const order = os.data() || {}, users = await db.collection("users").where("role", "==", "courier").get(), candidates = [];\n    for (const doc of users.docs) {\n      const u = doc.data() || {}, areas = Array.isArray(u.serviceAreaIds) ? u.serviceAreaIds : [];\n      if ((u.status && !["Aktif", "active", "ACTIVE"].includes(u.status)) || u.isActive === false || u.disabled === true) continue;\n      if (areas.length && !areas.includes(order.areaId)) continue;\n      const active = await db.collection("belanjaku_orders").where("courierUid", "==", doc.id).where("status", "in", ["ASSIGNED", "ACCEPTED", "PICKED_UP", "ON_DELIVERY"]).get();\n      candidates.push({ uid: doc.id, workload: active.size, areaMatch: areas.includes(order.areaId) ? 0 : 1 });\n    }\n    candidates.sort((a, b) => a.areaMatch - b.areaMatch || a.workload - b.workload || a.uid.localeCompare(b.uid));\n    if (!candidates.length) throw new HttpsError("failed-precondition", "Belum ada kurir aktif yang melayani wilayah ini.");\n    const chosen = candidates[0];\n    return db.runTransaction(async (tx) => {\n      const snap = await tx.get(orderRef);\n      if (!snap.exists || snap.data().status !== "CONFIRMED") throw new HttpsError("aborted", "Status pesanan berubah; muat ulang.");\n      tx.update(orderRef, { courierUid: chosen.uid, assignedBy: request.auth.uid, assignedAt: admin.firestore.FieldValue.serverTimestamp(), status: "ASSIGNED", updatedAt: admin.firestore.FieldValue.serverTimestamp(), assignmentAlgorithm: "AREA_THEN_LOWEST_ACTIVE_WORKLOAD_V1" });\n      return { success: true, orderId, courierUid: chosen.uid, workloadBeforeAssignment: chosen.workload };\n    });\n  }\n  return db.runTransaction(async (tx) => {\n    const os = await tx.get(orderRef);\n    if (!os.exists) throw new HttpsError("not-found", "Pesanan tidak ditemukan.");\n    const order = os.data() || {}, now = admin.firestore.FieldValue.serverTimestamp();\n    if (action === "CONFIRM") {\n      if (order.status === "CONFIRMED") return { success: true, reused: true, status: order.status };\n      if (order.status !== "NEW") throw new HttpsError("failed-precondition", "Hanya pesanan baru yang dapat dikonfirmasi.");\n      tx.update(orderRef, { status: "CONFIRMED", confirmedBy: request.auth.uid, confirmedAt: now, updatedAt: now });\n      return { success: true, status: "CONFIRMED" };\n    }\n    if (["PICKED_UP", "ON_DELIVERY", "DELIVERED", "COMPLETED", "CANCELLED"].includes(order.status)) throw new HttpsError("failed-precondition", "Pesanan sudah terlalu jauh diproses untuk dibatalkan.");\n    const items = Array.isArray(order.items) ? order.items : [], refs = items.map(i => db.collection("belanjaku_products").doc(String(i.productId))), snaps = [];\n    for (const ref of refs) snaps.push(await tx.get(ref));\n    let userRef = null, userSnap = null, before = null, after = null, amount = null;\n    if (order.paymentMethod === "BALANCE" && order.paymentStatus === "PAID" && order.refunded !== true) {\n      userRef = db.collection("users").doc(String(order.uid)); userSnap = await tx.get(userRef);\n      if (!userSnap.exists) throw new HttpsError("failed-precondition", "Akun pembeli tidak ditemukan; refund perlu pemeriksaan admin.");\n      before = toSafeInteger((userSnap.data() || {}).balance); amount = toSafeInteger(order.total);\n      if (before === null || amount === null || amount <= 0 || !Number.isSafeInteger(before + amount)) throw new HttpsError("failed-precondition", "Data saldo/refund tidak valid.");\n      after = before + amount;\n    }\n    for (let i = 0; i < refs.length; i++) {\n      if (!snaps[i].exists) continue;\n      const p = snaps[i].data() || {}, qty = toSafeInteger(items[i].quantity), stock = toSafeInteger(p.stock);\n      if (qty === null || qty < 1 || stock === null || !Number.isSafeInteger(stock + qty)) throw new HttpsError("failed-precondition", "Stok tidak valid; pembatalan perlu pemeriksaan admin.");\n      tx.update(refs[i], { stock: stock + qty, status: "available", updatedAt: now });\n    }\n    if (userRef) {\n      const ledger = db.collection("balance_ledger").doc(), mutation = db.collection("mutasi_saldo").doc();\n      tx.update(userRef, { balance: after, updatedAt: now });\n      tx.create(ledger, { uid: order.uid, type: "CREDIT", amount, before, after, reason: "Refund pembatalan Belanjaku", source: "BELANJAKU_REFUND", transactionId: orderId, createdAt: now });\n      tx.create(mutation, { uid: order.uid, tipe: "MASUK", nominal: amount, saldoAwal: before, saldoAkhir: after, keterangan: "Refund pembatalan Belanjaku #" + orderId, sumber: "BELANJAKU_REFUND", transactionId: orderId, waktu: now });\n    }\n    tx.update(orderRef, { status: "CANCELLED", paymentStatus: userRef ? "REFUNDED" : order.paymentStatus, refunded: Boolean(userRef), cancelledBy: request.auth.uid, cancelledAt: now, cancelReason: normalizeString(data.reason).slice(0, 300) || "Dibatalkan admin", updatedAt: now });\n    return { success: true, status: "CANCELLED", refunded: Boolean(userRef) };\n  });\n});\n\nexports.belanjakuCourierUpdateOrder = onCall({ region: REGION }, async (request) => {\n  if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "Silakan login.");\n  const uid = request.auth.uid, data = request.data || {}, orderId = normalizeString(data.orderId), action = normalizeString(data.action).toUpperCase();\n  if (!orderId || !["ACCEPT", "PICK_UP", "START_DELIVERY", "DELIVER"].includes(action)) throw new HttpsError("invalid-argument", "Tindakan kurir tidak valid.");\n  const orderRef = db.collection("belanjaku_orders").doc(orderId), userRef = db.collection("users").doc(uid);\n  return db.runTransaction(async (tx) => {\n    const us = await tx.get(userRef), os = await tx.get(orderRef);\n    if (!us.exists || (us.data() || {}).role !== "courier") throw new HttpsError("permission-denied", "Fitur ini hanya untuk akun kurir.");\n    if (!os.exists) throw new HttpsError("not-found", "Pesanan tidak ditemukan.");\n    const order = os.data() || {};\n    if (order.courierUid !== uid) throw new HttpsError("permission-denied", "Pesanan ini tidak ditugaskan kepada akun Anda.");\n    const map = { ACCEPT: ["ASSIGNED", "ACCEPTED"], PICK_UP: ["ACCEPTED", "PICKED_UP"], START_DELIVERY: ["PICKED_UP", "ON_DELIVERY"], DELIVER: ["ON_DELIVERY", "DELIVERED"] }, pair = map[action];\n    if (order.status === pair[1]) return { success: true, reused: true, status: pair[1] };\n    if (order.status !== pair[0]) throw new HttpsError("failed-precondition", "Urutan status tidak valid; muat ulang pesanan.");\n    const now = admin.firestore.FieldValue.serverTimestamp(), update = { status: pair[1], updatedAt: now };\n    if (action === "DELIVER") {\n      if (order.paymentMethod === "COD") {\n        if (data.codCollected !== true) throw new HttpsError("failed-precondition", "Konfirmasi uang COD wajib sebelum menyelesaikan pengantaran.");\n        update.paymentStatus = "PAID"; update.codCollectedBy = uid; update.codCollectedAt = now;\n      }\n      update.deliveredAt = now;\n    }\n    tx.update(orderRef, update);\n    return { success: true, status: pair[1], paymentStatus: action === "DELIVER" && order.paymentMethod === "COD" ? "PAID" : order.paymentStatus };\n  });\n});\nexports.belanjakuSetRelease = onCall({ region: REGION }, async (request) => {
+/* BELANJAKU OPS: server-authoritative order lifecycle and courier assignment. */
+exports.belanjakuAdminProcessOrder = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || !(await checkAdmin(request.auth.uid))) throw new HttpsError("permission-denied", "Hanya admin yang dapat memproses pesanan.");
+  const data = request.data || {}, orderId = normalizeString(data.orderId), action = normalizeString(data.action).toUpperCase();
+  if (!orderId || !["CONFIRM", "ASSIGN_AUTO", "CANCEL"].includes(action)) throw new HttpsError("invalid-argument", "Pesanan atau tindakan tidak valid.");
+  const orderRef = db.collection("belanjaku_orders").doc(orderId);
+  if (action === "ASSIGN_AUTO") {
+    const os = await orderRef.get();
+    if (!os.exists || os.data().status !== "CONFIRMED") throw new HttpsError("failed-precondition", "Pesanan harus dikonfirmasi sebelum penugasan.");
+    const order = os.data() || {}, users = await db.collection("users").where("role", "==", "courier").get(), candidates = [];
+    for (const doc of users.docs) {
+      const u = doc.data() || {}, areas = Array.isArray(u.serviceAreaIds) ? u.serviceAreaIds : [];
+      if ((u.status && !["Aktif", "active", "ACTIVE"].includes(u.status)) || u.isActive === false || u.disabled === true) continue;
+      if (areas.length && !areas.includes(order.areaId)) continue;
+      const active = await db.collection("belanjaku_orders").where("courierUid", "==", doc.id).where("status", "in", ["ASSIGNED", "ACCEPTED", "PICKED_UP", "ON_DELIVERY"]).get();
+      candidates.push({ uid: doc.id, workload: active.size, areaMatch: areas.includes(order.areaId) ? 0 : 1 });
+    }
+    candidates.sort((a, b) => a.areaMatch - b.areaMatch || a.workload - b.workload || a.uid.localeCompare(b.uid));
+    if (!candidates.length) throw new HttpsError("failed-precondition", "Belum ada kurir aktif yang melayani wilayah ini.");
+    const chosen = candidates[0];
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists || snap.data().status !== "CONFIRMED") throw new HttpsError("aborted", "Status pesanan berubah; muat ulang.");
+      tx.update(orderRef, { courierUid: chosen.uid, assignedBy: request.auth.uid, assignedAt: admin.firestore.FieldValue.serverTimestamp(), status: "ASSIGNED", updatedAt: admin.firestore.FieldValue.serverTimestamp(), assignmentAlgorithm: "AREA_THEN_LOWEST_ACTIVE_WORKLOAD_V1" });
+      return { success: true, orderId, courierUid: chosen.uid, workloadBeforeAssignment: chosen.workload };
+    });
+  }
+  return db.runTransaction(async (tx) => {
+    const os = await tx.get(orderRef);
+    if (!os.exists) throw new HttpsError("not-found", "Pesanan tidak ditemukan.");
+    const order = os.data() || {}, now = admin.firestore.FieldValue.serverTimestamp();
+    if (action === "CONFIRM") {
+      if (order.status === "CONFIRMED") return { success: true, reused: true, status: order.status };
+      if (order.status !== "NEW") throw new HttpsError("failed-precondition", "Hanya pesanan baru yang dapat dikonfirmasi.");
+      tx.update(orderRef, { status: "CONFIRMED", confirmedBy: request.auth.uid, confirmedAt: now, updatedAt: now });
+      return { success: true, status: "CONFIRMED" };
+    }
+    if (["PICKED_UP", "ON_DELIVERY", "DELIVERED", "COMPLETED", "CANCELLED"].includes(order.status)) throw new HttpsError("failed-precondition", "Pesanan sudah terlalu jauh diproses untuk dibatalkan.");
+    const items = Array.isArray(order.items) ? order.items : [], refs = items.map(i => db.collection("belanjaku_products").doc(String(i.productId))), snaps = [];
+    for (const ref of refs) snaps.push(await tx.get(ref));
+    let userRef = null, userSnap = null, before = null, after = null, amount = null;
+    if (order.paymentMethod === "BALANCE" && order.paymentStatus === "PAID" && order.refunded !== true) {
+      userRef = db.collection("users").doc(String(order.uid)); userSnap = await tx.get(userRef);
+      if (!userSnap.exists) throw new HttpsError("failed-precondition", "Akun pembeli tidak ditemukan; refund perlu pemeriksaan admin.");
+      before = toSafeInteger((userSnap.data() || {}).balance); amount = toSafeInteger(order.total);
+      if (before === null || amount === null || amount <= 0 || !Number.isSafeInteger(before + amount)) throw new HttpsError("failed-precondition", "Data saldo/refund tidak valid.");
+      after = before + amount;
+    }
+    for (let i = 0; i < refs.length; i++) {
+      if (!snaps[i].exists) continue;
+      const p = snaps[i].data() || {}, qty = toSafeInteger(items[i].quantity), stock = toSafeInteger(p.stock);
+      if (qty === null || qty < 1 || stock === null || !Number.isSafeInteger(stock + qty)) throw new HttpsError("failed-precondition", "Stok tidak valid; pembatalan perlu pemeriksaan admin.");
+      tx.update(refs[i], { stock: stock + qty, status: "available", updatedAt: now });
+    }
+    if (userRef) {
+      const ledger = db.collection("balance_ledger").doc(), mutation = db.collection("mutasi_saldo").doc();
+      tx.update(userRef, { balance: after, updatedAt: now });
+      tx.create(ledger, { uid: order.uid, type: "CREDIT", amount, before, after, reason: "Refund pembatalan Belanjaku", source: "BELANJAKU_REFUND", transactionId: orderId, createdAt: now });
+      tx.create(mutation, { uid: order.uid, tipe: "MASUK", nominal: amount, saldoAwal: before, saldoAkhir: after, keterangan: "Refund pembatalan Belanjaku #" + orderId, sumber: "BELANJAKU_REFUND", transactionId: orderId, waktu: now });
+    }
+    tx.update(orderRef, { status: "CANCELLED", paymentStatus: userRef ? "REFUNDED" : order.paymentStatus, refunded: Boolean(userRef), cancelledBy: request.auth.uid, cancelledAt: now, cancelReason: normalizeString(data.reason).slice(0, 300) || "Dibatalkan admin", updatedAt: now });
+    return { success: true, status: "CANCELLED", refunded: Boolean(userRef) };
+  });
+});
+
+exports.belanjakuCourierUpdateOrder = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "Silakan login.");
+  const uid = request.auth.uid, data = request.data || {}, orderId = normalizeString(data.orderId), action = normalizeString(data.action).toUpperCase();
+  if (!orderId || !["ACCEPT", "PICK_UP", "START_DELIVERY", "DELIVER"].includes(action)) throw new HttpsError("invalid-argument", "Tindakan kurir tidak valid.");
+  const orderRef = db.collection("belanjaku_orders").doc(orderId), userRef = db.collection("users").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const us = await tx.get(userRef), os = await tx.get(orderRef);
+    if (!us.exists || (us.data() || {}).role !== "courier") throw new HttpsError("permission-denied", "Fitur ini hanya untuk akun kurir.");
+    if (!os.exists) throw new HttpsError("not-found", "Pesanan tidak ditemukan.");
+    const order = os.data() || {};
+    if (order.courierUid !== uid) throw new HttpsError("permission-denied", "Pesanan ini tidak ditugaskan kepada akun Anda.");
+    const map = { ACCEPT: ["ASSIGNED", "ACCEPTED"], PICK_UP: ["ACCEPTED", "PICKED_UP"], START_DELIVERY: ["PICKED_UP", "ON_DELIVERY"], DELIVER: ["ON_DELIVERY", "DELIVERED"] }, pair = map[action];
+    if (order.status === pair[1]) return { success: true, reused: true, status: pair[1] };
+    if (order.status !== pair[0]) throw new HttpsError("failed-precondition", "Urutan status tidak valid; muat ulang pesanan.");
+    const now = admin.firestore.FieldValue.serverTimestamp(), update = { status: pair[1], updatedAt: now };
+    if (action === "DELIVER") {
+      if (order.paymentMethod === "COD") {
+        if (data.codCollected !== true) throw new HttpsError("failed-precondition", "Konfirmasi uang COD wajib sebelum menyelesaikan pengantaran.");
+        update.paymentStatus = "PAID"; update.codCollectedBy = uid; update.codCollectedAt = now;
+      }
+      update.deliveredAt = now;
+    }
+    tx.update(orderRef, update);
+    return { success: true, status: pair[1], paymentStatus: action === "DELIVER" && order.paymentMethod === "COD" ? "PAID" : order.paymentStatus };
+  });
+});
+exports.belanjakuSetRelease = onCall({ region: REGION }, async (request) => {
   if (!request.auth || !(await checkAdmin(request.auth.uid))) {
     throw new HttpsError("permission-denied", "Hanya admin yang dapat merilis Belanjaku.");
   }
