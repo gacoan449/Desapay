@@ -89,6 +89,48 @@ service cloud.firestore {
     match /devices/{deviceId} { allow read: if isAdmin(); allow create, update, delete: if isAdmin(); }
     match /bank_mutations/{mutationId} { allow read: if isAdmin(); allow create, update, delete: if isAdmin(); }
     match /announcements/{announcementId} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    // Belanjaku: katalog produk fisik terpisah dari produk PPOB.
+    match /belanjaku_products/{productId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /belanjaku_delivery_areas/{areaId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /belanjaku_product_interests/{interestId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.productId is string
+        && request.resource.data.areaId is string
+        && request.resource.data.areaName is string
+        && request.resource.data.keys().hasOnly([
+          "uid", "productId", "productName", "areaId", "areaName", "createdAt"
+        ]);
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.productId == resource.data.productId
+        && request.resource.data.keys().hasOnly([
+          "uid", "productId", "productName", "areaId", "areaName", "createdAt"
+        ]);
+      allow delete: if isAdmin();
+    }
+
+    match /belanjaku_orders/{orderId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      // Pembuatan/perubahan pesanan hanya setelah backend validasi tersedia.
+      allow create, update, delete: if false;
+    }
+
+    match /belanjaku_analytics/{summaryId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} { allow read, write: if false; }
   }
 }
