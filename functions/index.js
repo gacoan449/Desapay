@@ -5006,6 +5006,9 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
   if (!/^[A-Fa-f0-9]{32}$/.test(requestId)) {
     throw new HttpsError("invalid-argument", "ID permintaan checkout tidak valid.");
   }
+  const requestFingerprint = crypto.createHash("sha256").update(JSON.stringify({
+    paymentMethod, areaId, address, phone, items: cleanItems,
+  }), "utf8").digest("hex");
   const orderId = crypto.createHash("sha256").update(uid + ":" + requestId, "utf8").digest("hex");
   const orderRef = db.collection("belanjaku_orders").doc(orderId);
   const ledgerRef = db.collection("balance_ledger").doc();
@@ -5015,8 +5018,9 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
     const existingOrderSnap = await tx.get(orderRef);
     if (existingOrderSnap.exists) {
       const existingOrder = existingOrderSnap.data() || {};
-      if (existingOrder.uid !== uid || existingOrder.requestId !== requestId) {
-        throw new HttpsError("already-exists", "ID checkout sudah digunakan untuk permintaan lain.");
+      if (existingOrder.uid !== uid || existingOrder.requestId !== requestId ||
+          existingOrder.requestFingerprint !== requestFingerprint) {
+        throw new HttpsError("already-exists", "ID checkout sudah digunakan untuk data pesanan berbeda. Mulai checkout baru.");
       }
       return {
         success: true,
@@ -5041,6 +5045,7 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
     const userSnap = await tx.get(userRef);
     if (!userSnap.exists) throw new HttpsError("not-found", "Akun pengguna tidak ditemukan.");
     const user = userSnap.data() || {};
+    if (user.role !== "user") throw new HttpsError("permission-denied", "Hanya akun pembeli yang dapat membuat pesanan.");
     if (isAccountDisabled(user)) throw new HttpsError("permission-denied", "Akun tidak aktif.");
     const productRefs = cleanItems.map(i => db.collection("belanjaku_products").doc(i.productId));
     const productSnaps = [];
@@ -5054,7 +5059,7 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
       const p = snap.data() || {};
       const price = toSafeInteger(p.price);
       const stock = toSafeInteger(p.stock);
-      if (p.isActive !== true || p.status !== "available" || price === null || price < 0 || stock === null || stock < requested.quantity) {
+      if (p.isActive !== true || p.status !== "available" || price === null || price <= 0 || stock === null || stock < requested.quantity) {
         throw new HttpsError("failed-precondition", "Produk tidak aktif atau stok tidak mencukupi: " + (p.name || requested.productId));
       }
       const lineTotal = price * requested.quantity;
@@ -5082,7 +5087,7 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
       tx.create(mutationRef, { uid, tipe: "KELUAR", nominal: grandTotal, saldoAwal: balanceBefore, saldoAkhir: balanceAfter, keterangan: "Pembayaran Belanjaku #" + orderRef.id, sumber: "BELANJAKU_ORDER", transactionId: orderRef.id, waktu: now });
     }
     tx.create(orderRef, {
-      uid, requestId, items: orderItems, itemCount: orderItems.reduce((n, item) => n + item.quantity, 0),
+      uid, requestId, requestFingerprint, items: orderItems, itemCount: orderItems.reduce((n, item) => n + item.quantity, 0),
       subtotal: total, shippingFee, total: grandTotal, paymentMethod,
       paymentStatus: paymentMethod === "BALANCE" ? "PAID" : "UNPAID",
       status: "NEW", areaId, areaName: String(areaSnap.data().name || ""),
