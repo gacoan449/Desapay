@@ -4,17 +4,46 @@
       "collectionGroup": "notifikasi",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "uid", "order": "ASCENDING"},
-        {"fieldPath": "tipe", "order": "ASCENDING"},
-        {"fieldPath": "timestamp", "order": "DESCENDING"}
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipe",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "mutasi_saldo",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "uid", "order": "ASCENDING"},
-        {"fieldPath": "waktu", "order": "DESCENDING"}
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "waktu",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "belanjaku_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "courierUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
