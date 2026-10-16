@@ -5191,6 +5191,37 @@ exports.belanjakuCourierUpdateOrder = onCall({ region: REGION }, async (request)
     return { success: true, status: pair[1], paymentStatus: action === "DELIVER" && order.paymentMethod === "COD" ? "PAID" : order.paymentStatus };
   });
 });
+// Admin-only role provisioning. Public registration can only create role=user.
+exports.belanjakuAdminSetCourierRole = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || !(await checkAdmin(request.auth.uid))) {
+    throw new HttpsError("permission-denied", "Hanya admin yang dapat mengatur role kurir.");
+  }
+  const data = request.data || {};
+  const uid = normalizeString(data.uid);
+  const makeCourier = data.makeCourier === true;
+  const areaIds = Array.isArray(data.serviceAreaIds)
+    ? [...new Set(data.serviceAreaIds.filter(v => typeof v === "string").map(v => v.trim()).filter(Boolean))].slice(0, 50)
+    : [];
+  if (!uid || uid === request.auth.uid) {
+    throw new HttpsError("invalid-argument", "UID target tidak valid.");
+  }
+  const userRef = db.collection("users").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) throw new HttpsError("not-found", "Akun pengguna tidak ditemukan.");
+    const user = snap.data() || {};
+    if (user.role === "admin") throw new HttpsError("failed-precondition", "Role admin tidak dapat diubah melalui fungsi ini.");
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    if (makeCourier) {
+      if (!areaIds.length) throw new HttpsError("invalid-argument", "Pilih minimal satu wilayah layanan untuk kurir.");
+      tx.update(userRef, { role: "courier", serviceAreaIds: areaIds, courierApproved: true, courierApprovedBy: request.auth.uid, courierApprovedAt: now, isActive: true, updatedAt: now });
+      return { success: true, uid, role: "courier", serviceAreaIds: areaIds };
+    }
+    tx.update(userRef, { role: "user", serviceAreaIds: admin.firestore.FieldValue.delete(), courierApproved: false, courierRevokedBy: request.auth.uid, courierRevokedAt: now, updatedAt: now });
+    return { success: true, uid, role: "user" };
+  });
+});
+
 exports.belanjakuSetRelease = onCall({ region: REGION }, async (request) => {
   if (!request.auth || !(await checkAdmin(request.auth.uid))) {
     throw new HttpsError("permission-denied", "Hanya admin yang dapat merilis Belanjaku.");
