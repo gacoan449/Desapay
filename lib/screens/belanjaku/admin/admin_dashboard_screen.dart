@@ -1,7 +1,100 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import 'admin_orders_screen.dart';
 import 'admin_products_screen.dart';
 import 'admin_regions_screen.dart';
-class BelanjakuAdminDashboardScreen extends StatelessWidget { const BelanjakuAdminDashboardScreen({super.key}); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Admin Belanjaku'), actions: [\n      PopupMenuButton<String>(onSelected: (value) {\n        final Widget page = value == 'products' ? const BelanjakuAdminProductsScreen() : value == 'regions' ? const BelanjakuAdminRegionsScreen() : const BelanjakuAdminOrdersScreen();\n        Navigator.push(context, MaterialPageRoute(builder: (_) => page));\n      }, itemBuilder: (_) => const [PopupMenuItem(value: 'products', child: Text('Kelola Produk')), PopupMenuItem(value: 'regions', child: Text('Wilayah Layanan')), PopupMenuItem(value: 'orders', child: Text('Pesanan'))]),\n    ]), body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: FirebaseFirestore.instance.collection('belanjaku_product_interests').snapshots(), builder: (context, snap) { if (snap.hasError) return const Center(child: Text('Statistik minat tidak dapat dimuat. Pastikan akun admin memiliki akses.')); if (!snap.hasData) return const Center(child: CircularProgressIndicator()); final docs = snap.data!.docs; final users = docs.map((d) => d.data()['uid']).whereType<String>().toSet().length; final products = docs.map((d) => d.data()['productId']).whereType<String>().toSet().length; final areas = <String, int>{}; for (final doc in docs) { final name = doc.data()['areaName'] as String? ?? 'Belum diketahui'; areas[name] = (areas[name] ?? 0) + 1; } final entries = areas.entries.toList()..sort((a, b) => b.value.compareTo(a.value)); return ListView(padding: const EdgeInsets.all(16), children: [const Text('Ringkasan minat', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)), const SizedBox(height: 12), Row(children: [Expanded(child: _Metric(label: 'Catatan minat', value: docs.length.toString(), icon: Icons.favorite_outline)), const SizedBox(width: 10), Expanded(child: _Metric(label: 'Pengguna unik', value: users.toString(), icon: Icons.people_outline))]), const SizedBox(height: 10), _Metric(label: 'Produk diminati', value: products.toString(), icon: Icons.inventory_2_outlined), const SizedBox(height: 20), const Text('Minat berdasarkan wilayah', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)), if (entries.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Belum ada minat tercatat.')), ...entries.map((e) => ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.location_on_outlined, color: Color(0xFF0866D9)), title: Text(e.key), trailing: Text(e.value.toString(), style: const TextStyle(fontWeight: FontWeight.w800)))), const SizedBox(height: 12), const Text('Data ini menghitung catatan minat, bukan jumlah klik atau penjualan. Statistik pengunjung unik dan agregasi server belum diaktifkan.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B)))]); })); }
-class _Metric extends StatelessWidget { const _Metric({required this.label, required this.value, required this.icon}); final String label, value; final IconData icon; @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE6EDF5))), child: Row(children: [Icon(icon, color: const Color(0xFF0866D9), size: 26), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)), Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)))]))])); }
+
+class BelanjakuAdminDashboardScreen extends StatelessWidget {
+  const BelanjakuAdminDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final db = FirebaseFirestore.instance;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Admin Belanjaku'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              final Widget page = value == 'products'
+                  ? const BelanjakuAdminProductsScreen()
+                  : value == 'regions'
+                      ? const BelanjakuAdminRegionsScreen()
+                      : const BelanjakuAdminOrdersScreen();
+              Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'products', child: Text('Kelola Produk')),
+              PopupMenuItem(value: 'regions', child: Text('Wilayah Layanan')),
+              PopupMenuItem(value: 'orders', child: Text('Pesanan')),
+            ],
+          ),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: db.collection('belanjaku_product_interests').snapshots(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return const Center(child: Text('Statistik minat tidak dapat dimuat. Pastikan akun admin memiliki akses.'));
+          }
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final docs = snap.data!.docs;
+          final users = docs.map((d) => d.data()['uid']).whereType<String>().toSet().length;
+          final products = docs.map((d) => d.data()['productId']).whereType<String>().toSet().length;
+          final areas = <String, int>{};
+          for (final doc in docs) {
+            final name = doc.data()['areaName'] as String? ?? 'Belum diketahui';
+            areas[name] = (areas[name] ?? 0) + 1;
+          }
+          final entries = areas.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text('Ringkasan minat', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: _Metric(label: 'Catatan minat', value: docs.length.toString(), icon: Icons.favorite_outline)),
+                const SizedBox(width: 10),
+                Expanded(child: _Metric(label: 'Pengguna unik', value: users.toString(), icon: Icons.people_outline)),
+              ]),
+              const SizedBox(height: 10),
+              _Metric(label: 'Produk diminati', value: products.toString(), icon: Icons.inventory_2_outlined),
+              const SizedBox(height: 20),
+              const Text('Minat berdasarkan wilayah', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              if (entries.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Belum ada minat tercatat.')),
+              ...entries.map((e) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.location_on_outlined, color: Color(0xFF0866D9)),
+                title: Text(e.key),
+                trailing: Text(e.value.toString(), style: const TextStyle(fontWeight: FontWeight.w800)),
+              )),
+              const SizedBox(height: 12),
+              const Text('Data ini menghitung catatan minat, bukan klik katalog. Analitik klik dan pengunjung unik perlu event tracking terpisah.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.label, required this.value, required this.icon});
+  final String label;
+  final String value;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE6EDF5))),
+    child: Row(children: [
+      Icon(icon, color: const Color(0xFF0866D9), size: 26),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+      ])),
+    ]),
+  );
+}
