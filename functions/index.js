@@ -4965,3 +4965,123 @@ exports.adminReviewWithdrawal = onCall(
   }
 );
 
+
+
+/* ------------------------------------------------------------------
+ * BELANJAKU CHECKOUT — server-authoritative price/stock/balance.
+ * Release gate: settings/belanjaku.releaseEnabled must be true.
+ * ------------------------------------------------------------------ */
+exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError("unauthenticated", "Silakan login terlebih dahulu.");
+  }
+  const uid = request.auth.uid;
+  const data = request.data || {};
+  const paymentMethod = normalizeString(data.paymentMethod).toUpperCase();
+  const areaId = normalizeString(data.areaId);
+  const address = normalizeString(data.address);
+  const phone = normalizeString(data.phone);
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (!["COD", "BALANCE"].includes(paymentMethod)) {
+    throw new HttpsError("invalid-argument", "Metode pembayaran tidak didukung.");
+  }
+  if (!areaId || !address || address.length < 8 || !phone || items.length < 1 || items.length > 30) {
+    throw new HttpsError("invalid-argument", "Wilayah, alamat lengkap, nomor HP, dan barang wajib diisi.");
+  }
+  const cleanItems = [];
+  const seen = new Set();
+  for (const item of items) {
+    const productId = normalizeString(item && item.productId);
+    const quantity = toSafeInteger(item && item.quantity);
+    if (!productId || seen.has(productId) || quantity === null || quantity < 1 || quantity > 100) {
+      throw new HttpsError("invalid-argument", "Daftar barang tidak valid.");
+    }
+    seen.add(productId);
+    cleanItems.push({ productId, quantity });
+  }
+  const userRef = db.collection("users").doc(uid);
+  const settingsRef = db.collection("settings").doc("belanjaku");
+  const areaRef = db.collection("belanjaku_delivery_areas").doc(areaId);
+  const orderRef = db.collection("belanjaku_orders").doc();
+  const ledgerRef = db.collection("balance_ledger").doc();
+  const mutationRef = db.collection("mutasi_saldo").doc();
+  return db.runTransaction(async (tx) => {
+    const settingsSnap = await tx.get(settingsRef);
+    const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+    if (settings.releaseEnabled !== true) {
+      throw new HttpsError("failed-precondition", "Belanjaku belum dirilis oleh admin.");
+    }
+    const areaSnap = await tx.get(areaRef);
+    if (!areaSnap.exists || areaSnap.data().isActive !== true) {
+      throw new HttpsError("failed-precondition", "Wilayah pengiriman belum tersedia.");
+    }
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) throw new HttpsError("not-found", "Akun pengguna tidak ditemukan.");
+    const user = userSnap.data() || {};
+    if (isAccountDisabled(user)) throw new HttpsError("permission-denied", "Akun tidak aktif.");
+    const productRefs = cleanItems.map(i => db.collection("belanjaku_products").doc(i.productId));
+    const productSnaps = [];
+    for (const ref of productRefs) productSnaps.push(await tx.get(ref));
+    let total = 0;
+    const orderItems = [];
+    for (let i = 0; i < cleanItems.length; i++) {
+      const requested = cleanItems[i];
+      const snap = productSnaps[i];
+      if (!snap.exists) throw new HttpsError("not-found", "Salah satu produk tidak ditemukan.");
+      const p = snap.data() || {};
+      const price = toSafeInteger(p.price);
+      const stock = toSafeInteger(p.stock);
+      if (p.isActive !== true || p.status !== "available" || price === null || price < 0 || stock === null || stock < requested.quantity) {
+        throw new HttpsError("failed-precondition", "Produk tidak aktif atau stok tidak mencukupi: " + (p.name || requested.productId));
+      }
+      const lineTotal = price * requested.quantity;
+      if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(total + lineTotal)) {
+        throw new HttpsError("failed-precondition", "Total pesanan terlalu besar.");
+      }
+      total += lineTotal;
+      orderItems.push({ productId: snap.id, name: String(p.name || ""), unit: String(p.unit || "pcs"), price, quantity: requested.quantity, lineTotal });
+      tx.update(productRefs[i], { stock: stock - requested.quantity, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...(stock === requested.quantity ? { status: "out_of_stock" } : {}) });
+    }
+    const shippingFee = Math.max(0, toSafeInteger(settings.shippingFee) ?? 0);
+    const grandTotal = total + shippingFee;
+    if (!Number.isSafeInteger(grandTotal)) throw new HttpsError("failed-precondition", "Total pesanan tidak valid.");
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    let balanceBefore = null;
+    let balanceAfter = null;
+    if (paymentMethod === "BALANCE") {
+      balanceBefore = toSafeInteger(user.balance);
+      if (balanceBefore === null || balanceBefore < grandTotal) {
+        throw new HttpsError("failed-precondition", "Saldo DesaPay tidak mencukupi.");
+      }
+      balanceAfter = balanceBefore - grandTotal;
+      tx.update(userRef, { balance: balanceAfter, updatedAt: now });
+      tx.create(ledgerRef, { uid, type: "DEBIT", amount: grandTotal, before: balanceBefore, after: balanceAfter, reason: "Pembayaran Belanjaku", source: "BELANJAKU_ORDER", transactionId: orderRef.id, createdAt: now });
+      tx.create(mutationRef, { uid, tipe: "KELUAR", nominal: grandTotal, saldoAwal: balanceBefore, saldoAkhir: balanceAfter, keterangan: "Pembayaran Belanjaku #" + orderRef.id, sumber: "BELANJAKU_ORDER", transactionId: orderRef.id, waktu: now });
+    }
+    tx.create(orderRef, {
+      uid, items: orderItems, itemCount: orderItems.reduce((n, item) => n + item.quantity, 0),
+      subtotal: total, shippingFee, total: grandTotal, paymentMethod,
+      paymentStatus: paymentMethod === "BALANCE" ? "PAID" : "UNPAID",
+      status: "NEW", areaId, areaName: String(areaSnap.data().name || ""),
+      subdistrict: String(areaSnap.data().subdistrict || ""), address, phone,
+      customerName: String(user.nama || user.name || user.displayName || ""),
+      createdAt: now, updatedAt: now,
+      ...(paymentMethod === "BALANCE" ? { balanceBefore, balanceAfter } : {}),
+    });
+    return { success: true, orderId: orderRef.id, subtotal: total, shippingFee, total: grandTotal, paymentStatus: paymentMethod === "BALANCE" ? "PAID" : "UNPAID", status: "NEW" };
+  });
+});
+
+exports.belanjakuSetRelease = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || !(await checkAdmin(request.auth.uid))) {
+    throw new HttpsError("permission-denied", "Hanya admin yang dapat merilis Belanjaku.");
+  }
+  const enabled = request.data && request.data.enabled;
+  if (typeof enabled !== "boolean") throw new HttpsError("invalid-argument", "Status rilis tidak valid.");
+  await db.collection("settings").doc("belanjaku").set({
+    releaseEnabled: enabled,
+    releaseUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    releaseUpdatedBy: request.auth.uid,
+  }, { merge: true });
+  return { success: true, releaseEnabled: enabled };
+});
