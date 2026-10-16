@@ -361,6 +361,26 @@ class _DesaPayHomeState
           snapshot.data() ??
               <String, dynamic>{};
 
+      // Never route disabled/suspended accounts into any role home.
+      final String accountStatus =
+          (data['status'] ?? data['accountStatus'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+      if (data['disabled'] == true ||
+          data['isDisabled'] == true ||
+          data['isBlocked'] == true ||
+          data['isActive'] == false ||
+          const <String>{
+            'disabled', 'inactive', 'blocked', 'banned', 'suspended',
+            'nonaktif', 'non-aktif', 'tidak aktif', 'diblokir'
+          }.contains(accountStatus)) {
+        await FirebaseAuth.instance.signOut();
+        return const _AccountDestination.error(
+          'Akun dinonaktifkan. Hubungi administrator DesaPay.',
+        );
+      }
+
       // -------------------------------------------------------
       // ROLE
       // -------------------------------------------------------
