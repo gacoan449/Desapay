@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class BelanjakuAdminProductFormScreen extends StatefulWidget {
   const BelanjakuAdminProductFormScreen({super.key, this.productId, this.initialData});
@@ -9,16 +12,10 @@ class BelanjakuAdminProductFormScreen extends StatefulWidget {
 }
 class _BelanjakuAdminProductFormScreenState extends State<BelanjakuAdminProductFormScreen> {
   final formKey = GlobalKey<FormState>();
-  late final TextEditingController name;
-  late final TextEditingController description;
-  late final TextEditingController imageUrl;
-  late final TextEditingController price;
-  late final TextEditingController unit;
-  late final TextEditingController stock;
-  String category = 'Sayuran & Buah';
-  String status = 'coming_soon';
-  bool active = true;
-  bool saving = false;
+  late final TextEditingController name, description, imageUrl, price, unit, stock;
+  String category = 'Sayuran & Buah', status = 'coming_soon';
+  bool active = true, saving = false, uploading = false;
+  File? selectedImage;
   static const categories = ['Sayuran & Buah','Frozen Food','Sembako','Daging & Ayam','Minuman','Snack','Perlengkapan Rumah Tangga','Lainnya'];
   @override void initState() {
     super.initState();
@@ -34,12 +31,30 @@ class _BelanjakuAdminProductFormScreenState extends State<BelanjakuAdminProductF
     active = d['isActive'] != false;
   }
   @override void dispose() { name.dispose(); description.dispose(); imageUrl.dispose(); price.dispose(); unit.dispose(); stock.dispose(); super.dispose(); }
+
+  Future<void> chooseImage() async {
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1600);
+      if (picked != null && mounted) setState(() => selectedImage = File(picked.path));
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Foto tidak dapat dipilih: $e'))); }
+  }
+  Future<void> uploadImage(String productId) async {
+    if (selectedImage == null) return;
+    setState(() => uploading = true);
+    try {
+      final ref = FirebaseStorage.instance.ref().child('belanjaku/products/$productId/main.jpg');
+      final task = await ref.putFile(selectedImage!, SettableMetadata(contentType: 'image/jpeg'));
+      imageUrl.text = await task.ref.getDownloadURL();
+    } finally { if (mounted) setState(() => uploading = false); }
+  }
   Future<void> save() async {
     if (!formKey.currentState!.validate()) return;
     setState(() => saving = true);
     try {
-      final p = int.parse(price.text.trim()); final s = int.parse(stock.text.trim());
-      await FirebaseFirestore.instance.collection('belanjaku_products').doc(widget.productId).set({
+      final p = int.parse(price.text.trim()), s = int.parse(stock.text.trim());
+      final doc = widget.productId == null ? FirebaseFirestore.instance.collection('belanjaku_products').doc() : FirebaseFirestore.instance.collection('belanjaku_products').doc(widget.productId);
+      if (selectedImage != null) await uploadImage(doc.id);
+      await doc.set({
         'name': name.text.trim(), 'description': description.text.trim(), 'imageUrl': imageUrl.text.trim(),
         'price': p, 'unit': unit.text.trim(), 'stock': s, 'category': category,
         'status': status == 'available' && s == 0 ? 'out_of_stock' : status,
@@ -60,13 +75,17 @@ class _BelanjakuAdminProductFormScreenState extends State<BelanjakuAdminProductF
       const SizedBox(height: 12),
       TextFormField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'Deskripsi')),
       const SizedBox(height: 12),
-      TextFormField(controller: imageUrl, decoration: const InputDecoration(labelText: 'URL foto (opsional)')),
+      if (selectedImage != null) ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(selectedImage!, height: 180, fit: BoxFit.cover))
+      else if (imageUrl.text.isNotEmpty) ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(imageUrl.text, height: 180, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(height: 80, child: Icon(Icons.broken_image_outlined))),
+      OutlinedButton.icon(onPressed: uploading ? null : chooseImage, icon: const Icon(Icons.photo_library_outlined), label: Text(uploading ? 'Mengunggah foto...' : 'Pilih / Ganti Foto Produk')),
+      const SizedBox(height: 8),
+      TextFormField(controller: imageUrl, decoration: const InputDecoration(labelText: 'URL foto (opsional, jika tidak upload)')),
       const SizedBox(height: 12),
-      TextFormField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Harga (rupiah)'), validator: (v) => int.tryParse(v ?? '') == null || int.parse(v!) < 0 ? 'Masukkan harga yang valid' : null),
+      TextFormField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Harga (rupiah)'), validator: (v) { final n = int.tryParse(v ?? ''); return n == null || n < 0 ? 'Masukkan harga valid' : null; }),
       const SizedBox(height: 12),
       TextFormField(controller: unit, decoration: const InputDecoration(labelText: 'Satuan (ikat/kg/pack)'), validator: (v) => v == null || v.trim().isEmpty ? 'Satuan wajib diisi' : null),
       const SizedBox(height: 12),
-      TextFormField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stok'), validator: (v) => int.tryParse(v ?? '') == null || int.parse(v!) < 0 ? 'Stok harus 0 atau lebih' : null),
+      TextFormField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stok'), validator: (v) { final n = int.tryParse(v ?? ''); return n == null || n < 0 ? 'Stok harus 0 atau lebih' : null; }),
       const SizedBox(height: 12),
       DropdownButtonFormField<String>(value: status, decoration: const InputDecoration(labelText: 'Status'), items: const [
         DropdownMenuItem(value: 'coming_soon', child: Text('Segera Hadir')),
@@ -75,7 +94,7 @@ class _BelanjakuAdminProductFormScreenState extends State<BelanjakuAdminProductF
       ], onChanged: (v) { if (v != null) setState(() => status = v); }),
       SwitchListTile(contentPadding: EdgeInsets.zero, value: active, onChanged: (v) => setState(() => active = v), title: const Text('Tampilkan di katalog')),
       const SizedBox(height: 16),
-      ElevatedButton(onPressed: saving ? null : save, child: Text(saving ? 'Menyimpan...' : 'Simpan Produk')),
+      ElevatedButton(onPressed: saving || uploading ? null : save, child: Text(saving ? 'Menyimpan...' : 'Simpan Produk')),
     ])),
   );
 }
