@@ -5002,10 +5002,33 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
   const userRef = db.collection("users").doc(uid);
   const settingsRef = db.collection("settings").doc("belanjaku");
   const areaRef = db.collection("belanjaku_delivery_areas").doc(areaId);
-  const orderRef = db.collection("belanjaku_orders").doc();
+  const requestId = normalizeString(data.requestId);
+  if (!/^[A-Fa-f0-9]{32}$/.test(requestId)) {
+    throw new HttpsError("invalid-argument", "ID permintaan checkout tidak valid.");
+  }
+  const orderId = crypto.createHash("sha256").update(uid + ":" + requestId, "utf8").digest("hex");
+  const orderRef = db.collection("belanjaku_orders").doc(orderId);
   const ledgerRef = db.collection("balance_ledger").doc();
   const mutationRef = db.collection("mutasi_saldo").doc();
   return db.runTransaction(async (tx) => {
+    // Idempotency: retries after a committed request return the original order.
+    const existingOrderSnap = await tx.get(orderRef);
+    if (existingOrderSnap.exists) {
+      const existingOrder = existingOrderSnap.data() || {};
+      if (existingOrder.uid !== uid || existingOrder.requestId !== requestId) {
+        throw new HttpsError("already-exists", "ID checkout sudah digunakan untuk permintaan lain.");
+      }
+      return {
+        success: true,
+        orderId: orderRef.id,
+        subtotal: existingOrder.subtotal,
+        shippingFee: existingOrder.shippingFee,
+        total: existingOrder.total,
+        paymentStatus: existingOrder.paymentStatus,
+        status: existingOrder.status,
+        reused: true,
+      };
+    }
     const settingsSnap = await tx.get(settingsRef);
     const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
     if (settings.releaseEnabled !== true) {
@@ -5059,7 +5082,7 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
       tx.create(mutationRef, { uid, tipe: "KELUAR", nominal: grandTotal, saldoAwal: balanceBefore, saldoAkhir: balanceAfter, keterangan: "Pembayaran Belanjaku #" + orderRef.id, sumber: "BELANJAKU_ORDER", transactionId: orderRef.id, waktu: now });
     }
     tx.create(orderRef, {
-      uid, items: orderItems, itemCount: orderItems.reduce((n, item) => n + item.quantity, 0),
+      uid, requestId, items: orderItems, itemCount: orderItems.reduce((n, item) => n + item.quantity, 0),
       subtotal: total, shippingFee, total: grandTotal, paymentMethod,
       paymentStatus: paymentMethod === "BALANCE" ? "PAID" : "UNPAID",
       status: "NEW", areaId, areaName: String(areaSnap.data().name || ""),
