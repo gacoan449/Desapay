@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_orders_screen.dart';
@@ -15,6 +16,36 @@ class BelanjakuAdminDashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Admin Belanjaku'),
         actions: [
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance.collection('settings').doc('belanjaku').snapshots(),
+            builder: (context, releaseSnap) {
+              final released = releaseSnap.data?.data()?['releaseEnabled'] == true;
+              if (released) return const SizedBox.shrink();
+              return IconButton(
+                tooltip: 'Rilis Belanjaku',
+                icon: const Icon(Icons.rocket_launch_outlined),
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+                    title: const Text('Rilis Belanjaku?'),
+                    content: const Text('Pelanggan dapat mulai membuat pesanan. Pastikan katalog, wilayah, ongkir, stok, dan backend sudah diuji.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Belum')),
+                      ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Rilis sekarang')),
+                    ],
+                  ));
+                  if (confirmed != true || !context.mounted) return;
+                  try {
+                    await FirebaseFunctions.instanceFor(region: 'asia-southeast2').httpsCallable('belanjakuSetRelease').call({'enabled': true});
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Belanjaku berhasil dirilis. Tombol rilis akan disembunyikan.')));
+                  } on FirebaseFunctionsException catch (e) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Rilis gagal.')));
+                  } catch (e) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rilis gagal: $e')));
+                  }
+                },
+              );
+            },
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               final Widget page = value == 'products'
