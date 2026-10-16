@@ -1,5 +1,76 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import '../../services/belanjaku/cart_service.dart';
 import 'delivery_area_screen.dart';
-class BelanjakuCheckoutScreen extends StatefulWidget { const BelanjakuCheckoutScreen({super.key}); @override State<BelanjakuCheckoutScreen> createState() => _BelanjakuCheckoutScreenState(); }
-class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> { final cart = BelanjakuCartService.instance; Map<String, String>? area; String payment = 'COD'; String _rp(int n) => 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => m[1]! + '.'); @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Checkout')), body: ListView(padding: const EdgeInsets.all(16), children: [const Text('Wilayah Pengiriman', style: TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 8), Card(child: ListTile(leading: const Icon(Icons.location_on_outlined, color: Color(0xFF0866D9)), title: Text(area?['name'] ?? 'Pilih wilayah pengiriman'), subtitle: Text(area?['subdistrict'] ?? 'Pilih desa/kelurahan secara manual'), trailing: const Icon(Icons.chevron_right), onTap: () async { final selected = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const BelanjakuDeliveryAreaScreen())); if (selected != null && mounted) setState(() => area = selected); })), const SizedBox(height: 20), const Text('Metode Pembayaran', style: TextStyle(fontWeight: FontWeight.w800)), RadioListTile<String>(value: 'COD', groupValue: payment, onChanged: (v) => setState(() => payment = v!), title: const Text('Bayar saat barang diterima (COD)'), contentPadding: EdgeInsets.zero), const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.account_balance_wallet_outlined), title: Text('Saldo DesaPay'), subtitle: Text('Belum diaktifkan; perlu integrasi backend pembayaran terverifikasi.')), const SizedBox(height: 16), const Text('Ringkasan Belanja', style: TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 8), ...cart.items.map((i) => Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [Expanded(child: Text(i.product.name + ' × ' + i.quantity.toString())), Text(_rp(i.lineTotal))]))), const Divider(height: 24), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Subtotal'), Text(_rp(cart.total), style: const TextStyle(fontWeight: FontWeight.w800))]), const SizedBox(height: 12), const Text('Biaya kirim ditetapkan setelah wilayah dan jadwal layanan dikonfirmasi.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)), const SizedBox(height: 20), const ElevatedButton(onPressed: null, child: Text('Pemesanan belum diaktifkan')), const SizedBox(height: 8), const Text('Checkout belum mengirim atau membayar pesanan. Fitur akan diaktifkan setelah validasi stok, harga, dan backend siap.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF64748B)))])); }
+
+class BelanjakuCheckoutScreen extends StatefulWidget {
+  const BelanjakuCheckoutScreen({super.key});
+  @override State<BelanjakuCheckoutScreen> createState() => _BelanjakuCheckoutScreenState();
+}
+class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
+  final cart = BelanjakuCartService.instance;
+  final addressController = TextEditingController();
+  final phoneController = TextEditingController();
+  Map<String, String>? area;
+  String payment = 'COD';
+  bool submitting = false;
+  String rp(int n) => 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(\\d{1,3})(?=(\\d{3})+(?!\\d))'), (m) => m[1]! + '.');
+  @override void dispose() { addressController.dispose(); phoneController.dispose(); super.dispose(); }
+
+  Future<void> submitOrder() async {
+    if (area == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih wilayah pengiriman.'))); return; }
+    if (addressController.text.trim().length < 8 || phoneController.text.trim().length < 8) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Isi alamat lengkap dan nomor HP yang valid.'))); return; }
+    if (cart.items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Keranjang kosong.'))); return; }
+    setState(() => submitting = true);
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'asia-southeast2').httpsCallable('belanjakuCreateOrder');
+      final result = await callable.call(<String, dynamic>{
+        'paymentMethod': payment,
+        'areaId': area!['id'],
+        'address': addressController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'items': cart.items.map((item) => <String, dynamic>{'productId': item.product.id, 'quantity': item.quantity}).toList(),
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      cart.clear();
+      if (!mounted) return;
+      await showDialog<void>(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
+        title: const Text('Pesanan berhasil dibuat'),
+        content: Text('Nomor pesanan: ${data['orderId']}\nTotal: ${rp((data['total'] as num).toInt())}\nPembayaran: ${payment == 'COD' ? 'COD — belum dibayar' : 'Saldo DesaPay — lunas'}'),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Selesai'))],
+      ));
+      if (mounted) Navigator.pop(context, true);
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Pesanan gagal diproses.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pesanan gagal diproses: $e')));
+    } finally { if (mounted) setState(() => submitting = false); }
+  }
+
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Checkout'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0756D8), Color(0xFF0798EA)])))),
+    body: ListView(padding: const EdgeInsets.all(16), children: [
+      const Text('Wilayah Pengiriman', style: TextStyle(fontWeight: FontWeight.w800)),
+      const SizedBox(height: 8),
+      Card(child: ListTile(leading: const Icon(Icons.location_on_outlined, color: Color(0xFF0866D9)), title: Text(area?['name'] ?? 'Pilih wilayah pengiriman'), subtitle: Text(area?['subdistrict'] ?? 'Pilih desa/kelurahan secara manual'), trailing: const Icon(Icons.chevron_right), onTap: () async { final selected = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const BelanjakuDeliveryAreaScreen())); if (selected != null && mounted) setState(() => area = selected); })),
+      const SizedBox(height: 12),
+      TextField(controller: addressController, maxLines: 3, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Alamat lengkap', hintText: 'Nama jalan, nomor rumah, RT/RW, patokan')),
+      const SizedBox(height: 12),
+      TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Nomor HP penerima')),
+      const SizedBox(height: 20),
+      const Text('Metode Pembayaran', style: TextStyle(fontWeight: FontWeight.w800)),
+      RadioListTile<String>(value: 'COD', groupValue: payment, onChanged: (v) => setState(() => payment = v!), title: const Text('Bayar saat barang diterima (COD)'), contentPadding: EdgeInsets.zero),
+      RadioListTile<String>(value: 'BALANCE', groupValue: payment, onChanged: (v) => setState(() => payment = v!), title: const Text('Saldo DesaPay'), subtitle: const Text('Saldo dipotong di server hanya jika pesanan berhasil dibuat.'), contentPadding: EdgeInsets.zero),
+      const SizedBox(height: 16),
+      const Text('Ringkasan Belanja', style: TextStyle(fontWeight: FontWeight.w800)),
+      const SizedBox(height: 8),
+      ...cart.items.map((i) => Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [Expanded(child: Text('${i.product.name} × ${i.quantity}')), Text(rp(i.lineTotal))]))),
+      const Divider(height: 24),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Subtotal perkiraan'), Text(rp(cart.total), style: const TextStyle(fontWeight: FontWeight.w800))]),
+      const SizedBox(height: 8),
+      const Text('Ongkir mengikuti pengaturan admin. Harga dan stok akhir selalu diperiksa ulang di server.', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+      const SizedBox(height: 20),
+      SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: submitting ? null : submitOrder, icon: submitting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.lock_outline), label: Text(submitting ? 'Memproses pesanan...' : 'Buat Pesanan'))),
+    ]),
+  );
+}
