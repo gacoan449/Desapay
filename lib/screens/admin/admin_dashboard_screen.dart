@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../../services/firestore_service.dart';
 import '../../services/digiflazz_service.dart';
 import '../belanjaku/admin/admin_dashboard_screen.dart' as belanjaku_admin;
+import 'courier_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -2279,6 +2280,18 @@ class _AdminDashboardScreenState
                 ][menu],
               ),
               actions: [
+                IconButton(
+                  tooltip: 'Kelola Kurir',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CourierManagementScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.delivery_dining),
+                ),
                 IconButton(
                   tooltip: 'Admin Belanjaku',
                   onPressed: () {
