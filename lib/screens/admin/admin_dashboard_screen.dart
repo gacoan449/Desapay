@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../services/firestore_service.dart';
 import '../../services/digiflazz_service.dart';
+import '../belanjaku/admin/admin_dashboard_screen.dart' as belanjaku_admin;
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -2279,12 +2280,20 @@ class _AdminDashboardScreenState
               ),
               actions: [
                 IconButton(
-                  onPressed:
-                      loadAll,
-                  icon:
-                      const Icon(
-                    Icons.refresh,
-                  ),
+                  tooltip: 'Admin Belanjaku',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const belanjaku_admin.BelanjakuAdminDashboardScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.shopping_basket_outlined),
+                ),
+                IconButton(
+                  onPressed: loadAll,
+                  icon: const Icon(Icons.refresh),
                 ),
               ],
             ),
