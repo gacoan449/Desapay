@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import '../../services/belanjaku/cart_service.dart';
@@ -14,6 +15,12 @@ class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
   Map<String, String>? area;
   String payment = 'COD';
   bool submitting = false;
+  String? _requestId;
+
+  String _newRequestId() {
+    final random = Random.secure();
+    return List.generate(32, (_) => random.nextInt(16).toRadixString(16)).join();
+  }
   String rp(int n) => 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => m[1]! + '.');
   @override void dispose() { addressController.dispose(); phoneController.dispose(); super.dispose(); }
 
@@ -23,8 +30,11 @@ class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
     if (cart.items.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Keranjang kosong.'))); return; }
     setState(() => submitting = true);
     try {
+      // Reuse this key when retrying after a timeout to prevent duplicate orders/charges.
+      _requestId ??= _newRequestId();
       final callable = FirebaseFunctions.instanceFor(region: 'asia-southeast2').httpsCallable('belanjakuCreateOrder');
       final result = await callable.call(<String, dynamic>{
+        'requestId': _requestId,
         'paymentMethod': payment,
         'areaId': area!['id'],
         'address': addressController.text.trim(),
@@ -33,6 +43,7 @@ class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       cart.clear();
+      _requestId = null;
       if (!mounted) return;
       await showDialog<void>(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
         title: const Text('Pesanan berhasil dibuat'),
