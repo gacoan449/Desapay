@@ -76,7 +76,7 @@ class _BelanjakuAdminProductFormScreenState extends State<BelanjakuAdminProductF
       TextFormField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'Deskripsi')),
       const SizedBox(height: 12),
       if (selectedImage != null) ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(selectedImage!, height: 180, fit: BoxFit.cover))
-      else if (imageUrl.text.isNotEmpty) ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(imageUrl.text, height: 180, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(height: 80, child: Icon(Icons.broken_image_outlined))),
+      else if (imageUrl.text.isNotEmpty) ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(imageUrl.text, height: 180, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(height: 80, child: Icon(Icons.broken_image_outlined)))),
       OutlinedButton.icon(onPressed: uploading ? null : chooseImage, icon: const Icon(Icons.photo_library_outlined), label: Text(uploading ? 'Mengunggah foto...' : 'Pilih / Ganti Foto Produk')),
       const SizedBox(height: 8),
       TextFormField(controller: imageUrl, decoration: const InputDecoration(labelText: 'URL foto (opsional, jika tidak upload)')),
