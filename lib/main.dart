@@ -16,6 +16,7 @@ import 'screens/splash/splash_screen.dart';
 import 'screens/login/login_screen.dart';
 import 'widgets/bottom_nav.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/belanjaku/courier_home_screen.dart';
 
 
 // =====================================================================
@@ -288,6 +289,7 @@ class FirebaseErrorScreen
 // role
 //      ↓
 // admin → AdminDashboard
+// courier → BelanjakuCourierHomeScreen
 // user  → BottomNav
 //
 // Role kosong / invalid / dokumen tidak ada:
@@ -386,6 +388,10 @@ class _DesaPayHomeState
       // -------------------------------------------------------
       // USER
       // -------------------------------------------------------
+
+      if (role == 'courier') {
+        return const _AccountDestination.courier();
+      }
 
       if (role == 'user') {
         return const
@@ -604,6 +610,10 @@ class _DesaPayHomeState
             // USER
             // -------------------------------------------------
 
+            if (destination.isCourier) {
+              return const BelanjakuCourierHomeScreen();
+            }
+
             if (destination.isUser) {
               debugPrint(
                 '✅ Routing → BottomNav',
@@ -639,28 +649,39 @@ class _DesaPayHomeState
 class _AccountDestination {
   final bool isAdmin;
   final bool isUser;
+  final bool isCourier;
   final String? errorMessage;
 
   const _AccountDestination({
     this.isAdmin = false,
     this.isUser = false,
+    this.isCourier = false,
     this.errorMessage,
   });
 
   const _AccountDestination.admin()
       : isAdmin = true,
         isUser = false,
+        isCourier = false,
         errorMessage = null;
 
   const _AccountDestination.user()
       : isAdmin = false,
         isUser = true,
+        isCourier = false,
+        errorMessage = null;
+
+  const _AccountDestination.courier()
+      : isAdmin = false,
+        isUser = false,
+        isCourier = true,
         errorMessage = null;
 
   const _AccountDestination.error(
     String message,
   )   : isAdmin = false,
         isUser = false,
+        isCourier = false,
         errorMessage = message;
 }
 
