@@ -18,6 +18,7 @@ import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
 import '../notifikasi/notifikasi_screen.dart' hide CustomBounce;
 import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
 import '../ppob/semua_layanan_screen.dart' hide CustomBounce;
+import '../belanjaku/belanjaku_home_screen.dart';
 
 // ============================================================
 // WIDGET
@@ -1370,6 +1371,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding:
                             EdgeInsets.zero,
                         children: [
+                          // =================================================
+                          // BELANJAKU — KATALOG PRODUK FISIK
+                          // Modul terpisah; tidak mengubah alur transaksi PPOB.
+                          // =================================================
+                          MenuItem(
+                            icon: Icons.shopping_cart_rounded,
+                            title: 'Belanjaku',
+                            badgeColor: const Color(0xFFEAF3FF),
+                            iconColor: const Color(0xFF0866D9),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const BelanjakuHomeScreen(),
+                                ),
+                              );
+                            },
+                          ),
+
                           // =================================================
                           // 1. TELEKOMUNIKASI
                           // =================================================
