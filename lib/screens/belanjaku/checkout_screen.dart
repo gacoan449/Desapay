@@ -14,7 +14,7 @@ class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
   Map<String, String>? area;
   String payment = 'COD';
   bool submitting = false;
-  String rp(int n) => 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(\\d{1,3})(?=(\\d{3})+(?!\\d))'), (m) => m[1]! + '.');
+  String rp(int n) => 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => m[1]! + '.');
   @override void dispose() { addressController.dispose(); phoneController.dispose(); super.dispose(); }
 
   Future<void> submitOrder() async {
