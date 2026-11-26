@@ -1,0 +1,17 @@
+project_id = "sukqrxsolvukqunrurfw"
+
+[auth.third_party.firebase]
+enabled = true
+project_id = "desapay-9918f"
+
+[functions.payment-webhook]
+verify_jwt = false
+
+[functions.health]
+verify_jwt = true
+
+[functions.register-device]
+verify_jwt = true
+
+[functions.unregister-device]
+verify_jwt = true
