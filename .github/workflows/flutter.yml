@@ -88,4 +88,4 @@ jobs:
           name: flutter-app-release
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 14
