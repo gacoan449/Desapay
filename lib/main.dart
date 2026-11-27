@@ -8,7 +8,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'config/warna.dart';
 import 'firebase_options.dart';
@@ -74,12 +73,6 @@ Future<void> main() async {
   } catch (e, stackTrace) {
     firebaseError = e.toString();
 
-    try {
-      await FirebaseCrashlytics.instance.recordError(e, stackTrace, fatal: true);
-    } catch (_) {
-      // Crashlytics can be unavailable while Firebase is starting up.
-    }
-
     debugPrint(
       '❌ Firebase initialization gagal: $e',
     );
@@ -94,11 +87,7 @@ Future<void> main() async {
       await HybridBackendService.initialize();
     } catch (error, stackTrace) {
       debugPrint('Supabase/pendamping Firebase gagal diinisialisasi: $error');
-      try {
-        await FirebaseCrashlytics.instance.recordError(error, stackTrace, fatal: false);
-      } catch (_) {
-        // The app can still start with Firebase Auth if the optional backend is unavailable.
-      }
+      HybridBackendService.recordError(error, stackTrace, reason: 'Optional backend initialization failed');
     }
   }
 
