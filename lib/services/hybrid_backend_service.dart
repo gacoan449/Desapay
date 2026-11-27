@@ -22,6 +22,7 @@ class HybridBackendService {
   static StreamSubscription<User?>? _authSubscription;
   static StreamSubscription<String>? _tokenSubscription;
   static bool _initialized = false;
+  static bool _crashlyticsReady = false;
 
   static const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const _supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -57,16 +58,37 @@ class HybridBackendService {
     return client.storage.from(bucket).getPublicUrl(path);
   }
 
+  static Future<void> _initializeCrashlytics() async {
+    try {
+      final crashlytics = FirebaseCrashlytics.instance;
+      FlutterError.onError = crashlytics.recordFlutterFatalError;
+      PlatformDispatcher.instance.onError = (error, stack) {
+        crashlytics.recordError(error, stack, fatal: true);
+        return true;
+      };
+      await crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode);
+      _crashlyticsReady = true;
+    } catch (error) {
+      // Crashlytics is optional. Missing Android Crashlytics resources must
+      // never prevent Firebase Auth/Firestore or the app from starting.
+      debugPrint('Crashlytics tidak tersedia; startup tetap dilanjutkan: $error');
+    }
+  }
+
+  static void recordError(Object error, StackTrace stack, {String? reason}) {
+    if (!_crashlyticsReady) return;
+    try {
+      unawaited(FirebaseCrashlytics.instance.recordError(error, stack, reason: reason));
+    } catch (_) {
+      // Error reporting must remain best-effort.
+    }
+  }
+
   static Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
 
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
-    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(!kDebugMode);
+    await _initializeCrashlytics();
 
     if (!isConfigured) {
       debugPrint('Supabase belum dikonfigurasi; Firebase Auth tetap aktif.');
@@ -101,7 +123,7 @@ class HybridBackendService {
         body: {'token': token, 'platform': Platform.isIOS ? 'ios' : 'android'},
       );
     } catch (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, reason: 'FCM device registration failed');
+      recordError(error, stack, reason: 'FCM device registration failed');
     }
   }
 
@@ -113,7 +135,7 @@ class HybridBackendService {
       if (token == null || token.isEmpty) return;
       await Supabase.instance.client.functions.invoke('unregister-device', body: {'token': token});
     } catch (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, reason: 'FCM device unregistration failed');
+      recordError(error, stack, reason: 'FCM device unregistration failed');
     }
   }
 
