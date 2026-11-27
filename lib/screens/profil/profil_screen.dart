@@ -53,6 +53,18 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
       if (doc.exists) {
         final data = doc.data() ?? {};
+        var profileUrl = data['fotoProfil']?.toString();
+        if (profileUrl != null && profileUrl.isNotEmpty && !profileUrl.startsWith('http')) {
+          try {
+            profileUrl = await HybridBackendService.createPrivateFileUrl(
+              profileUrl,
+              bucket: 'profile-images',
+            );
+          } catch (_) {
+            profileUrl = null;
+          }
+        }
+        if (!mounted) return;
 
         setState(() {
           _nama = (data['nama'] ??
@@ -67,18 +79,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   "Belum terverifikasi")
               .toString();
 
-          final profileValue = data['fotoProfil']?.toString();
-          _fotoProfil = profileValue;
-          if (profileValue != null && profileValue.isNotEmpty && !profileValue.startsWith('http')) {
-            try {
-              _fotoProfil = await HybridBackendService.createPrivateFileUrl(
-                profileValue,
-                bucket: 'profile-images',
-              );
-            } catch (_) {
-              _fotoProfil = null;
-            }
-          }
+          _fotoProfil = profileUrl;
 
           _kycStatus =
               (data['kycStatus'] ?? "BELUM").toString().toUpperCase();
