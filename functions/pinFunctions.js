@@ -137,3 +137,18 @@ exports.pinAuthorizePurchase = onCall({region: REGION}, async (request) => {
   }});
   return {authorizationId: token};
 });
+
+exports.pinAuthorizeBelanjaku = onCall({region: REGION}, async (request) => {
+  const uid = requireAuth(request);
+  const data = request.data || {};
+  if (!validPin(data.pin)) fail("PIN harus terdiri dari 6 digit angka.");
+  const requestId = String(data.requestId || "");
+  const fingerprint = String(data.fingerprint || "");
+  if (!/^[A-Fa-f0-9]{32}$/.test(requestId) || !/^[a-f0-9]{64}$/.test(fingerprint)) {
+    fail("Data checkout tidak valid.");
+  }
+  const token = await verifyAndUpdate(uid, data.pin, {purchase: {
+    requestId, sku: "BELANJAKU_BALANCE", customerNo: fingerprint,
+  }});
+  return {authorizationId: token};
+});

@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../services/hybrid_backend_service.dart';
 
 class BelanjakuAdminProductFormScreen extends StatefulWidget {
   const BelanjakuAdminProductFormScreen({super.key, this.productId, this.initialData});
@@ -42,9 +43,13 @@ class _BelanjakuAdminProductFormScreenState extends State<BelanjakuAdminProductF
     if (selectedImage == null) return;
     setState(() => uploading = true);
     try {
-      final ref = FirebaseStorage.instance.ref().child('belanjaku/products/$productId/main.jpg');
-      final task = await ref.putFile(selectedImage!, SettableMetadata(contentType: 'image/jpeg'));
-      imageUrl.text = await task.ref.getDownloadURL();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw StateError('Sesi login berakhir.');
+      final path = '$uid/belanjaku/products/$productId/main.jpg';
+      imageUrl.text = await HybridBackendService.uploadStorageFile(
+        bucket: 'product-images', path: path, file: selectedImage!,
+        contentType: 'image/jpeg', public: true,
+      );
     } finally { if (mounted) setState(() => uploading = false); }
   }
   Future<void> save() async {

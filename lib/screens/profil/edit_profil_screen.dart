@@ -2,11 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../config/warna.dart';
 import '../../widgets/menu_item.dart';
+import '../../services/hybrid_backend_service.dart';
 
 class EditProfilScreen extends StatefulWidget {
   const EditProfilScreen({super.key});
@@ -22,7 +22,6 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
 
   bool _isLoading = false;
@@ -30,8 +29,11 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
   // Data dari Firestore
   String _kycStatus = "Belum"; // Belum, Pending, Terverifikasi, Ditolak
   String? _fotoProfilUrl;
+  String? _fotoProfilStoragePath;
   String? _fotoKtpUrl;
   String? _fotoSelfieUrl;
+  String? _fotoKtpStoragePath;
+  String? _fotoSelfieStoragePath;
 
   // File lokal yang baru dipilih pengguna (sebelum diupload)
   File? _imageProfilBaru;
@@ -61,14 +63,24 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
       if (!doc.exists || !mounted) return;
 
       final data = doc.data()!;
+      final ktpValue = data["fotoKtp"]?.toString();
+      final selfieValue = data["fotoSelfie"]?.toString();
+      final profileValue = data["fotoProfil"]?.toString();
+      final profilePreview = await _resolvePrivatePreview(profileValue, 'profile-images');
+      final ktpPreview = await _resolveKycPreview(ktpValue);
+      final selfiePreview = await _resolveKycPreview(selfieValue);
+      if (!mounted) return;
       setState(() {
         _namaController.text = data["nama"] ?? user.displayName ?? "";
         _emailController.text = data["email"] ?? user.email ?? "";
         _phoneController.text = data["phone"] ?? user.phoneNumber ?? "";
         
-        _fotoProfilUrl = data["fotoProfil"];
-        _fotoKtpUrl = data["fotoKtp"];
-        _fotoSelfieUrl = data["fotoSelfie"];
+        _fotoProfilStoragePath = _isStoragePath(profileValue) ? profileValue : null;
+        _fotoProfilUrl = profilePreview;
+        _fotoKtpStoragePath = _isStoragePath(ktpValue) ? ktpValue : null;
+        _fotoSelfieStoragePath = _isStoragePath(selfieValue) ? selfieValue : null;
+        _fotoKtpUrl = ktpPreview;
+        _fotoSelfieUrl = selfiePreview;
         _kycStatus = data["kycStatus"] ?? "Belum";
       });
     } catch (e) {
@@ -92,13 +104,29 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     }
   }
 
-  /// Fungsi untuk mengunggah gambar ke Firebase Storage dan mengembalikan URL-nya
-  Future<String?> _uploadKeStorage(File file, String path) async {
+  bool _isStoragePath(String? value) => value != null && value.isNotEmpty && !value.startsWith('http');
+
+  Future<String?> _resolveKycPreview(String? value) async {
+    return _resolvePrivatePreview(value, 'user-files');
+  }
+
+  Future<String?> _resolvePrivatePreview(String? value, String bucket) async {
+    if (!_isStoragePath(value)) return value;
     try {
-      TaskSnapshot snapshot = await _storage.ref().child(path).putFile(file);
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      debugPrint("Upload error: $e");
+      return await HybridBackendService.createPrivateFileUrl(value!, bucket: bucket);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Uploads profile photos and KYC documents into the owner's private folder.
+  Future<String?> _uploadKeStorage(File file, String bucket, String path, {required bool public}) async {
+    try {
+      return await HybridBackendService.uploadStorageFile(
+        bucket: bucket, path: path, file: file,
+        contentType: 'image/jpeg', public: public,
+      );
+    } catch (_) {
       return null;
     }
   }
@@ -118,30 +146,40 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     try {
       final User? user = _auth.currentUser;
       if (user != null) {
-        String? finalProfilUrl = _fotoProfilUrl;
-        String? finalKtpUrl = _fotoKtpUrl;
-        String? finalSelfieUrl = _fotoSelfieUrl;
+        String? finalProfilUrl = _fotoProfilStoragePath ?? _fotoProfilUrl;
+        String? finalKtpUrl = _fotoKtpStoragePath ?? _fotoKtpUrl;
+        String? finalSelfieUrl = _fotoSelfieStoragePath ?? _fotoSelfieUrl;
         
 
         // 1. Upload Foto Profil jika ada yang baru
         if (_imageProfilBaru != null) {
-          final url = await _uploadKeStorage(_imageProfilBaru!, 'profiles/${user.uid}/profil_${DateTime.now().millisecondsSinceEpoch}.jpg');
-          if (url == null) throw StateError("Gagal mengunggah foto profil.");
-          finalProfilUrl = url;
+          final path = '${user.uid}/profiles/profil_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final uploaded = await _uploadKeStorage(_imageProfilBaru!, 'profile-images', path, public: false);
+          final preview = uploaded == null ? null : await _resolvePrivatePreview(path, 'profile-images');
+          if (preview == null) throw StateError("Gagal mengunggah foto profil.");
+          finalProfilUrl = path;
+          _fotoProfilStoragePath = path;
+          _fotoProfilUrl = preview;
         }
 
         // 2. Upload KTP jika ada yang baru
         if (_imageKtpBaru != null) {
-          final url = await _uploadKeStorage(_imageKtpBaru!, 'kyc/${user.uid}/ktp_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          final path = '${user.uid}/kyc/ktp_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final url = await _uploadKeStorage(_imageKtpBaru!, 'user-files', path, public: false);
           if (url == null) throw StateError("Gagal mengunggah foto KTP.");
-          finalKtpUrl = url;
+          finalKtpUrl = path;
+          _fotoKtpStoragePath = path;
+          _fotoKtpUrl = await _resolveKycPreview(path);
         }
 
         // 3. Upload Selfie jika ada yang baru
         if (_imageSelfieBaru != null) {
-          final url = await _uploadKeStorage(_imageSelfieBaru!, 'kyc/${user.uid}/selfie_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          final path = '${user.uid}/kyc/selfie_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final url = await _uploadKeStorage(_imageSelfieBaru!, 'user-files', path, public: false);
           if (url == null) throw StateError("Gagal mengunggah foto selfie.");
-          finalSelfieUrl = url;
+          finalSelfieUrl = path;
+          _fotoSelfieStoragePath = path;
+          _fotoSelfieUrl = await _resolveKycPreview(path);
         }
 
         // 4. Simpan semua data & URL foto ke Firestore

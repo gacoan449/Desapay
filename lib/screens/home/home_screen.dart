@@ -13,7 +13,6 @@ import '../../services/saldo_service.dart';
 // SCREEN MODULER
 // ============================================================
 import '../pulsa/pulsa_screen.dart' hide CustomBounce;
-import '../pln/pln_screen.dart' hide CustomBounce;
 import '../saldo/topup_saldo_screen.dart' hide CustomBounce;
 import '../notifikasi/notifikasi_screen.dart' hide CustomBounce;
 import '../ppob/ppob_generic_screen.dart' hide CustomBounce;
@@ -1484,7 +1483,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 MaterialPageRoute(
                                   builder:
                                       (_) =>
-                                          const PlnScreen(),
+                                          const PpobGenericScreen(kategori: "PLN"),
                                 ),
                               );
                             },

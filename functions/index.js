@@ -5009,11 +5009,13 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
   const requestFingerprint = crypto.createHash("sha256").update(JSON.stringify({
     paymentMethod, areaId, address, phone, items: cleanItems,
   }), "utf8").digest("hex");
+  const pinAuthorizationId = normalizeString(data.pinAuthorizationId);
   const orderId = crypto.createHash("sha256").update(uid + ":" + requestId, "utf8").digest("hex");
   const orderRef = db.collection("belanjaku_orders").doc(orderId);
   const ledgerRef = db.collection("balance_ledger").doc();
   const mutationRef = db.collection("mutasi_saldo").doc();
   return db.runTransaction(async (tx) => {
+    let authorizationRefForConsume = null;
     // Idempotency: retries after a committed request return the original order.
     const existingOrderSnap = await tx.get(orderRef);
     if (existingOrderSnap.exists) {
@@ -5032,6 +5034,19 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
         status: existingOrder.status,
         reused: true,
       };
+    }
+    if (paymentMethod === "BALANCE") {
+      if (!/^[a-f0-9]{64}$/.test(pinAuthorizationId)) {
+        throw new HttpsError("failed-precondition", "PIN pembayaran wajib diverifikasi.");
+      }
+      authorizationRefForConsume = db.collection("pin_authorizations").doc(pinAuthorizationId);
+      const authSnap = await tx.get(authorizationRefForConsume);
+      const auth = authSnap.exists ? authSnap.data() || {} : {};
+      const expiresAt = auth.expiresAt && typeof auth.expiresAt.toMillis === "function" ? auth.expiresAt.toMillis() : 0;
+      if (auth.uid !== uid || auth.requestId !== requestId || auth.sku !== "BELANJAKU_BALANCE" ||
+          auth.customerNo !== requestFingerprint || auth.consumed === true || expiresAt < Date.now()) {
+        throw new HttpsError("permission-denied", "Otorisasi PIN tidak valid atau kedaluwarsa.");
+      }
     }
     const settingsSnap = await tx.get(settingsRef);
     const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
@@ -5069,6 +5084,9 @@ exports.belanjakuCreateOrder = onCall({ region: REGION }, async (request) => {
       total += lineTotal;
       orderItems.push({ productId: snap.id, name: String(p.name || ""), unit: String(p.unit || "pcs"), price, quantity: requested.quantity, lineTotal });
       tx.update(productRefs[i], { stock: stock - requested.quantity, updatedAt: admin.firestore.FieldValue.serverTimestamp(), ...(stock === requested.quantity ? { status: "out_of_stock" } : {}) });
+    }
+    if (authorizationRefForConsume) {
+      tx.update(authorizationRefForConsume, { consumed: true, consumedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
     const shippingFee = Math.max(0, toSafeInteger(settings.shippingFee) ?? 0);
     const grandTotal = total + shippingFee;
