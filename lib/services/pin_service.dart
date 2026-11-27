@@ -99,4 +99,23 @@ class PinService {
     }
     return data['authorizationId'] as String;
   }
+
+  Future<String> authorizeBelanjaku({
+    required String pin,
+    required String requestId,
+    required String fingerprint,
+  }) async {
+    if (_auth.currentUser == null) throw Exception('Silakan login kembali.');
+    if (!_validPin(pin)) throw Exception('PIN harus terdiri dari 6 digit angka.');
+    final result = await _functions.httpsCallable('pinAuthorizeBelanjaku').call({
+      'pin': pin,
+      'requestId': requestId,
+      'fingerprint': fingerprint,
+    });
+    final data = result.data;
+    if (data is! Map || data['authorizationId'] is! String) {
+      throw Exception('Otorisasi PIN tidak valid.');
+    }
+    return data['authorizationId'] as String;
+  }
 }

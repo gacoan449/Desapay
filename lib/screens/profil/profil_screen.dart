@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../config/warna.dart';
+import '../../services/hybrid_backend_service.dart';
 import 'edit_profil_screen.dart';
 import 'keamanan_screen.dart';
 import 'bantuan_cs_screen.dart';
@@ -66,7 +67,18 @@ class _ProfilScreenState extends State<ProfilScreen> {
                   "Belum terverifikasi")
               .toString();
 
-          _fotoProfil = data['fotoProfil']?.toString();
+          final profileValue = data['fotoProfil']?.toString();
+          _fotoProfil = profileValue;
+          if (profileValue != null && profileValue.isNotEmpty && !profileValue.startsWith('http')) {
+            try {
+              _fotoProfil = await HybridBackendService.createPrivateFileUrl(
+                profileValue,
+                bucket: 'profile-images',
+              );
+            } catch (_) {
+              _fotoProfil = null;
+            }
+          }
 
           _kycStatus =
               (data['kycStatus'] ?? "BELUM").toString().toUpperCase();
@@ -189,6 +201,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
     if (keluar != true) return;
 
+    await HybridBackendService.unregisterCurrentDevice();
     await _auth.signOut();
 
     if (!mounted) return;

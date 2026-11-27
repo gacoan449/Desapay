@@ -4,6 +4,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'hybrid_backend_service.dart';
 
 /// ===============================================================
 /// KONTRAK LAYANAN AUTENTIKASI DESAPAY
@@ -524,6 +525,7 @@ class AuthService implements IAuthService {
 
   @override
   Future<void> logout() async {
+    await HybridBackendService.unregisterCurrentDevice();
     await _auth.signOut();
   }
 

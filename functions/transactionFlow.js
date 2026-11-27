@@ -326,12 +326,52 @@ async function finalize(requestRef, status, providerData, refundReason) {
   }
 
   const finalStatus = status === "FAILED" ? "FAILED" : "SUCCESS";
+  await releaseActivePurchaseLock(current, requestRef.id);
   await writeHistory(requestRef, finalStatus, provider);
   const title = finalStatus === "SUCCESS" ? "Transaksi berhasil" : "Transaksi gagal";
   const body = finalStatus === "SUCCESS"
     ? `Transaksi ${current.productName || current.buyer_sku_code || "PPOB"} berhasil.`
     : (needsRefund ? "Transaksi gagal. Saldo dikembalikan." : "Transaksi gagal.");
   await notify(current.uid, title, body, requestRef.id, finalStatus);
+}
+
+function activePurchaseLockRef(uid, sku, customerNo) {
+  const key = crypto.createHash("sha256")
+      .update(`${uid}\n${sku}\n${customerNo}`, "utf8").digest("hex");
+  return db.collection("active_purchase_locks").doc(key);
+}
+
+async function acquireActivePurchaseLock(uid, sku, customerNo, requestId) {
+  const lockRef = activePurchaseLockRef(uid, sku, customerNo);
+  return db.runTransaction(async (tx) => {
+    const lockSnap = await tx.get(lockRef);
+    if (lockSnap.exists) {
+      const activeId = text((lockSnap.data() || {}).requestId);
+      if (activeId && activeId !== requestId) {
+        const activeRef = db.collection("transaction_requests").doc(activeId);
+        const activeSnap = await tx.get(activeRef);
+        const active = activeSnap.exists ? activeSnap.data() || {} : {};
+        const status = text(active.status).toUpperCase();
+        const terminal = status === "SUCCESS" ||
+          (status === "FAILED" && (active.balanceDebited !== true || active.balanceRefunded === true));
+        if (!terminal) return false;
+      }
+    }
+    tx.set(lockRef, {uid, sku, customerNo, requestId, updatedAt: admin.firestore.FieldValue.serverTimestamp()});
+    return true;
+  });
+}
+
+async function releaseActivePurchaseLock(data, requestId) {
+  const uid = text(data.uid);
+  const sku = text(data.buyer_sku_code || data.sku);
+  const customerNo = text(data.customerNo || data.customer_no);
+  if (!uid || !sku || !customerNo) return;
+  const lockRef = activePurchaseLockRef(uid, sku, customerNo);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(lockRef);
+    if (snap.exists && text((snap.data() || {}).requestId) === requestId) tx.delete(lockRef);
+  });
 }
 
 async function sendToDigiflazz(requestData, refId) {
@@ -385,11 +425,17 @@ async function processRequest(requestRef) {
   const data = snap.data() || {};
   if (text(data.status).toUpperCase() !== "WAITING") return;
 
-  await requestRef.update({
-    status: "PROCESSING",
-    processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  const claimed = await db.runTransaction(async (tx) => {
+    const current = await tx.get(requestRef);
+    if (!current.exists || text(current.data().status).toUpperCase() !== "WAITING") return false;
+    tx.update(requestRef, {
+      status: "PROCESSING",
+      processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
   });
+  if (!claimed) return;
 
   const uid = text(data.uid);
   const sku = text(data.buyer_sku_code || data.sku);
@@ -437,6 +483,14 @@ async function processRequest(requestRef) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     await writeHistory(requestRef, "FAILED", {status: "Gagal", rc: "PIN_REQUIRED", message: "Otorisasi PIN tidak valid."});
+    return;
+  }
+
+  const lockAcquired = await acquireActivePurchaseLock(uid, sku, customerNo, requestRef.id);
+  if (!lockAcquired) {
+    await finalize(requestRef, "FAILED", {
+      status: "Gagal", rc: "DUPLICATE_ACTIVE", message: "Transaksi dengan produk dan nomor tujuan ini masih diproses. Cek status sebelum mencoba lagi.",
+    }, "Duplikasi transaksi saat transaksi sebelumnya masih aktif");
     return;
   }
 

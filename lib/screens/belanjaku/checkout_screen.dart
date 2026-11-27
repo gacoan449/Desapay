@@ -1,7 +1,10 @@
 import 'dart:math';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import '../../services/belanjaku/cart_service.dart';
+import '../../services/pin_service.dart';
 import 'delivery_area_screen.dart';
 
 class BelanjakuCheckoutScreen extends StatefulWidget {
@@ -32,14 +35,30 @@ class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
     try {
       // Reuse this key when retrying after a timeout to prevent duplicate orders/charges.
       _requestId ??= _newRequestId();
+      final items = cart.items.map((item) => <String, dynamic>{'productId': item.product.id, 'quantity': item.quantity}).toList();
+      final areaId = area!['id']!;
+      final address = addressController.text.trim();
+      final phone = phoneController.text.trim();
+      String? pinAuthorizationId;
+      if (payment == 'BALANCE') {
+        final pin = await _askPaymentPin();
+        if (pin == null) return;
+        final fingerprint = sha256.convert(utf8.encode(jsonEncode(<String, dynamic>{
+          'paymentMethod': payment, 'areaId': areaId, 'address': address, 'phone': phone, 'items': items,
+        }))).toString();
+        pinAuthorizationId = await PinService().authorizeBelanjaku(
+          pin: pin, requestId: _requestId!, fingerprint: fingerprint,
+        );
+      }
       final callable = FirebaseFunctions.instanceFor(region: 'asia-southeast2').httpsCallable('belanjakuCreateOrder');
       final result = await callable.call(<String, dynamic>{
         'requestId': _requestId,
         'paymentMethod': payment,
-        'areaId': area!['id'],
-        'address': addressController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'items': cart.items.map((item) => <String, dynamic>{'productId': item.product.id, 'quantity': item.quantity}).toList(),
+        'areaId': areaId,
+        'address': address,
+        'phone': phone,
+        'items': items,
+        if (pinAuthorizationId != null) 'pinAuthorizationId': pinAuthorizationId,
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       cart.clear();
@@ -53,9 +72,23 @@ class _BelanjakuCheckoutScreenState extends State<BelanjakuCheckoutScreen> {
       if (mounted) Navigator.pop(context, true);
     } on FirebaseFunctionsException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Pesanan gagal diproses.')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pesanan gagal diproses: $e')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pesanan gagal diproses. Coba lagi.')));
     } finally { if (mounted) setState(() => submitting = false); }
+  }
+
+  Future<String?> _askPaymentPin() async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(context: context, barrierDismissible: false, builder: (dialogContext) => AlertDialog(
+        title: const Text('PIN Pembayaran'),
+        content: TextField(controller: controller, autofocus: true, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Masukkan PIN 6 digit', counterText: '')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text), child: const Text('Lanjutkan')),
+        ],
+      ));
+    } finally { controller.dispose(); }
   }
 
   @override Widget build(BuildContext context) => Scaffold(

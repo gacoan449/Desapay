@@ -685,10 +685,6 @@ class _PulsaScreenState extends State<PulsaScreen> {
 
       if (!mounted) return;
 
-      setState(() {
-        _sedangTransaksi = false;
-      });
-
       _tampilkanDialogMenunggu(
         transaksiRef.id,
         produk,
@@ -751,15 +747,14 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     .toString()
                     .toUpperCase();
 
-            final sn =
-                data['sn']?.toString() ?? '';
+            final sn = (data['providerSn'] ?? data['sn'])?.toString() ?? '';
 
-            final message =
-                data['message']?.toString() ?? '';
+            final message = (data['providerMessage'] ?? data['failureReason'] ?? data['message'])?.toString() ?? '';
 
             if (status == 'WAITING' ||
                 status == 'PROCESSING' ||
-                status == 'PENDING') {
+                status == 'PENDING' ||
+                status == 'REFUND_PENDING') {
               return const AlertDialog(
                 title:
                     Text("Transaksi Diproses"),
@@ -823,6 +818,8 @@ class _PulsaScreenState extends State<PulsaScreen> {
                         dialogContext,
                       );
 
+                      if (mounted) setState(() => _sedangTransaksi = false);
+
                       nomorController.clear();
 
                       setState(() {
@@ -866,6 +863,7 @@ class _PulsaScreenState extends State<PulsaScreen> {
                     Navigator.pop(
                       dialogContext,
                     );
+                  if (mounted) setState(() => _sedangTransaksi = false);
                   },
                   child:
                       const Text("Tutup"),

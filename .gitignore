@@ -2,6 +2,9 @@
 .env
 .env.production
 .env.development
+.env.supabase
+.env.supabase.*
+service-account*.json
 
 # Berkas bawaan Flutter & Dart yang tidak perlu diunggah ke GitHub
 .dart_tool/

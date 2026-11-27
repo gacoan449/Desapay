@@ -11,10 +11,12 @@ import '../../services/pin_service.dart';
 
 class PpobGenericScreen extends StatefulWidget {
   final String kategori;
+  final String? brandFilter;
 
   const PpobGenericScreen({
     super.key,
     required this.kategori,
+    this.brandFilter,
   });
 
   @override
@@ -118,6 +120,11 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     final brand = _normalize(_productBrand(product));
     final name = _normalize(_productName(product));
     final sku = _normalize(_productSku(product));
+
+    if (requestedCategory == 'transfer pulsa') {
+      return category.contains('transfer pulsa') ||
+          name.contains('transfer pulsa') || sku.contains('transfer');
+    }
 
     if (requestedCategory == 'pulsa') {
       return category.contains('pulsa') ||
@@ -280,6 +287,35 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
         brand.contains(requestedCategory);
   }
 
+  bool _matchesBrandFilter(Map<String, dynamic> product) {
+    final requested = _normalize(widget.brandFilter);
+    if (requested.isEmpty) return true;
+    final brand = _normalize(_productBrand(product));
+    final name = _normalize(_productName(product));
+    if (requested.contains('telkomsel') || requested == 'tsel') {
+      return brand.contains('telkomsel') || brand == 'tsel' || name.contains('telkomsel');
+    }
+    if (requested == 'tri' || requested == '3') {
+      return brand == 'tri' || brand == 'three' || brand == '3' || name.contains('tri');
+    }
+    if (requested.contains('indosat')) return brand.contains('indosat') || brand == 'im3' || name.contains('indosat');
+    if (requested.contains('smart')) return brand.contains('smart') || name.contains('smartfren');
+    if (requested.contains('by u') || requested == 'byu') return brand.replaceAll(' ', '') == 'byu' || name.contains('byu');
+    if (requested == 'xl') return brand == 'xl' || brand.contains('xl axiata') || name.contains(' xl ');
+    if (requested == 'axis') return brand.contains('axis') || name.contains('axis');
+    if (requested.contains('gojek') || requested.contains('gopay') || requested.contains('go pay')) {
+      return brand.contains('gopay') || brand.contains('go pay') || brand.contains('gojek') || name.contains('gopay');
+    }
+    if (requested.contains('grab')) return brand.contains('grab') || name.contains('grab');
+    if (requested.contains('indrive')) return brand.contains('indrive') || name.contains('indrive');
+    if (requested.contains('maxim')) return brand.contains('maxim') || name.contains('maxim');
+    if (requested.contains('shopee')) return brand.contains('shopee') || name.contains('shopee');
+    if (requested.contains('dana')) return brand.contains('dana') || name.contains('dana');
+    if (requested.contains('link')) return brand.contains('linkaja') || name.contains('linkaja');
+    if (requested == 'ovo') return brand == 'ovo' || name.contains('ovo');
+    return brand.contains(requested) || name.contains(requested);
+  }
+
   // ==========================================================
   // RESOLVE CATEGORY
   // ==========================================================
@@ -413,12 +449,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           _resolveRequestedCategory();
 
       final filteredProducts = allProducts
-          .where(
-            (product) => _isProductMatch(
-              product,
-              requestedCategory,
-            ),
-          )
+          .where((product) =>
+              _isProductMatch(product, requestedCategory) &&
+              _matchesBrandFilter(product))
           .toList();
 
       filteredProducts.sort(
@@ -723,6 +756,7 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     setState(() {
       _isProcessingTransaction = true;
     });
+    var keepPendingLock = false;
 
     try {
       // --------------------------------------------------------
@@ -878,6 +912,7 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
       final result = await completer.future.timeout(
         const Duration(seconds: 90),
         onTimeout: () {
+          keepPendingLock = true;
           return {
             'status': 'TIMEOUT',
             'message':
@@ -892,7 +927,9 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
           result['status']?.toString().toUpperCase() ?? '';
 
       final message =
-          result['message']?.toString() ??
+          result['providerMessage']?.toString() ??
+              result['failureReason']?.toString() ??
+              result['message']?.toString() ??
               result['msg']?.toString() ??
               '';
 
@@ -951,9 +988,11 @@ class _PpobGenericScreenState extends State<PpobGenericScreen> {
     } finally {
       if (!mounted) return;
 
-      setState(() {
-        _isProcessingTransaction = false;
-      });
+      if (!keepPendingLock) {
+        setState(() {
+          _isProcessingTransaction = false;
+        });
+      }
     }
   }
 

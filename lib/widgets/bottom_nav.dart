@@ -5,7 +5,7 @@ import '../config/warna.dart';
 
 import '../screens/home/home_screen.dart';
 import '../screens/riwayat/riwayat_screen.dart';
-import '../screens/ewallet/ewallet_screen.dart';
+import '../screens/ppob/ppob_generic_screen.dart';
 import '../screens/profil/profil_screen.dart';
 
 class BottomNav extends StatefulWidget {
@@ -25,7 +25,7 @@ class _BottomNavState extends State<BottomNav> {
   static const List<Widget> _pages = [
     HomeScreen(),
     RiwayatScreen(),
-    EwalletScreen(),
+    PpobGenericScreen(kategori: 'E-Money'),
     ProfilScreen(),
   ];
 

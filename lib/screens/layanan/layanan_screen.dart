@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../config/warna.dart';
 import '../../widgets/menu_item.dart';
-import '../ewallet/ewallet_screen.dart';
-import '../paket/paket_screen.dart';
-import '../pln/pln_screen.dart';
+import '../ppob/ppob_generic_screen.dart';
 import '../pascabayar/pascabayar_screen.dart';
 import '../pulsa/pulsa_screen.dart';
 
@@ -116,17 +114,17 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
               judul: "Pulsa & Paket Data",
               items: [
                 const DataLayanan(icon: Icons.phone_android_rounded, title: "Pulsa", color: Color(0xFFFF9F43), target: PulsaScreen()),
-                const DataLayanan(icon: Icons.swap_horizontal_circle_rounded, title: "Transfer Pulsa", color: Color(0xFFFF6B6B), target: PulsaScreen()),
-                const DataLayanan(icon: Icons.flash_on_rounded, title: "Token PLN", color: Color(0xFFD97706), target: PlnScreen()),
-                const DataLayanan(icon: Icons.star_rounded, title: "Tsel Spesial", color: Color(0xFFE52229), target: PaketScreen()),
-                const DataLayanan(icon: Icons.bolt_rounded, title: "Aktivasi Tsel", color: Color(0xFFFA5252), target: PaketScreen()),
-                const DataLayanan(icon: Icons.phone_in_talk_rounded, title: "Paket Nelpon", color: Color(0xFF0284C7), pesan: "Paket Nelpon"),
-                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Tri", color: Color(0xFF9333EA), target: PaketScreen()),
-                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Indosat", color: Color(0xFFDB2777), target: PaketScreen()),
-                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Smart", color: Color(0xFFDB2777), target: PaketScreen()),
-                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota by.U", color: Color(0xFF0D9488), target: PaketScreen()),
-                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota XL", color: Color(0xFF0284C7), target: PaketScreen()),
-                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota AXIS", color: Color(0xFF7E22CE), target: PaketScreen()),
+                const DataLayanan(icon: Icons.swap_horizontal_circle_rounded, title: "Transfer Pulsa", color: Color(0xFFFF6B6B), target: PpobGenericScreen(kategori: "Transfer Pulsa")),
+                const DataLayanan(icon: Icons.flash_on_rounded, title: "Token PLN", color: Color(0xFFD97706), target: PpobGenericScreen(kategori: "PLN")),
+                const DataLayanan(icon: Icons.star_rounded, title: "Tsel Spesial", color: Color(0xFFE52229), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "Telkomsel")),
+                const DataLayanan(icon: Icons.bolt_rounded, title: "Aktivasi Tsel", color: Color(0xFFFA5252), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "Telkomsel")),
+                const DataLayanan(icon: Icons.phone_in_talk_rounded, title: "Paket Nelpon", color: Color(0xFF0284C7), target: PpobGenericScreen(kategori: "Paket SMS Telepon")),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Tri", color: Color(0xFF9333EA), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "Tri")),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Indosat", color: Color(0xFFDB2777), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "Indosat")),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota Smart", color: Color(0xFFDB2777), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "Smartfren")),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota by.U", color: Color(0xFF0D9488), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "by.U")),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota XL", color: Color(0xFF0284C7), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "XL")),
+                const DataLayanan(icon: Icons.signal_cellular_alt_rounded, title: "Kuota AXIS", color: Color(0xFF7E22CE), target: PpobGenericScreen(kategori: "Paket Data", brandFilter: "AXIS")),
               ],
             ),
             _buildSectionKategori(
@@ -134,15 +132,15 @@ class _LayananScreenState extends State<LayananScreen> with SingleTickerProvider
               icon: Icons.account_balance_wallet_rounded,
               judul: "E-Wallet & E-Money",
               items: [
-                const DataLayanan(icon: Icons.directions_car_filled_rounded, title: "MAXIM", color: Color(0xFFF59E0B), target: EwalletScreen(jenisEwallet: "MAXIM")),
-                const DataLayanan(icon: Icons.electric_moped_rounded, title: "GRAB Driver", color: Color(0xFF16A34A), target: EwalletScreen(jenisEwallet: "GRAB")),
-                const DataLayanan(icon: Icons.two_wheeler_rounded, title: "inDrive", color: Color(0xFF22C55E), target: EwalletScreen(jenisEwallet: "INDRIVE")),
-                const DataLayanan(icon: Icons.motorcycle_rounded, title: "Gojek Driver", color: Color(0xFF15803D), target: EwalletScreen(jenisEwallet: "Gojek Driver")),
-                const DataLayanan(icon: Icons.shopping_bag_rounded, title: "ShopeePay", color: Color(0xFFF43F5E), target: EwalletScreen(jenisEwallet: "ShopeePay")),
-                const DataLayanan(icon: Icons.account_balance_wallet_rounded, title: "DANA", color: Color(0xFF0284C7), target: EwalletScreen(jenisEwallet: "DANA")),
-                const DataLayanan(icon: Icons.payment_rounded, title: "LinkAja", color: Color(0xFFDC2626), target: EwalletScreen(jenisEwallet: "LinkAja")),
-                const DataLayanan(icon: Icons.credit_card_rounded, title: "OVO", color: Color(0xFF7C3AED), target: EwalletScreen(jenisEwallet: "OVO")),
-                const DataLayanan(icon: Icons.wallet_rounded, title: "GOPAY", color: Color(0xFF0EA5E9), target: EwalletScreen(jenisEwallet: "GoPay")),
+                const DataLayanan(icon: Icons.directions_car_filled_rounded, title: "MAXIM", color: Color(0xFFF59E0B), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "MAXIM")),
+                const DataLayanan(icon: Icons.electric_moped_rounded, title: "GRAB Driver", color: Color(0xFF16A34A), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "GRAB")),
+                const DataLayanan(icon: Icons.two_wheeler_rounded, title: "inDrive", color: Color(0xFF22C55E), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "INDRIVE")),
+                const DataLayanan(icon: Icons.motorcycle_rounded, title: "Gojek Driver", color: Color(0xFF15803D), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "Gojek Driver")),
+                const DataLayanan(icon: Icons.shopping_bag_rounded, title: "ShopeePay", color: Color(0xFFF43F5E), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "ShopeePay")),
+                const DataLayanan(icon: Icons.account_balance_wallet_rounded, title: "DANA", color: Color(0xFF0284C7), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "DANA")),
+                const DataLayanan(icon: Icons.payment_rounded, title: "LinkAja", color: Color(0xFFDC2626), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "LinkAja")),
+                const DataLayanan(icon: Icons.credit_card_rounded, title: "OVO", color: Color(0xFF7C3AED), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "OVO")),
+                const DataLayanan(icon: Icons.wallet_rounded, title: "GOPAY", color: Color(0xFF0EA5E9), target: PpobGenericScreen(kategori: "E-Money", brandFilter: "GoPay")),
               ],
             ),
             _buildSectionKategori(
