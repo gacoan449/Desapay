@@ -33,7 +33,8 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pin the CLI to avoid unauthenticated GitHub release API rate limits.
+          version: 2.58.5
 
       # Payment callback remains a separate manual deployment until the real
       # TriPay Private Key has been saved as PAYMENT_WEBHOOK_SECRET in Supabase.
