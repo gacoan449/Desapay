@@ -8,7 +8,6 @@ import 'edit_profil_screen.dart';
 import 'keamanan_screen.dart';
 import 'bantuan_cs_screen.dart';
 import 'tentang_screen.dart';
-import '../login/login_screen.dart';
 import '../saldo/penarikan_saldo_screen.dart';
 
 class ProfilScreen extends StatefulWidget {
@@ -202,18 +201,19 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
     if (keluar != true) return;
 
-    await HybridBackendService.unregisterCurrentDevice();
+    // Auth gate di lib/main.dart mendengarkan authStateChanges().
+    // Setelah signOut, root akan otomatis menampilkan LoginScreen.
+    // Jangan push LoginScreen kedua di atas root, karena halaman duplikat
+    // ini akan tetap menutupi root setelah login berikutnya berhasil.
+    try {
+      await HybridBackendService.unregisterCurrentDevice();
+    } catch (error, stackTrace) {
+      debugPrint('Gagal unregister device saat logout: $error');
+      debugPrint(stackTrace.toString());
+    }
+
     await _auth.signOut();
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
-      ),
-      (route) => false,
-    );
+    // Tidak perlu Navigator: DesaPayHome menangani perpindahan halaman.
   }
 
   @override
