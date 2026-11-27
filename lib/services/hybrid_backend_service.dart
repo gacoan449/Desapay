@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -22,7 +20,6 @@ class HybridBackendService {
   static StreamSubscription<User?>? _authSubscription;
   static StreamSubscription<String>? _tokenSubscription;
   static bool _initialized = false;
-  static bool _crashlyticsReady = false;
 
   static const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const _supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -58,37 +55,15 @@ class HybridBackendService {
     return client.storage.from(bucket).getPublicUrl(path);
   }
 
-  static Future<void> _initializeCrashlytics() async {
-    try {
-      final crashlytics = FirebaseCrashlytics.instance;
-      FlutterError.onError = crashlytics.recordFlutterFatalError;
-      PlatformDispatcher.instance.onError = (error, stack) {
-        crashlytics.recordError(error, stack, fatal: true);
-        return true;
-      };
-      await crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode);
-      _crashlyticsReady = true;
-    } catch (error) {
-      // Crashlytics is optional. Missing Android Crashlytics resources must
-      // never prevent Firebase Auth/Firestore or the app from starting.
-      debugPrint('Crashlytics tidak tersedia; startup tetap dilanjutkan: $error');
-    }
-  }
-
+  /// Crash reporting is intentionally local-only: Firebase Crashlytics is
+  /// excluded so its missing Android component cannot block Firebase startup.
   static void recordError(Object error, StackTrace stack, {String? reason}) {
-    if (!_crashlyticsReady) return;
-    try {
-      unawaited(FirebaseCrashlytics.instance.recordError(error, stack, reason: reason));
-    } catch (_) {
-      // Error reporting must remain best-effort.
-    }
+    debugPrint('[$reason] $error\n$stack');
   }
 
   static Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
-
-    await _initializeCrashlytics();
 
     if (!isConfigured) {
       debugPrint('Supabase belum dikonfigurasi; Firebase Auth tetap aktif.');
