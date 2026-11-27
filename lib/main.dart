@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 
 import 'config/warna.dart';
 import 'firebase_options.dart';
@@ -27,59 +26,28 @@ import 'screens/belanjaku/courier_home_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // =========================================================
   // PORTRAIT ONLY
-  // =========================================================
-
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // =========================================================
   // FIREBASE
-  // =========================================================
-
   FirebaseApp? firebaseApp;
   String? firebaseError;
 
   try {
     firebaseApp = await Firebase.initializeApp(
-      options:
-          DefaultFirebaseOptions.currentPlatform,
-    );
-
-    // =======================================================
-    // CLOUD FUNCTIONS
-    // =======================================================
-    //
-    // Instance tersedia setelah Firebase berhasil
-    // diinisialisasi.
-    //
-    // Function dipanggil oleh service ketika diperlukan.
-    //
-    // =======================================================
-
-    FirebaseFunctions.instance;
-
-    debugPrint(
-      '✅ DesaPay Firebase berhasil terhubung: '
-      '${firebaseApp.name}',
+      options: DefaultFirebaseOptions.currentPlatform,
     );
 
     debugPrint(
-      '✅ Firebase Cloud Functions siap digunakan.',
+      'DesaPay Firebase berhasil terhubung: ${firebaseApp.name}',
     );
   } catch (e, stackTrace) {
     firebaseError = e.toString();
-
-    debugPrint(
-      '❌ Firebase initialization gagal: $e',
-    );
-
-    debugPrint(
-      stackTrace.toString(),
-    );
+    debugPrint('Firebase initialization gagal: $e');
+    debugPrint(stackTrace.toString());
   }
 
   if (firebaseApp != null) {
@@ -87,20 +55,18 @@ Future<void> main() async {
       await HybridBackendService.initialize();
     } catch (error, stackTrace) {
       debugPrint('Supabase/pendamping Firebase gagal diinisialisasi: $error');
-      HybridBackendService.recordError(error, stackTrace, reason: 'Optional backend initialization failed');
+      HybridBackendService.recordError(
+        error,
+        stackTrace,
+        reason: 'Optional backend initialization failed',
+      );
     }
   }
 
-  // =========================================================
-  // APP
-  // =========================================================
-
   runApp(
     DesaPayApp(
-      firebaseReady:
-          firebaseApp != null,
-      firebaseError:
-          firebaseError,
+      firebaseReady: firebaseApp != null,
+      firebaseError: firebaseError,
     ),
   );
 }
@@ -121,51 +87,29 @@ class DesaPayApp extends StatelessWidget {
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'DesaPay',
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
         useMaterial3: true,
-
-        colorScheme:
-            ColorScheme.fromSeed(
-          seedColor:
-              WarnaDesaPay.primary,
-
-          primary:
-              WarnaDesaPay.primary,
-
-          onPrimary:
-              Colors.white,
-
-          secondary:
-              WarnaDesaPay.secondary,
-
-          surface:
-              Colors.white,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: WarnaDesaPay.primary,
+          primary: WarnaDesaPay.primary,
+          onPrimary: Colors.white,
+          secondary: WarnaDesaPay.secondary,
+          surface: Colors.white,
         ),
-
-        scaffoldBackgroundColor:
-            WarnaDesaPay.lightBg,
-
+        scaffoldBackgroundColor: WarnaDesaPay.lightBg,
         fontFamily: 'Inter',
-
-        appBarTheme:
-            const AppBarTheme(
+        appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
         ),
       ),
-
       home: !firebaseReady
           ? FirebaseErrorScreen(
-              error:
-                  firebaseError ??
-                      'Unknown Firebase error',
+              error: firebaseError ?? 'Unknown Firebase error',
             )
           : const DesaPayHome(),
     );
@@ -177,8 +121,7 @@ class DesaPayApp extends StatelessWidget {
 // FIREBASE ERROR SCREEN
 // =====================================================================
 
-class FirebaseErrorScreen
-    extends StatelessWidget {
+class FirebaseErrorScreen extends StatelessWidget {
   final String error;
 
   const FirebaseErrorScreen({
@@ -187,91 +130,46 @@ class FirebaseErrorScreen
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          WarnaDesaPay.lightBg,
-
+      backgroundColor: WarnaDesaPay.lightBg,
       body: SafeArea(
         child: Center(
-          child:
-              SingleChildScrollView(
-            padding:
-                const EdgeInsets.all(24),
-
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.cloud_off,
                   size: 72,
                   color: Colors.red,
                 ),
-
-                const SizedBox(
-                  height: 20,
-                ),
-
+                const SizedBox(height: 20),
                 const Text(
                   'DesaPay gagal memulai',
-
-                  textAlign:
-                      TextAlign.center,
-
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 12,
-                ),
-
+                const SizedBox(height: 12),
                 const Text(
                   'Firebase tidak berhasil diinisialisasi.',
-
-                  textAlign:
-                      TextAlign.center,
+                  textAlign: TextAlign.center,
                 ),
-
-                const SizedBox(
-                  height: 20,
-                ),
-
+                const SizedBox(height: 20),
                 Container(
-                  width:
-                      double.infinity,
-
-                  padding:
-                      const EdgeInsets.all(
-                    16,
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.white,
-
-                    borderRadius:
-                        BorderRadius.circular(
-                      12,
-                    ),
-                  ),
-
-                  child:
-                      SelectableText(
+                  child: SelectableText(
                     error,
-
-                    style:
-                        const TextStyle(
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
               ],
@@ -287,91 +185,35 @@ class FirebaseErrorScreen
 // =====================================================================
 // DESAPAY HOME / AUTH GATE
 // =====================================================================
-//
-// ALUR:
-//
-// Firebase Auth
-//      ↓
-// User ditemukan?
-//      ↓
-// users/{UID}
-//      ↓
-// role
-//      ↓
-// admin → AdminDashboard
-// courier → BelanjakuCourierHomeScreen
-// user  → BottomNav
-//
-// Role kosong / invalid / dokumen tidak ada:
-// → jangan diam-diam masuk ke BottomNav.
-//
-// =====================================================================
 
-class DesaPayHome
-    extends StatefulWidget {
-  const DesaPayHome({
-    super.key,
-  });
+class DesaPayHome extends StatefulWidget {
+  const DesaPayHome({super.key});
 
   @override
-  State<DesaPayHome> createState() =>
-      _DesaPayHomeState();
+  State<DesaPayHome> createState() => _DesaPayHomeState();
 }
 
-
-class _DesaPayHomeState
-    extends State<DesaPayHome> {
-
+class _DesaPayHomeState extends State<DesaPayHome> {
   String? _loadedUid;
-
-  Future<_AccountDestination>?
-      _destinationFuture;
-
-
-  // =========================================================
-  // AUTH STREAM
-  // =========================================================
+  Future<_AccountDestination>? _destinationFuture;
 
   Stream<User?> get _authStream =>
-      FirebaseAuth.instance
-          .authStateChanges();
+      FirebaseAuth.instance.authStateChanges();
 
-
-  // =========================================================
-  // LOAD ACCOUNT
-  // =========================================================
-
-  Future<_AccountDestination>
-      _loadAccountDestination(
-    String uid,
-  ) async {
+  Future<_AccountDestination> _loadAccountDestination(String uid) async {
     try {
-      final DocumentSnapshot<
-              Map<String, dynamic>>
-          snapshot =
-          await FirebaseFirestore
-              .instance
-              .collection('users')
-              .doc(uid)
-              .get();
-
-      // -------------------------------------------------------
-      // USER TIDAK ADA
-      // -------------------------------------------------------
+      final DocumentSnapshot<Map<String, dynamic>> snapshot =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
       if (!snapshot.exists) {
         return _AccountDestination.error(
-          'Data akun tidak ditemukan di database DesaPay.\n\n'
-          'UID: $uid',
+          'Data akun tidak ditemukan di database DesaPay.\n\nUID: $uid',
         );
       }
 
-      final Map<String, dynamic>
-          data =
-          snapshot.data() ??
-              <String, dynamic>{};
+      final Map<String, dynamic> data =
+          snapshot.data() ?? <String, dynamic>{};
 
-      // Never route disabled/suspended accounts into any role home.
       final String accountStatus =
           (data['status'] ?? data['accountStatus'] ?? '')
               .toString()
@@ -382,8 +224,15 @@ class _DesaPayHomeState
           data['isBlocked'] == true ||
           data['isActive'] == false ||
           const <String>{
-            'disabled', 'inactive', 'blocked', 'banned', 'suspended',
-            'nonaktif', 'non-aktif', 'tidak aktif', 'diblokir'
+            'disabled',
+            'inactive',
+            'blocked',
+            'banned',
+            'suspended',
+            'nonaktif',
+            'non-aktif',
+            'tidak aktif',
+            'diblokir'
           }.contains(accountStatus)) {
         await HybridBackendService.unregisterCurrentDevice();
         await FirebaseAuth.instance.signOut();
@@ -392,278 +241,125 @@ class _DesaPayHomeState
         );
       }
 
-      // -------------------------------------------------------
-      // ROLE
-      // -------------------------------------------------------
-
       final String role =
-          (data['role'] ?? '')
-              .toString()
-              .trim()
-              .toLowerCase();
+          (data['role'] ?? '').toString().trim().toLowerCase();
 
-      debugPrint(
-        '🔐 DesaPay role check: '
-        'uid=$uid role=$role',
-      );
-
-      // -------------------------------------------------------
-      // ADMIN
-      // -------------------------------------------------------
+      debugPrint('DesaPay role check: uid=$uid role=$role');
 
       if (role == 'admin') {
-        return const
-            _AccountDestination.admin();
+        return const _AccountDestination.admin();
       }
-
-      // -------------------------------------------------------
-      // USER
-      // -------------------------------------------------------
-
       if (role == 'courier') {
         return const _AccountDestination.courier();
       }
-
       if (role == 'user') {
-        return const
-            _AccountDestination.user();
+        return const _AccountDestination.user();
       }
 
-      // -------------------------------------------------------
-      // ROLE INVALID
-      // -------------------------------------------------------
-
       return _AccountDestination.error(
-        'Role akun tidak valid.\n\n'
-        'UID: $uid\n'
+        'Role akun tidak valid.\n\nUID: $uid\n'
         'Role: ${role.isEmpty ? '(kosong)' : role}',
       );
     } on FirebaseException catch (e) {
-      debugPrint(
-        '❌ Firestore account check gagal: '
-        '${e.code} - ${e.message}',
-      );
-
+      debugPrint('Firestore account check gagal: ${e.code} - ${e.message}');
       return _AccountDestination.error(
         'Gagal memverifikasi akun DesaPay.\n\n'
         'Kode: ${e.code}\n'
         '${e.message ?? 'Tidak ada pesan tambahan.'}',
       );
     } catch (e, stackTrace) {
-      debugPrint(
-        '❌ Account routing error: $e',
-      );
-
-      debugPrint(
-        stackTrace.toString(),
-      );
-
-      return const
-          _AccountDestination.error(
+      debugPrint('Account routing error: $e');
+      debugPrint(stackTrace.toString());
+      return const _AccountDestination.error(
         'Terjadi kesalahan saat memverifikasi akun.',
       );
     }
   }
 
-
-  // =========================================================
-  // RESET DESTINATION
-  // =========================================================
-
   void _resetDestination() {
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     setState(() {
       _loadedUid = null;
       _destinationFuture = null;
     });
   }
 
-
-  // =========================================================
-  // PREPARE DESTINATION
-  // =========================================================
-
-  void _prepareDestination(
-    User user,
-  ) {
-    if (_loadedUid == user.uid &&
-        _destinationFuture != null) {
-      return;
-    }
-
+  void _prepareDestination(User user) {
+    if (_loadedUid == user.uid && _destinationFuture != null) return;
     _loadedUid = user.uid;
-
-    _destinationFuture =
-        _loadAccountDestination(
-      user.uid,
-    );
+    _destinationFuture = _loadAccountDestination(user.uid);
   }
 
-
-  // =========================================================
-  // BUILD
-  // =========================================================
-
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: _authStream,
-
-      builder: (
-        context,
-        snapshot,
-      ) {
-        // =====================================================
-        // AUTH MASIH MEMUAT
-        // =====================================================
-
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
 
-        // =====================================================
-        // BELUM LOGIN
-        // =====================================================
-
-        final User? user =
-            snapshot.data;
-
+        final User? user = snapshot.data;
         if (user == null) {
           _loadedUid = null;
           _destinationFuture = null;
-
           return const LoginScreen();
         }
 
-        // =====================================================
-        // LOGIN ADA
-        // =====================================================
-
         _prepareDestination(user);
-
-        final Future<
-                _AccountDestination>?
-            future =
-            _destinationFuture;
-
+        final Future<_AccountDestination>? future = _destinationFuture;
         if (future == null) {
           return const Scaffold(
-            body: Center(
-              child:
-                  CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // =====================================================
-        // CEK ROLE
-        // =====================================================
-
-        return FutureBuilder<
-            _AccountDestination>(
+        return FutureBuilder<_AccountDestination>(
           future: future,
-
-          builder: (
-            context,
-            accountSnapshot,
-          ) {
-            // -------------------------------------------------
-            // LOADING
-            // -------------------------------------------------
-
-            if (accountSnapshot
-                    .connectionState ==
-                ConnectionState.waiting) {
+          builder: (context, accountSnapshot) {
+            if (accountSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
-                backgroundColor:
-                    WarnaDesaPay.lightBg,
-
+                backgroundColor: WarnaDesaPay.lightBg,
                 body: Center(
-                  child:
-                      CircularProgressIndicator(
-                    color:
-                        WarnaDesaPay.primary,
+                  child: CircularProgressIndicator(
+                    color: WarnaDesaPay.primary,
                   ),
                 ),
               );
             }
 
-            // -------------------------------------------------
-            // FUTURE ERROR
-            // -------------------------------------------------
-
             if (accountSnapshot.hasError) {
               return _AccountErrorScreen(
                 message:
-                    'Gagal memverifikasi akun:\n\n'
-                    '${accountSnapshot.error}',
-
-                onRetry:
-                    _resetDestination,
+                    'Gagal memverifikasi akun:\n\n${accountSnapshot.error}',
+                onRetry: _resetDestination,
               );
             }
 
-            final _AccountDestination?
-                destination =
-                accountSnapshot.data;
-
+            final _AccountDestination? destination = accountSnapshot.data;
             if (destination == null) {
               return _AccountErrorScreen(
-                message:
-                    'Sistem tidak menerima hasil '
-                    'verifikasi akun.',
-
-                onRetry:
-                    _resetDestination,
+                message: 'Sistem tidak menerima hasil verifikasi akun.',
+                onRetry: _resetDestination,
               );
             }
-
-            // -------------------------------------------------
-            // ADMIN
-            // -------------------------------------------------
 
             if (destination.isAdmin) {
-              debugPrint(
-                '✅ Routing → AdminDashboardScreen',
-              );
-
-              return const
-                  AdminDashboardScreen();
+              debugPrint('Routing ke AdminDashboardScreen');
+              return const AdminDashboardScreen();
             }
-
-            // -------------------------------------------------
-            // USER
-            // -------------------------------------------------
-
             if (destination.isCourier) {
               return const BelanjakuCourierHomeScreen();
             }
-
             if (destination.isUser) {
-              debugPrint(
-                '✅ Routing → BottomNav',
-              );
-
+              debugPrint('Routing ke BottomNav');
               return const BottomNav();
             }
 
-            // -------------------------------------------------
-            // ERROR
-            // -------------------------------------------------
-
             return _AccountErrorScreen(
-              message:
-                  destination.errorMessage ??
-                      'Akun tidak dapat diverifikasi.',
-
-              onRetry:
-                  _resetDestination,
+              message: destination.errorMessage ??
+                  'Akun tidak dapat diverifikasi.',
+              onRetry: _resetDestination,
             );
           },
         );
@@ -708,9 +404,8 @@ class _AccountDestination {
         isCourier = true,
         errorMessage = null;
 
-  const _AccountDestination.error(
-    String message,
-  )   : isAdmin = false,
+  const _AccountDestination.error(String message)
+      : isAdmin = false,
         isUser = false,
         isCourier = false,
         errorMessage = message;
@@ -721,8 +416,7 @@ class _AccountDestination {
 // ACCOUNT ERROR SCREEN
 // =====================================================================
 
-class _AccountErrorScreen
-    extends StatelessWidget {
+class _AccountErrorScreen extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
@@ -732,145 +426,66 @@ class _AccountErrorScreen
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          WarnaDesaPay.lightBg,
-
+      backgroundColor: WarnaDesaPay.lightBg,
       body: SafeArea(
         child: Center(
-          child:
-              SingleChildScrollView(
-            padding:
-                const EdgeInsets.all(24),
-
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
                   width: 70,
                   height: 70,
-
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.orange
-                            .withOpacity(
-                      0.12,
-                    ),
-
-                    shape:
-                        BoxShape.circle,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.12),
+                    shape: BoxShape.circle,
                   ),
-
-                  child:
-                      const Icon(
-                    Icons
-                        .manage_accounts_rounded,
-
+                  child: const Icon(
+                    Icons.manage_accounts_rounded,
                     size: 38,
-
-                    color:
-                        Colors.orange,
+                    color: Colors.orange,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 18,
-                ),
-
+                const SizedBox(height: 18),
                 const Text(
                   'Akun Belum Dapat Diverifikasi',
-
-                  textAlign:
-                      TextAlign.center,
-
-                  style:
-                      TextStyle(
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
                     fontSize: 21,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 12,
-                ),
-
+                const SizedBox(height: 12),
                 SelectableText(
                   message,
-
-                  textAlign:
-                      TextAlign.center,
-
-                  style:
-                      const TextStyle(
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.5,
-                    color:
-                        Colors.black54,
+                    color: Colors.black54,
                   ),
                 ),
-
-                const SizedBox(
-                  height: 24,
-                ),
-
-                // =================================================
-                // RETRY
-                // =================================================
-
+                const SizedBox(height: 24),
                 ElevatedButton.icon(
-                  onPressed:
-                      onRetry,
-
-                  icon:
-                      const Icon(
-                    Icons.refresh,
-                  ),
-
-                  label:
-                      const Text(
-                    'Coba Lagi',
-                  ),
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Coba Lagi'),
                 ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
-                // =================================================
-                // LOGOUT
-                // =================================================
-
+                const SizedBox(height: 10),
                 OutlinedButton.icon(
-                  onPressed:
-                      () async {
+                  onPressed: () async {
                     try {
                       await HybridBackendService.unregisterCurrentDevice();
-                      await FirebaseAuth
-                          .instance
-                          .signOut();
+                      await FirebaseAuth.instance.signOut();
                     } catch (e) {
-                      debugPrint(
-                        'Logout error: $e',
-                      );
+                      debugPrint('Logout error: $e');
                     }
                   },
-
-                  icon:
-                      const Icon(
-                    Icons.logout,
-                  ),
-
-                  label:
-                      const Text(
-                    'Keluar',
-                  ),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Keluar'),
                 ),
               ],
             ),
